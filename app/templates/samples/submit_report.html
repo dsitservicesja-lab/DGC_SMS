@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Submit Report - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-upload"></i> Submit Report</h4>
+                <small class="text-muted">
+                    {{ assignment.sample.lab_number }} — Test: {{ assignment.test_name }}
+                </small>
+            </div>
+            <div class="card-body">
+                {% if assignment.status.value == 'Returned for Correction' and assignment.review_comments %}
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Report was returned for correction</h6>
+                    <p class="mb-0">{{ assignment.review_comments }}</p>
+                </div>
+                {% endif %}
+
+                <form method="POST" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.report_text.label(class="form-label") }}
+                        {{ form.report_text(class="form-control", rows=8) }}
+                        {% for error in form.report_text.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.report_file.label(class="form-label") }}
+                        {{ form.report_file(class="form-control") }}
+                        <div class="form-text">Optional: attach a report document (PDF, image)</div>
+                        {% if assignment.report_file %}
+                        <div class="form-text text-info">
+                            Current file: {{ assignment.report_file_original_name }}
+                            — uploading a new file will replace it.
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-success") }}
+                        <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

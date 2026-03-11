@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Assignment #{{ assignment.id }} - DGC SMS{% endblock %}
+
+{% block content %}
+{% set sample = assignment.sample %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="bi bi-clipboard2-check"></i> Test Assignment</h2>
+        <p class="text-muted mb-0">{{ sample.lab_number }} — {{ sample.sample_name }}</p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        {% set a_colors = {
+            'Assigned': 'primary',
+            'In Progress': 'info',
+            'Report Submitted': 'warning',
+            'Under Review': 'warning',
+            'Returned for Correction': 'danger',
+            'Accepted': 'success',
+            'Rejected': 'danger',
+            'Completed': 'success',
+        } %}
+        <span class="badge bg-{{ a_colors.get(assignment.status.value, 'secondary') }} fs-6">
+            {{ assignment.status.value }}
+        </span>
+        {% if current_user.id == assignment.chemist_id and assignment.status.value in ['Assigned', 'In Progress', 'Returned for Correction'] %}
+        <a href="{{ url_for('samples.submit_report', assignment_id=assignment.id) }}" class="btn btn-success btn-sm">
+            <i class="bi bi-upload"></i> Submit Report
+        </a>
+        {% endif %}
+        {% if (current_user.is_branch_head() or current_user.role.value == 'Admin') and assignment.status.value in ['Report Submitted', 'Under Review'] %}
+        <a href="{{ url_for('samples.review_report', assignment_id=assignment.id) }}" class="btn btn-warning btn-sm">
+            <i class="bi bi-clipboard-check"></i> Review Report
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><h5 class="mb-0">Assignment Details</h5></div>
+            <div class="card-body">
+                <dl>
+                    <dt>Test Name</dt><dd>{{ assignment.test_name }}</dd>
+                    {% if assignment.test_reference %}
+                    <dt>Test Reference</dt><dd>{{ assignment.test_reference }}</dd>
+                    {% endif %}
+                    <dt>Assigned To</dt><dd>{{ assignment.chemist.full_name }}</dd>
+                    <dt>Assigned By</dt><dd>{{ assignment.assigner.full_name }}</dd>
+                    <dt>Assigned Date</dt><dd>{{ assignment.assigned_date.strftime('%d %b %Y %H:%M') }}</dd>
+                    {% if assignment.expected_completion %}
+                    <dt>Expected Completion</dt><dd>{{ assignment.expected_completion.strftime('%d %b %Y') }}</dd>
+                    {% endif %}
+                    {% if assignment.date_completed %}
+                    <dt>Date Completed</dt><dd>{{ assignment.date_completed.strftime('%d %b %Y %H:%M') }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><h5 class="mb-0">Sample Info</h5></div>
+            <div class="card-body">
+                <dl>
+                    <dt>Lab Number</dt><dd><a href="{{ url_for('samples.detail', sample_id=sample.id) }}">{{ sample.lab_number }}</a></dd>
+                    <dt>Sample Name</dt><dd>{{ sample.sample_name }}</dd>
+                    <dt>Type</dt><dd><span class="badge bg-info">{{ sample.sample_type.value }}</span></dd>
+                    <dt>Date Received</dt><dd>{{ sample.date_received.strftime('%d %b %Y') }}</dd>
+                    {% if sample.scanned_file %}
+                    <dt>Scanned Document</dt>
+                    <dd>
+                        <a href="{{ url_for('samples.download_file', filename=sample.scanned_file) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-download"></i> {{ sample.scanned_file_original_name }}
+                        </a>
+                    </dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Report Section -->
+{% if assignment.report_text or assignment.report_file %}
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0">Report</h5></div>
+    <div class="card-body">
+        {% if assignment.report_text %}
+        <div class="mb-3">
+            <h6>Findings</h6>
+            <div class="border rounded p-3 bg-light">{{ assignment.report_text }}</div>
+        </div>
+        {% endif %}
+        {% if assignment.report_file %}
+        <div class="mb-3">
+            <h6>Attached File</h6>
+            <a href="{{ url_for('samples.download_file', filename=assignment.report_file) }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-download"></i> {{ assignment.report_file_original_name }}
+            </a>
+        </div>
+        {% endif %}
+        {% if assignment.report_submitted_at %}
+        <small class="text-muted">Submitted: {{ assignment.report_submitted_at.strftime('%d %b %Y %H:%M') }}</small>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Review Section -->
+{% if assignment.review_comments or assignment.reviewed_at %}
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0">Review</h5></div>
+    <div class="card-body">
+        {% if assignment.reviewer %}
+        <p><strong>Reviewed by:</strong> {{ assignment.reviewer.full_name }}</p>
+        {% endif %}
+        {% if assignment.reviewed_at %}
+        <p><strong>Reviewed at:</strong> {{ assignment.reviewed_at.strftime('%d %b %Y %H:%M') }}</p>
+        {% endif %}
+        {% if assignment.review_comments %}
+        <div class="border rounded p-3 bg-light">{{ assignment.review_comments }}</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Sample
+</a>
+{% endblock %}

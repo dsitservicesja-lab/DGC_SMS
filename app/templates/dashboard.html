@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <span class="text-muted">Welcome, {{ current_user.full_name }}</span>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-3 mb-4">
+    {% if current_user.role.value == 'Chemist' %}
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Total Assignments</h6>
+                <h2 class="card-title">{{ stats.total_assignments }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #e67e22;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Pending Tests</h6>
+                <h2 class="card-title text-warning">{{ stats.pending }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #3498db;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Reports Submitted</h6>
+                <h2 class="card-title text-primary">{{ stats.submitted }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Completed</h6>
+                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+            </div>
+        </div>
+    </div>
+
+    {% elif current_user.role.value == 'Officer' %}
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Total Samples</h6>
+                <h2 class="card-title">{{ stats.total_samples }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #f39c12;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Awaiting Assignment</h6>
+                <h2 class="card-title text-warning">{{ stats.registered }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #3498db;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">In Progress</h6>
+                <h2 class="card-title text-primary">{{ stats.in_progress }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Completed</h6>
+                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Total Samples</h6>
+                <h2 class="card-title">{{ stats.total_samples }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #e67e22;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Awaiting Assignment</h6>
+                <h2 class="card-title text-warning">{{ stats.awaiting_assignment }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Reports Pending Review</h6>
+                <h2 class="card-title text-purple">{{ stats.reports_pending_review }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Completed</h6>
+                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">Quick Actions</h5></div>
+            <div class="card-body">
+                <div class="d-flex gap-2 flex-wrap">
+                    {% if current_user.role.value in ['Officer', 'Admin', 'HOD'] %}
+                    <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Register New Sample
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-collection"></i> View All Samples
+                    </a>
+                    <a href="{{ url_for('main.notifications') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-bell"></i> View Notifications
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Notifications -->
+{% if notifications %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Recent Notifications</h5>
+        <a href="{{ url_for('main.notifications') }}" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for notif in notifications[:5] %}
+        <div class="list-group-item {% if not notif.is_read %}list-group-item-light{% endif %}">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <strong>{{ notif.title }}</strong>
+                    {% if not notif.is_read %}<span class="badge bg-primary badge-status ms-1">New</span>{% endif %}
+                    <p class="mb-0 text-muted small">{{ notif.message | truncate(120) }}</p>
+                </div>
+                <small class="text-muted text-nowrap ms-3">{{ notif.created_at.strftime('%d %b %Y %H:%M') }}</small>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

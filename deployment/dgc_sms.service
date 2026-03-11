@@ -1,0 +1,20 @@
+[Unit]
+Description=DGC Sample Management System
+After=network.target
+
+[Service]
+User=dgc_sms
+Group=dgc_sms
+WorkingDirectory=/opt/dgc_sms
+EnvironmentFile=/opt/dgc_sms/.env
+ExecStart=/opt/dgc_sms/venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    --access-logfile /opt/dgc_sms/access.log \
+    --error-logfile /opt/dgc_sms/error.log \
+    run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

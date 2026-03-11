@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Review Report - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <!-- Report Preview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-text"></i> Report to Review</h5>
+                <small class="text-muted">
+                    {{ assignment.sample.lab_number }} — Test: {{ assignment.test_name }}
+                    — Analyst: {{ assignment.chemist.full_name }}
+                </small>
+            </div>
+            <div class="card-body">
+                {% if assignment.report_text %}
+                <h6>Findings</h6>
+                <div class="border rounded p-3 bg-light mb-3">{{ assignment.report_text }}</div>
+                {% endif %}
+                {% if assignment.report_file %}
+                <h6>Attached File</h6>
+                <a href="{{ url_for('samples.download_file', filename=assignment.report_file) }}"
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-download"></i> {{ assignment.report_file_original_name }}
+                </a>
+                {% endif %}
+                {% if assignment.report_submitted_at %}
+                <p class="mt-2 text-muted small">
+                    Submitted: {{ assignment.report_submitted_at.strftime('%d %b %Y %H:%M') }}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Review Form -->
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Review Decision</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.action.label(class="form-label") }}
+                        {{ form.action(class="form-select") }}
+                        {% for error in form.action.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.review_comments.label(class="form-label") }}
+                        {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments (required for corrections)") }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+from flask import render_template, redirect, url_for, flash, jsonify
+from flask_login import login_required, current_user
+
+from app import db
+from app.main import main_bp
+from app.models import (
+    Sample, SampleAssignment, Notification, User,
+    Role, SampleStatus, AssignmentStatus,
+)
+
+
+@main_bp.route('/')
+def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    return redirect(url_for('auth.login'))
+
+
+@main_bp.route('/dashboard')
+@login_required
+def dashboard():
+    stats = {}
+
+    if current_user.role == Role.CHEMIST:
+        my_assignments = SampleAssignment.query.filter_by(
+            chemist_id=current_user.id
+        )
+        stats['total_assignments'] = my_assignments.count()
+        stats['pending'] = my_assignments.filter(
+            SampleAssignment.status.in_([
+                AssignmentStatus.ASSIGNED,
+                AssignmentStatus.IN_PROGRESS,
+                AssignmentStatus.RETURNED,
+            ])
+        ).count()
+        stats['submitted'] = my_assignments.filter_by(
+            status=AssignmentStatus.REPORT_SUBMITTED
+        ).count()
+        stats['completed'] = my_assignments.filter(
+            SampleAssignment.status.in_([
+                AssignmentStatus.ACCEPTED,
+                AssignmentStatus.COMPLETED,
+            ])
+        ).count()
+
+    elif current_user.role == Role.OFFICER:
+        my_samples = Sample.query.filter_by(uploaded_by=current_user.id)
+        stats['total_samples'] = my_samples.count()
+        stats['registered'] = my_samples.filter_by(
+            status=SampleStatus.REGISTERED
+        ).count()
+        stats['in_progress'] = my_samples.filter(
+            Sample.status.in_([
+                SampleStatus.ASSIGNED,
+                SampleStatus.IN_PROGRESS,
+            ])
+        ).count()
+        stats['completed'] = my_samples.filter(
+            Sample.status.in_([
+                SampleStatus.ACCEPTED,
+                SampleStatus.COMPLETED,
+            ])
+        ).count()
+
+    else:
+        # Branch heads, HOD, Admin
+        query = Sample.query
+        if current_user.branch and current_user.role == Role.SENIOR_CHEMIST:
+            query = query.filter(Sample.sample_type == current_user.branch)
+
+        stats['total_samples'] = query.count()
+        stats['awaiting_assignment'] = query.filter_by(
+            status=SampleStatus.REGISTERED
+        ).count()
+        stats['reports_pending_review'] = SampleAssignment.query.filter_by(
+            status=AssignmentStatus.REPORT_SUBMITTED
+        ).count()
+        stats['completed'] = query.filter(
+            Sample.status.in_([
+                SampleStatus.ACCEPTED,
+                SampleStatus.COMPLETED,
+            ])
+        ).count()
+
+    # Recent notifications
+    notifications = Notification.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Notification.created_at.desc()).limit(10).all()
+
+    return render_template(
+        'dashboard.html', stats=stats, notifications=notifications
+    )
+
+
+@main_bp.route('/notifications')
+@login_required
+def notifications():
+    notifs = Notification.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Notification.created_at.desc()).all()
+    return render_template('notifications.html', notifications=notifs)
+
+
+@main_bp.route('/notifications/<int:notif_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notif_id):
+    notif = Notification.query.get_or_404(notif_id)
+    if notif.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.notifications'))
+    notif.is_read = True
+    db.session.commit()
+    if notif.link:
+        return redirect(notif.link)
+    return redirect(url_for('main.notifications'))
+
+
+@main_bp.route('/api/notifications/unread-count')
+@login_required
+def unread_notification_count():
+    count = Notification.query.filter_by(
+        user_id=current_user.id, is_read=False
+    ).count()
+    return jsonify({'count': count})
