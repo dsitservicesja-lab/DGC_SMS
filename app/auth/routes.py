@@ -3,8 +3,9 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from app import db
 from app.auth import auth_bp
-from app.forms import LoginForm, UserCreateForm, UserEditForm
+from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm
 from app.models import User, Role, Branch
+from app.notifications import send_email
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -23,6 +24,49 @@ def login():
             return redirect(next_page or url_for('main.dashboard'))
         flash('Invalid username or password.', 'danger')
     return render_template('auth/login.html', form=form)
+
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and user.is_active_user:
+            token = user.get_reset_token()
+            reset_url = url_for('auth.reset_password', token=token, _external=True)
+            send_email(
+                subject='[DGC SMS] Password Reset Request',
+                recipients=[user.email],
+                body_text=(
+                    f'Hello {user.first_name},\n\n'
+                    f'To reset your password, visit the following link:\n{reset_url}\n\n'
+                    f'This link will expire in 30 minutes.\n'
+                    f'If you did not request a password reset, please ignore this email.'
+                ),
+            )
+        # Always show the same message to prevent user enumeration
+        flash('If an account with that email exists, a password reset link has been sent.', 'info')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/forgot_password.html', form=form)
+
+
+@auth_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    user = User.verify_reset_token(token)
+    if not user:
+        flash('The reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        db.session.commit()
+        flash('Your password has been reset. You can now log in.', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html', form=form)
 
 
 @auth_bp.route('/logout')

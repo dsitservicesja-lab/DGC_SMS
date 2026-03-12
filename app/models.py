@@ -1,7 +1,9 @@
 import enum
 from datetime import datetime, timezone
 
+from flask import current_app
 from flask_login import UserMixin
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, login_manager
@@ -89,6 +91,21 @@ class User(UserMixin, db.Model):
     @property
     def full_name(self):
         return f'{self.first_name} {self.last_name}'
+
+    def get_reset_token(self):
+        """Generate a timed password-reset token."""
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        return s.dumps(self.id, salt='password-reset')
+
+    @staticmethod
+    def verify_reset_token(token, max_age=1800):
+        """Return the User for a valid token, or None (default 30 min expiry)."""
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        try:
+            user_id = s.loads(token, salt='password-reset', max_age=max_age)
+        except (SignatureExpired, BadSignature):
+            return None
+        return db.session.get(User, user_id)
 
     def is_branch_head(self):
         return self.role in (Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY)
