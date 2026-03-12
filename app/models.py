@@ -272,3 +272,37 @@ class Notification(db.Model):
 
     def __repr__(self):
         return f'<Notification {self.title} for User {self.user_id}>'
+
+
+# ---------------------------------------------------------------------------
+# App Settings (key/value store)
+# ---------------------------------------------------------------------------
+
+class Setting(db.Model):
+    __tablename__ = 'settings'
+
+    key = db.Column(db.String(120), primary_key=True)
+    value = db.Column(db.String(500), nullable=False, default='')
+
+    @staticmethod
+    def get(key, default=''):
+        row = db.session.get(Setting, key)
+        return row.value if row else default
+
+    @staticmethod
+    def set(key, value):
+        row = db.session.get(Setting, key)
+        if row:
+            row.value = value
+        else:
+            db.session.add(Setting(key=key, value=value))
+
+    @staticmethod
+    def get_bool(key, default=True):
+        val = Setting.get(key)
+        if val == '':
+            return default
+        return val.lower() in ('true', '1', 'yes')
+
+    def __repr__(self):
+        return f'<Setting {self.key}={self.value}>'

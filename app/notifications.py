@@ -18,7 +18,11 @@ def _send_async_email(app, msg):
 
 
 def send_email(subject, recipients, body_text, body_html=None):
-    """Send an email (non-blocking)."""
+    """Send an email (non-blocking). Respects the email_enabled setting."""
+    from app.models import Setting
+    if not Setting.get_bool('email_enabled', default=True):
+        current_app.logger.info(f'Email suppressed (disabled in settings): {subject}')
+        return
     app = current_app._get_current_object()
     msg = Message(subject=subject, recipients=recipients, body=body_text)
     if body_html:

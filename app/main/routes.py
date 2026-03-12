@@ -1,11 +1,11 @@
-from flask import render_template, redirect, url_for, flash, jsonify
+from flask import render_template, redirect, url_for, flash, jsonify, request
 from flask_login import login_required, current_user
 
 from app import db
 from app.main import main_bp
 from app.models import (
     Sample, SampleAssignment, Notification, User,
-    Role, SampleStatus, AssignmentStatus,
+    Role, SampleStatus, AssignmentStatus, Setting,
 )
 
 
@@ -122,3 +122,25 @@ def unread_notification_count():
         user_id=current_user.id, is_read=False
     ).count()
     return jsonify({'count': count})
+
+
+# ---------------------------------------------------------------------------
+# Admin Settings
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    if current_user.role not in (Role.ADMIN, Role.HOD):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    if request.method == 'POST':
+        email_enabled = 'email_enabled' in request.form
+        Setting.set('email_enabled', str(email_enabled).lower())
+        db.session.commit()
+        flash('Settings updated.', 'success')
+        return redirect(url_for('main.settings'))
+
+    email_enabled = Setting.get_bool('email_enabled', default=True)
+    return render_template('settings.html', email_enabled=email_enabled)
