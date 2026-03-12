@@ -44,6 +44,11 @@ def create_app(config_name=None):
     from app.main import main_bp
     app.register_blueprint(main_bp)
 
+    # Make enums available in all templates
+    from app.models import Role, Branch
+    app.jinja_env.globals['Role'] = Role
+    app.jinja_env.globals['Branch'] = Branch
+
     @app.before_request
     def check_password_change():
         from flask_login import current_user

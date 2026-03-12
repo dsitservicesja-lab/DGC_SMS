@@ -61,6 +61,22 @@ NEW_TABLES = [
         '  value VARCHAR(500) NOT NULL DEFAULT ""'
         ')',
     ),
+    (
+        'user_roles',
+        'CREATE TABLE IF NOT EXISTS user_roles ('
+        '  user_id INTEGER NOT NULL REFERENCES users(id),'
+        '  role VARCHAR(20) NOT NULL,'
+        '  PRIMARY KEY (user_id, role)'
+        ')',
+    ),
+    (
+        'user_branches',
+        'CREATE TABLE IF NOT EXISTS user_branches ('
+        '  user_id INTEGER NOT NULL REFERENCES users(id),'
+        '  branch VARCHAR(20) NOT NULL,'
+        '  PRIMARY KEY (user_id, branch)'
+        ')',
+    ),
 ]
 
 # ------------------------------------------------------------------------------
@@ -96,8 +112,39 @@ def migrate(db_path):
         print(f'  Column {table}.{col}: added')
 
     conn.commit()
+
+    # Migrate data from legacy single-value columns to association tables
+    _migrate_roles_branches(cur)
+
+    conn.commit()
     conn.close()
     print('Migration complete.')
+
+
+def _migrate_roles_branches(cur):
+    """Copy role/branch from legacy columns into user_roles/user_branches tables.
+    Only inserts rows that don't already exist."""
+    # Migrate roles
+    cur.execute(
+        'SELECT id, role FROM users WHERE role IS NOT NULL'
+    )
+    for user_id, role in cur.fetchall():
+        cur.execute(
+            'INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, ?)',
+            (user_id, role),
+        )
+    print('  Legacy roles migrated to user_roles')
+
+    # Migrate branches
+    cur.execute(
+        'SELECT id, branch FROM users WHERE branch IS NOT NULL'
+    )
+    for user_id, branch in cur.fetchall():
+        cur.execute(
+            'INSERT OR IGNORE INTO user_branches (user_id, branch) VALUES (?, ?)',
+            (user_id, branch),
+        )
+    print('  Legacy branches migrated to user_branches')
 
 
 if __name__ == '__main__':

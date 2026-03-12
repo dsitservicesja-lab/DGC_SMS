@@ -4,7 +4,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-collection"></i> Samples</h2>
-    {% if current_user.role.value in ['Officer', 'Admin', 'HOD'] %}
+    {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
     <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
         <i class="bi bi-plus-circle"></i> Register Sample
     </a>

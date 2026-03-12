@@ -29,6 +29,23 @@ class Branch(enum.Enum):
     FOOD_ALCOHOL = 'Food (Alcohol)'
 
 
+# ---------------------------------------------------------------------------
+# Many-to-many association tables for User ↔ Role / Branch
+# ---------------------------------------------------------------------------
+
+user_roles = db.Table(
+    'user_roles',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('role', db.Enum(Role), primary_key=True),
+)
+
+user_branches = db.Table(
+    'user_branches',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('branch', db.Enum(Branch), primary_key=True),
+)
+
+
 class SampleStatus(enum.Enum):
     REGISTERED = 'Registered'
     ASSIGNED = 'Assigned'
@@ -73,8 +90,8 @@ class User(UserMixin, db.Model):
     first_name = db.Column(db.String(120), nullable=False)
     last_name = db.Column(db.String(120), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.Enum(Role), nullable=False, default=Role.CHEMIST)
-    branch = db.Column(db.Enum(Branch), nullable=True)
+    role = db.Column(db.Enum(Role), nullable=True)       # legacy single-role
+    branch = db.Column(db.Enum(Branch), nullable=True)    # legacy single-branch
     is_active_user = db.Column(db.Boolean, default=True)
     must_change_password = db.Column(db.Boolean, default=True)
     created_at = db.Column(
@@ -97,6 +114,74 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    # ----- role / branch helpers (backed by association tables) -----
+
+    _roles = None   # in-memory cache / pending value
+    _branches = None
+
+    @property
+    def roles(self):
+        """Return the set of Role enums for this user."""
+        if self._roles is not None:
+            return self._roles
+        if self.id is None:
+            self._roles = set()
+            return self._roles
+        rows = db.session.execute(
+            user_roles.select().where(user_roles.c.user_id == self.id)
+        ).fetchall()
+        self._roles = {row.role for row in rows}
+        return self._roles
+
+    @roles.setter
+    def roles(self, value):
+        self._roles = set(value)
+
+    @property
+    def branches(self):
+        """Return the set of Branch enums for this user."""
+        if self._branches is not None:
+            return self._branches
+        if self.id is None:
+            self._branches = set()
+            return self._branches
+        rows = db.session.execute(
+            user_branches.select().where(user_branches.c.user_id == self.id)
+        ).fetchall()
+        self._branches = {row.branch for row in rows}
+        return self._branches
+
+    @branches.setter
+    def branches(self, value):
+        self._branches = set(value)
+
+    def has_role(self, role):
+        return role in self.roles
+
+    def has_any_role(self, *roles):
+        return bool(self.roles & set(roles))
+
+    def has_branch(self, branch):
+        return branch in self.branches
+
+    def has_any_branch(self, *branches):
+        return bool(self.branches & set(branches))
+
+    @property
+    def role_names(self):
+        """Comma-separated display of roles."""
+        return ', '.join(sorted(r.value for r in self.roles)) or '—'
+
+    @property
+    def branch_names(self):
+        """Comma-separated display of branches."""
+        return ', '.join(sorted(b.value for b in self.branches)) or '—'
+
+    @property
+    def primary_branch(self):
+        """Return one branch (for filtering) or None."""
+        return next(iter(self.branches), None)
+
     @property
     def full_name(self):
         return f'{self.first_name} {self.last_name}'
@@ -117,16 +202,40 @@ class User(UserMixin, db.Model):
         return db.session.get(User, user_id)
 
     def is_branch_head(self):
-        return self.role in (Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY)
+        return self.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY)
 
     def __repr__(self):
-        return f'<User {self.username} ({self.role.value})>'
+        return f'<User {self.username} ({self.role_names})>'
 
 
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
+
+# Flush pending roles/branches to the association tables after insert or update
+from sqlalchemy import event as _sa_event
+
+
+@_sa_event.listens_for(User, 'after_insert')
+@_sa_event.listens_for(User, 'after_update')
+def _flush_user_roles_branches(mapper, connection, target):
+    if target._roles is not None:
+        connection.execute(
+            user_roles.delete().where(user_roles.c.user_id == target.id)
+        )
+        for r in target._roles:
+            connection.execute(user_roles.insert().values(
+                user_id=target.id, role=r
+            ))
+    if target._branches is not None:
+        connection.execute(
+            user_branches.delete().where(user_branches.c.user_id == target.id)
+        )
+        for b in target._branches:
+            connection.execute(user_branches.insert().values(
+                user_id=target.id, branch=b
+            ))
 
 # ---------------------------------------------------------------------------
 # Sample

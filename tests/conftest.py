@@ -29,11 +29,12 @@ def _create_user(role=Role.OFFICER, branch=None, username='testuser'):
         email=f'{username}@test.com',
         first_name='Test',
         last_name='User',
-        role=role,
-        branch=branch,
         must_change_password=False,
     )
     user.set_password('password123')
+    user.roles = {role}
+    if branch:
+        user.branches = {branch}
     db.session.add(user)
     db.session.commit()
     return user

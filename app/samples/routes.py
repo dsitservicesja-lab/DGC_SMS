@@ -14,6 +14,7 @@ from app.samples import samples_bp
 from app.models import (
     Sample, SampleAssignment, SampleHistory, User,
     Role, Branch, SampleStatus, AssignmentStatus,
+    user_roles, user_branches,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -83,18 +84,18 @@ def sample_list():
         )
 
     # Role-based filtering
-    if current_user.role == Role.CHEMIST:
+    if current_user.has_role(Role.CHEMIST) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
         # Chemists see only samples assigned to them
         assigned_ids = db.select(SampleAssignment.sample_id).where(
             SampleAssignment.chemist_id == current_user.id
         ).scalar_subquery()
         query = query.filter(Sample.id.in_(assigned_ids))
-    elif current_user.role == Role.OFFICER:
+    elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
         # Officers see samples they uploaded
         query = query.filter(Sample.uploaded_by == current_user.id)
-    elif current_user.role == Role.SENIOR_CHEMIST and current_user.branch:
-        # Senior Chemists see samples in their branch
-        query = query.filter(Sample.sample_type == current_user.branch)
+    elif current_user.has_role(Role.SENIOR_CHEMIST) and current_user.branches and not current_user.has_any_role(Role.HOD, Role.ADMIN):
+        # Senior Chemists see samples in their branch(es)
+        query = query.filter(Sample.sample_type.in_(current_user.branches))
 
     samples = query.order_by(Sample.date_registered.desc()).all()
     return render_template(
@@ -115,7 +116,7 @@ def sample_list():
 @samples_bp.route('/register', methods=['GET', 'POST'])
 @login_required
 def register():
-    if current_user.role not in (Role.OFFICER, Role.ADMIN, Role.HOD):
+    if not current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD):
         flash('Only officers can register samples.', 'danger')
         return redirect(url_for('samples.sample_list'))
 
@@ -181,7 +182,7 @@ def detail(sample_id):
 @login_required
 def edit(sample_id):
     sample = Sample.query.get_or_404(sample_id)
-    if current_user.role not in (Role.OFFICER, Role.ADMIN, Role.HOD) and \
+    if not current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) and \
        current_user.id != sample.uploaded_by:
         flash('Access denied.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
@@ -217,7 +218,7 @@ def edit(sample_id):
 @login_required
 def assign(sample_id):
     sample = Sample.query.get_or_404(sample_id)
-    if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
+    if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Only Senior Chemists / Branch Heads can assign samples.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -225,11 +226,14 @@ def assign(sample_id):
 
     # Populate chemist choices – chemists in the matching branch
     chemists = User.query.filter(
-        User.role == Role.CHEMIST,
         User.is_active_user.is_(True),
+    ).join(user_roles).filter(
+        user_roles.c.role == Role.CHEMIST,
     )
-    if current_user.branch:
-        chemists = chemists.filter(User.branch == current_user.branch)
+    if current_user.branches:
+        chemists = chemists.join(user_branches).filter(
+            user_branches.c.branch.in_(current_user.branches)
+        )
     chemists = chemists.order_by(User.last_name).all()
     form.chemist_ids.choices = [(c.id, c.full_name) for c in chemists]
 
@@ -275,14 +279,14 @@ def assignment_detail(assignment_id):
 
 
 def _can_view_assignment(assignment):
-    if current_user.role == Role.ADMIN:
+    if current_user.has_role(Role.ADMIN):
         return True
     if current_user.id == assignment.chemist_id:
         return True
     if current_user.id == assignment.sample.uploaded_by:
         return True
     if current_user.is_branch_head():
-        if current_user.branch is None or current_user.branch == assignment.sample.sample_type:
+        if not current_user.branches or assignment.sample.sample_type in current_user.branches:
             return True
     return False
 
@@ -365,10 +369,10 @@ def preliminary_review(assignment_id):
 
     # Only Officer who uploaded the sample, HOD, or Admin can do preliminary review
     sample = assignment.sample
-    if current_user.role == Role.OFFICER and current_user.id != sample.uploaded_by:
+    if current_user.has_role(Role.OFFICER) and current_user.id != sample.uploaded_by:
         flash('Access denied.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
-    if current_user.role not in (Role.OFFICER, Role.HOD, Role.ADMIN):
+    if not current_user.has_any_role(Role.OFFICER, Role.HOD, Role.ADMIN):
         flash('Only Officers can perform preliminary reviews.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
@@ -426,7 +430,7 @@ def preliminary_review(assignment_id):
 def review_report(assignment_id):
     assignment = SampleAssignment.query.get_or_404(assignment_id)
 
-    if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
+    if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Only Senior Chemists / Branch Heads can review reports.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
@@ -483,7 +487,7 @@ def review_report(assignment_id):
 def submit_to_deputy(sample_id):
     sample = Sample.query.get_or_404(sample_id)
 
-    if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
+    if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Only Senior Chemists can submit to Deputy.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -543,7 +547,7 @@ def submit_to_deputy(sample_id):
 def deputy_review(sample_id):
     sample = Sample.query.get_or_404(sample_id)
 
-    if current_user.role not in (Role.DEPUTY, Role.HOD, Role.ADMIN):
+    if not current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN):
         flash('Only the Deputy Government Chemist can perform this review.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -598,7 +602,7 @@ def deputy_review(sample_id):
 def resubmit_to_deputy(sample_id):
     sample = Sample.query.get_or_404(sample_id)
 
-    if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
+    if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Access denied.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -630,7 +634,7 @@ def resubmit_to_deputy(sample_id):
 def prepare_certificate(sample_id):
     sample = Sample.query.get_or_404(sample_id)
 
-    if current_user.role not in (Role.DEPUTY, Role.HOD, Role.ADMIN):
+    if not current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN):
         flash('Only the Deputy Government Chemist can prepare certificates.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -682,7 +686,7 @@ def prepare_certificate(sample_id):
 def hod_review(sample_id):
     sample = Sample.query.get_or_404(sample_id)
 
-    if current_user.role not in (Role.HOD, Role.ADMIN):
+    if not current_user.has_any_role(Role.HOD, Role.ADMIN):
         flash('Only the Government Chemist can review and sign certificates.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 

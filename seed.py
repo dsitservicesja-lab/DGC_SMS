@@ -25,10 +25,10 @@ def seed():
             email='admin@dgc.gov.jm',
             first_name='System',
             last_name='Administrator',
-            role=Role.ADMIN,
             must_change_password=False,
         )
         admin.set_password('admin123')
+        admin.roles = {Role.ADMIN}
         db.session.add(admin)
 
         # HOD
@@ -37,9 +37,9 @@ def seed():
             email='hod@dgc.gov.jm',
             first_name='Head',
             last_name='Department',
-            role=Role.HOD,
         )
         hod.set_password('hod123')
+        hod.roles = {Role.HOD}
         db.session.add(hod)
 
         # Deputy
@@ -48,9 +48,9 @@ def seed():
             email='deputy@dgc.gov.jm',
             first_name='Deputy',
             last_name='Director',
-            role=Role.DEPUTY,
         )
         deputy.set_password('deputy123')
+        deputy.roles = {Role.DEPUTY}
         db.session.add(deputy)
 
         # Senior Chemists (one per branch)
@@ -66,10 +66,10 @@ def seed():
                 email=f'{uname}@dgc.gov.jm',
                 first_name=fname,
                 last_name=lname,
-                role=Role.SENIOR_CHEMIST,
-                branch=branch,
             )
             sc.set_password('senior123')
+            sc.roles = {Role.SENIOR_CHEMIST}
+            sc.branches = {branch}
             db.session.add(sc)
 
         # Chemists (two per branch)
@@ -89,10 +89,10 @@ def seed():
                 email=f'{uname}@dgc.gov.jm',
                 first_name=fname,
                 last_name=lname,
-                role=Role.CHEMIST,
-                branch=branch,
             )
             c.set_password('chemist123')
+            c.roles = {Role.CHEMIST}
+            c.branches = {branch}
             db.session.add(c)
 
         # Officer
@@ -101,9 +101,9 @@ def seed():
             email='officer1@dgc.gov.jm',
             first_name='Jane',
             last_name='Officer',
-            role=Role.OFFICER,
         )
         officer.set_password('officer123')
+        officer.roles = {Role.OFFICER}
         db.session.add(officer)
 
         db.session.commit()

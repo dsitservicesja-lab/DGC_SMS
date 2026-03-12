@@ -29,12 +29,12 @@
             <i class="bi bi-upload"></i> Submit Report
         </a>
         {% endif %}
-        {% if (current_user.role.value in ['Officer', 'HOD', 'Admin'] or current_user.id == sample.uploaded_by) and assignment.status.value == 'Report Submitted' %}
+        {% if (current_user.has_any_role(Role.OFFICER, Role.HOD, Role.ADMIN) or current_user.id == sample.uploaded_by) and assignment.status.value == 'Report Submitted' %}
         <a href="{{ url_for('samples.preliminary_review', assignment_id=assignment.id) }}" class="btn btn-info btn-sm">
             <i class="bi bi-clipboard-check"></i> Preliminary Review
         </a>
         {% endif %}
-        {% if (current_user.is_branch_head() or current_user.role.value == 'Admin') and assignment.status.value == 'Technical Review' %}
+        {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and assignment.status.value == 'Technical Review' %}
         <a href="{{ url_for('samples.review_report', assignment_id=assignment.id) }}" class="btn btn-warning btn-sm">
             <i class="bi bi-clipboard-check"></i> Technical Review
         </a>

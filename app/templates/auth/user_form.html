@@ -63,16 +63,30 @@
                     {% endif %}
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            {{ form.role.label(class="form-label") }}
-                            {{ form.role(class="form-select") }}
-                            {% for error in form.role.errors %}
+                            {{ form.roles.label(class="form-label") }}
+                            <div class="border rounded p-2">
+                                {% for subfield in form.roles %}
+                                <div class="form-check">
+                                    {{ subfield(class="form-check-input") }}
+                                    {{ subfield.label(class="form-check-label") }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% for error in form.roles.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
                         <div class="col-md-6 mb-3">
-                            {{ form.branch.label(class="form-label") }}
-                            {{ form.branch(class="form-select") }}
-                            {% for error in form.branch.errors %}
+                            {{ form.branches.label(class="form-label") }}
+                            <div class="border rounded p-2">
+                                {% for subfield in form.branches %}
+                                <div class="form-check">
+                                    {{ subfield(class="form-check-input") }}
+                                    {{ subfield.label(class="form-check-label") }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% for error in form.branches.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>

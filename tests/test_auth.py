@@ -64,7 +64,7 @@ def test_create_user(app, client):
         'email': 'new@test.com',
         'password': 'pass1234',
         'password2': 'pass1234',
-        'role': 'CHEMIST',
-        'branch': 'TOXICOLOGY',
+        'roles': ['CHEMIST'],
+        'branches': ['TOXICOLOGY'],
     }, follow_redirects=True)
     assert b'created successfully' in resp.data

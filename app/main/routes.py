@@ -21,7 +21,7 @@ def index():
 def dashboard():
     stats = {}
 
-    if current_user.role == Role.CHEMIST:
+    if current_user.has_role(Role.CHEMIST) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
         my_assignments = SampleAssignment.query.filter_by(
             chemist_id=current_user.id
         )
@@ -47,7 +47,7 @@ def dashboard():
             ])
         ).count()
 
-    elif current_user.role == Role.OFFICER:
+    elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
         my_samples = Sample.query.filter_by(uploaded_by=current_user.id)
         stats['total_samples'] = my_samples.count()
         stats['registered'] = my_samples.filter_by(
@@ -72,7 +72,7 @@ def dashboard():
             ])
         ).count()
 
-    elif current_user.role == Role.DEPUTY:
+    elif current_user.has_role(Role.DEPUTY) and not current_user.has_any_role(Role.HOD, Role.ADMIN):
         query = Sample.query
         stats['total_samples'] = query.count()
         stats['deputy_review'] = query.filter_by(
@@ -94,8 +94,8 @@ def dashboard():
     else:
         # Branch heads, HOD, Admin
         query = Sample.query
-        if current_user.branch and current_user.role == Role.SENIOR_CHEMIST:
-            query = query.filter(Sample.sample_type == current_user.branch)
+        if current_user.branches and current_user.has_role(Role.SENIOR_CHEMIST):
+            query = query.filter(Sample.sample_type.in_(current_user.branches))
 
         stats['total_samples'] = query.count()
         stats['awaiting_assignment'] = query.filter_by(
@@ -163,7 +163,7 @@ def unread_notification_count():
 @main_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    if current_user.role not in (Role.ADMIN, Role.HOD):
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 

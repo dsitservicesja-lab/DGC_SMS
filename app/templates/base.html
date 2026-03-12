@@ -44,12 +44,12 @@
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle"></i> {{ current_user.full_name }}
-                            <small class="text-light opacity-75">({{ current_user.role.value }})</small>
+                            <small class="text-light opacity-75">({{ current_user.role_names }})</small>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><span class="dropdown-item-text text-muted">{{ current_user.email }}</span></li>
-                            {% if current_user.branch %}
-                            <li><span class="dropdown-item-text text-muted">{{ current_user.branch.value }}</span></li>
+                            {% if current_user.branches %}
+                            <li><span class="dropdown-item-text text-muted">{{ current_user.branch_names }}</span></li>
                             {% endif %}
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
@@ -77,7 +77,7 @@
                             <i class="bi bi-collection"></i> Samples
                         </a>
                     </li>
-                    {% if current_user.role in [current_user.role.__class__.OFFICER, current_user.role.__class__.ADMIN, current_user.role.__class__.HOD] %}
+                    {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('samples.register') }}">
                             <i class="bi bi-plus-circle"></i> Register Sample
@@ -89,7 +89,7 @@
                             <i class="bi bi-bell"></i> Notifications
                         </a>
                     </li>
-                    {% if current_user.role in [current_user.role.__class__.ADMIN, current_user.role.__class__.HOD] %}
+                    {% if current_user.has_any_role(Role.ADMIN, Role.HOD) %}
                     <li class="nav-item mt-3">
                         <small class="text-muted px-3">ADMIN</small>
                     </li>

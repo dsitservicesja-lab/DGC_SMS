@@ -9,7 +9,7 @@
 
 <!-- Stats Cards -->
 <div class="row g-3 mb-4">
-    {% if current_user.role.value == 'Chemist' %}
+    {% if current_user.has_role(Role.CHEMIST) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
     <div class="col-md-3">
         <div class="card stat-card h-100">
             <div class="card-body">
@@ -43,7 +43,7 @@
         </div>
     </div>
 
-    {% elif current_user.role.value == 'Officer' %}
+    {% elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
     <div class="col-md-3">
         <div class="card stat-card h-100">
             <div class="card-body">
@@ -77,7 +77,7 @@
         </div>
     </div>
 
-    {% elif current_user.role.value == 'Deputy' %}
+    {% elif current_user.has_role(Role.DEPUTY) and not current_user.has_any_role(Role.HOD, Role.ADMIN) %}
     <div class="col-md-3">
         <div class="card stat-card h-100">
             <div class="card-body">
@@ -154,7 +154,7 @@
             <div class="card-header"><h5 class="mb-0">Quick Actions</h5></div>
             <div class="card-body">
                 <div class="d-flex gap-2 flex-wrap">
-                    {% if current_user.role.value in ['Officer', 'Admin', 'HOD'] %}
+                    {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
                     <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Register New Sample
                     </a>

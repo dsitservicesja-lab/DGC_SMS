@@ -6,7 +6,7 @@ from flask import current_app, render_template_string
 from flask_mail import Message
 
 from app import db, mail
-from app.models import Notification, User, Branch, Role
+from app.models import Notification, User, Branch, Role, user_roles, user_branches
 
 
 def _send_async_email(app, msg):
@@ -58,16 +58,16 @@ def create_notification(user_id, title, message, link=None, send_mail=True):
 def notify_branch_heads(branch, title, message, link=None, exclude_user_id=None):
     """Notify Senior Chemist, Deputy and HOD for a given branch."""
     head_roles = [Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD]
-    heads = User.query.filter(
-        User.role.in_(head_roles),
+    heads = User.query.join(user_roles).filter(
+        user_roles.c.role.in_(head_roles),
         User.is_active_user.is_(True),
-    ).all()
+    ).distinct().all()
 
     # Filter by branch – HOD/Deputy may not have a branch (org-wide)
     for head in heads:
         if head.id == exclude_user_id:
             continue
-        if head.branch is not None and head.branch != branch:
+        if head.branches and branch not in head.branches:
             continue
         create_notification(head.id, title, message, link)
 
@@ -216,10 +216,10 @@ def notify_submitted_to_deputy(sample):
     link = f'/samples/{sample.id}'
     # Notify Deputy and HOD
     from app.models import Role
-    deputies = User.query.filter(
-        User.role.in_([Role.DEPUTY, Role.HOD]),
+    deputies = User.query.join(user_roles).filter(
+        user_roles.c.role.in_([Role.DEPUTY, Role.HOD]),
         User.is_active_user.is_(True),
-    ).all()
+    ).distinct().all()
     for user in deputies:
         create_notification(user.id, title, message, link)
 
@@ -254,10 +254,10 @@ def notify_certificate_prepared(sample):
     link = f'/samples/{sample.id}'
     # Notify HOD
     from app.models import Role
-    hods = User.query.filter(
-        User.role == Role.HOD,
+    hods = User.query.join(user_roles).filter(
+        user_roles.c.role == Role.HOD,
         User.is_active_user.is_(True),
-    ).all()
+    ).distinct().all()
     for hod in hods:
         create_notification(hod.id, title, message, link)
 
@@ -285,10 +285,10 @@ def notify_certificate_signed(sample, action):
 
     # Notify Deputy, branch heads, and the uploading officer
     from app.models import Role
-    deputies = User.query.filter(
-        User.role == Role.DEPUTY,
+    deputies = User.query.join(user_roles).filter(
+        user_roles.c.role == Role.DEPUTY,
         User.is_active_user.is_(True),
-    ).all()
+    ).distinct().all()
     for dep in deputies:
         create_notification(dep.id, title, message, link)
 

@@ -103,7 +103,7 @@ def logout():
 @auth_bp.route('/users')
 @login_required
 def user_list():
-    if current_user.role not in (Role.ADMIN, Role.HOD):
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
     users = User.query.order_by(User.last_name).all()
@@ -113,7 +113,7 @@ def user_list():
 @auth_bp.route('/users/create', methods=['GET', 'POST'])
 @login_required
 def user_create():
-    if current_user.role not in (Role.ADMIN, Role.HOD):
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
     form = UserCreateForm()
@@ -123,11 +123,11 @@ def user_create():
             last_name=form.last_name.data,
             username=form.username.data,
             email=form.email.data,
-            role=Role[form.role.data],
-            branch=Branch[form.branch.data] if form.branch.data else None,
         )
         user.set_password(form.password.data)
         user.must_change_password = True
+        user.roles = {Role[r] for r in form.roles.data}
+        user.branches = {Branch[b] for b in form.branches.data}
         db.session.add(user)
         db.session.commit()
         flash(f'User {user.username} created successfully.', 'success')
@@ -138,14 +138,14 @@ def user_create():
 @auth_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 def user_edit(user_id):
-    if current_user.role not in (Role.ADMIN, Role.HOD):
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
     user = User.query.get_or_404(user_id)
     form = UserEditForm(obj=user)
     if request.method == 'GET':
-        form.role.data = user.role.name
-        form.branch.data = user.branch.name if user.branch else ''
+        form.roles.data = [r.name for r in user.roles]
+        form.branches.data = [b.name for b in user.branches]
     if form.validate_on_submit():
         # Check email uniqueness
         existing = User.query.filter(
@@ -157,8 +157,8 @@ def user_edit(user_id):
             user.first_name = form.first_name.data
             user.last_name = form.last_name.data
             user.email = form.email.data
-            user.role = Role[form.role.data]
-            user.branch = Branch[form.branch.data] if form.branch.data else None
+            user.roles = {Role[r] for r in form.roles.data}
+            user.branches = {Branch[b] for b in form.branches.data}
             user.is_active_user = form.is_active_user.data
             if form.new_password.data:
                 user.set_password(form.new_password.data)
@@ -171,7 +171,7 @@ def user_edit(user_id):
 @auth_bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 def user_delete(user_id):
-    if current_user.role != Role.ADMIN:
+    if not current_user.has_role(Role.ADMIN):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
     user = User.query.get_or_404(user_id)
@@ -207,8 +207,14 @@ def user_delete(user_id):
         )
         return redirect(url_for('auth.user_list'))
 
-    # Safe to delete — clean up notifications first
+    # Safe to delete — clean up notifications and role/branch associations first
     Notification.query.filter_by(user_id=user.id).delete()
+    db.session.execute(
+        db.text('DELETE FROM user_roles WHERE user_id = :uid'), {'uid': user.id}
+    )
+    db.session.execute(
+        db.text('DELETE FROM user_branches WHERE user_id = :uid'), {'uid': user.id}
+    )
     db.session.delete(user)
     db.session.commit()
     flash(f'User {user.username} has been deleted.', 'success')

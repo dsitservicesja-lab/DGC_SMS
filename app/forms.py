@@ -48,6 +48,11 @@ class ChangePasswordForm(FlaskForm):
     submit = SubmitField('Change Password')
 
 
+class MultiCheckboxField(SelectMultipleField):
+    widget = widgets.ListWidget(prefix_label=False)
+    option_widget = widgets.CheckboxInput()
+
+
 class UserCreateForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=120)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=120)])
@@ -57,11 +62,10 @@ class UserCreateForm(FlaskForm):
     password2 = PasswordField(
         'Confirm Password', validators=[DataRequired(), EqualTo('password')]
     )
-    role = SelectField('Role', choices=[(r.name, r.value) for r in Role], validators=[DataRequired()])
-    branch = SelectField(
-        'Branch / Lab',
-        choices=[('', '-- Select --')] + [(b.name, b.value) for b in Branch],
-        validators=[Optional()],
+    roles = MultiCheckboxField('Roles', choices=[(r.name, r.value) for r in Role], validators=[DataRequired()])
+    branches = MultiCheckboxField(
+        'Branches / Labs',
+        choices=[(b.name, b.value) for b in Branch],
     )
     submit = SubmitField('Create User')
 
@@ -78,11 +82,10 @@ class UserEditForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=120)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=120)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
-    role = SelectField('Role', choices=[(r.name, r.value) for r in Role], validators=[DataRequired()])
-    branch = SelectField(
-        'Branch / Lab',
-        choices=[('', '-- Select --')] + [(b.name, b.value) for b in Branch],
-        validators=[Optional()],
+    roles = MultiCheckboxField('Roles', choices=[(r.name, r.value) for r in Role], validators=[DataRequired()])
+    branches = MultiCheckboxField(
+        'Branches / Labs',
+        choices=[(b.name, b.value) for b in Branch],
     )
     is_active_user = BooleanField('Active')
     new_password = PasswordField('New Password', validators=[Optional(), Length(min=6)])
