@@ -34,9 +34,16 @@ class SampleStatus(enum.Enum):
     ASSIGNED = 'Assigned'
     IN_PROGRESS = 'In Progress'
     REPORT_SUBMITTED = 'Report Submitted'
-    UNDER_REVIEW = 'Under Review'
+    UNDER_PRELIMINARY_REVIEW = 'Preliminary Review'
+    UNDER_TECHNICAL_REVIEW = 'Technical Review'
     RETURNED = 'Returned for Correction'
     ACCEPTED = 'Accepted'
+    DEPUTY_REVIEW = 'Deputy Review'
+    DEPUTY_RETURNED = 'Returned by Deputy'
+    CERTIFICATE_PREPARATION = 'Certificate Preparation'
+    HOD_REVIEW = 'HOD Review'
+    HOD_RETURNED = 'Returned by HOD'
+    CERTIFIED = 'Certified'
     REJECTED = 'Rejected'
     COMPLETED = 'Completed'
 
@@ -45,7 +52,8 @@ class AssignmentStatus(enum.Enum):
     ASSIGNED = 'Assigned'
     IN_PROGRESS = 'In Progress'
     REPORT_SUBMITTED = 'Report Submitted'
-    UNDER_REVIEW = 'Under Review'
+    UNDER_PRELIMINARY_REVIEW = 'Preliminary Review'
+    UNDER_TECHNICAL_REVIEW = 'Technical Review'
     RETURNED = 'Returned for Correction'
     ACCEPTED = 'Accepted'
     REJECTED = 'Rejected'
@@ -153,6 +161,42 @@ class Sample(db.Model):
     )
     expected_report_date = db.Column(db.Date, nullable=True)
 
+    # Summary report (pharmaceutical samples – prepared by Senior Chemist)
+    summary_report = db.Column(db.Text, nullable=True)
+    summary_report_file = db.Column(db.String(500), nullable=True)
+    summary_report_file_original_name = db.Column(db.String(255), nullable=True)
+    summary_report_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    summary_report_at = db.Column(db.DateTime, nullable=True)
+
+    # Deputy Government Chemist review
+    deputy_review_comments = db.Column(db.Text, nullable=True)
+    deputy_reviewed_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    deputy_reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    # Certificate of Analysis (prepared by Deputy)
+    certificate_text = db.Column(db.Text, nullable=True)
+    certificate_file = db.Column(db.String(500), nullable=True)
+    certificate_file_original_name = db.Column(db.String(255), nullable=True)
+    certificate_prepared_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    certificate_prepared_at = db.Column(db.DateTime, nullable=True)
+
+    # Government Chemist (HOD) review & signing
+    hod_review_comments = db.Column(db.Text, nullable=True)
+    hod_reviewed_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    hod_reviewed_at = db.Column(db.DateTime, nullable=True)
+    certified_at = db.Column(db.DateTime, nullable=True)
+    certified_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+
     # Relationships
     assignments = db.relationship(
         'SampleAssignment', backref='sample', lazy='dynamic',
@@ -161,6 +205,21 @@ class Sample(db.Model):
     history = db.relationship(
         'SampleHistory', backref='sample', lazy='dynamic',
         cascade='all, delete-orphan', order_by='SampleHistory.created_at.desc()'
+    )
+    summary_report_user = db.relationship(
+        'User', foreign_keys=[summary_report_by]
+    )
+    deputy_reviewer = db.relationship(
+        'User', foreign_keys=[deputy_reviewed_by]
+    )
+    certificate_preparer = db.relationship(
+        'User', foreign_keys=[certificate_prepared_by]
+    )
+    hod_reviewer = db.relationship(
+        'User', foreign_keys=[hod_reviewed_by]
+    )
+    certifier = db.relationship(
+        'User', foreign_keys=[certified_by]
     )
 
     def __repr__(self):
@@ -203,16 +262,30 @@ class SampleAssignment(db.Model):
     report_file_original_name = db.Column(db.String(255), nullable=True)
     report_submitted_at = db.Column(db.DateTime, nullable=True)
 
-    # Review
+    # Preliminary review (by Officer / Senior Chemist Technologist)
+    preliminary_review_comments = db.Column(db.Text, nullable=True)
+    preliminary_reviewed_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    preliminary_reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    # Technical review (by Senior Chemist)
     review_comments = db.Column(db.Text, nullable=True)
     reviewed_by = db.Column(
         db.Integer, db.ForeignKey('users.id'), nullable=True
     )
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
+    # Track which review stage returned from ('preliminary' or 'technical')
+    return_stage = db.Column(db.String(20), nullable=True)
+
     # Relationships
     assigner = db.relationship(
         'User', foreign_keys=[assigned_by], backref='made_assignments'
+    )
+    preliminary_reviewer = db.relationship(
+        'User', foreign_keys=[preliminary_reviewed_by],
+        backref='preliminary_reviewed_assignments'
     )
     reviewer = db.relationship(
         'User', foreign_keys=[reviewed_by], backref='reviewed_assignments'

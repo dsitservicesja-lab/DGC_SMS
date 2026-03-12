@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Deputy Review - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Sample Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clipboard2-data"></i> Sample Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <dl>
+                            <dt>Lab Number</dt><dd>{{ sample.lab_number }}</dd>
+                            <dt>Sample Name</dt><dd>{{ sample.sample_name }}</dd>
+                            <dt>Type</dt><dd><span class="badge bg-info">{{ sample.sample_type.value }}</span></dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-4">
+                        <dl>
+                            <dt>Date Received</dt><dd>{{ sample.date_received.strftime('%d %b %Y') }}</dd>
+                            {% if sample.source %}<dt>Source</dt><dd>{{ sample.source }}</dd>{% endif %}
+                            {% if sample.parish %}<dt>Parish</dt><dd>{{ sample.parish }}</dd>{% endif %}
+                        </dl>
+                    </div>
+                    <div class="col-md-4">
+                        {% if sample.scanned_file %}
+                        <dt>Scanned Document</dt>
+                        <dd>
+                            <a href="{{ url_for('samples.download_file', filename=sample.scanned_file) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> {{ sample.scanned_file_original_name }}
+                            </a>
+                        </dd>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analyst Reports -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Analyst Reports</h5>
+            </div>
+            <div class="card-body">
+                {% for a in assignments %}
+                <div class="border rounded p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6>{{ a.test_name }} — {{ a.chemist.full_name }}</h6>
+                            {% if a.test_reference %}
+                            <small class="text-muted">Ref: {{ a.test_reference }}</small>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-success">{{ a.status.value }}</span>
+                    </div>
+                    <div class="mt-2 bg-light rounded p-2">{{ a.report_text }}</div>
+                    {% if a.report_file %}
+                    <a href="{{ url_for('samples.download_file', filename=a.report_file) }}"
+                       class="btn btn-sm btn-outline-primary mt-2">
+                        <i class="bi bi-download"></i> {{ a.report_file_original_name }}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Summary Report (Pharmaceutical) -->
+        {% if sample.summary_report %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-text"></i> Summary Report (Pharmaceutical)</h5>
+            </div>
+            <div class="card-body">
+                <div class="bg-light rounded p-3 mb-2">{{ sample.summary_report }}</div>
+                {% if sample.summary_report_file %}
+                <a href="{{ url_for('samples.download_file', filename=sample.summary_report_file) }}"
+                   class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-download"></i> {{ sample.summary_report_file_original_name }}
+                </a>
+                {% endif %}
+                {% if sample.summary_report_user %}
+                <p class="text-muted small mt-2 mb-0">
+                    Prepared by {{ sample.summary_report_user.full_name }}
+                    {% if sample.summary_report_at %} on {{ sample.summary_report_at.strftime('%d %b %Y %H:%M') }}{% endif %}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Review Form -->
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Deputy Government Chemist Review</h4>
+                <small class="text-muted">
+                    Review the submission for completeness and accuracy.
+                    If approved, proceed to prepare the Certificate of Analysis.
+                </small>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.action.label(class="form-label") }}
+                        {{ form.action(class="form-select") }}
+                        {% for error in form.action.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.review_comments.label(class="form-label") }}
+                        {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

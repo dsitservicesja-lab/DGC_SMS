@@ -17,11 +17,15 @@ from app.models import (
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
-    ReportSubmitForm, ReportReviewForm,
+    ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
+    SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
 )
 from app.notifications import (
     notify_sample_uploaded, notify_sample_assigned,
-    notify_report_submitted, notify_report_reviewed,
+    notify_report_submitted, notify_preliminary_review_completed,
+    notify_report_reviewed, notify_submitted_to_deputy,
+    notify_deputy_review_completed, notify_certificate_prepared,
+    notify_certificate_signed,
 )
 
 
@@ -307,12 +311,22 @@ def submit_report(assignment_id):
     if form.validate_on_submit():
         assignment.report_text = form.report_text.data
         assignment.report_submitted_at = datetime.now(timezone.utc)
-        assignment.status = AssignmentStatus.REPORT_SUBMITTED
 
         if form.report_file.data:
             stored, original = _save_file(form.report_file.data)
             assignment.report_file = stored
             assignment.report_file_original_name = original
+
+        # Route to correct review stage based on where it was returned from
+        if assignment.return_stage == 'technical':
+            # Returned by Senior Chemist – skip preliminary, go back to
+            # technical review directly
+            assignment.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
+        else:
+            # First submission or returned from preliminary review
+            assignment.status = AssignmentStatus.REPORT_SUBMITTED
+
+        assignment.return_stage = None
 
         _add_history(
             assignment.sample, 'Report Submitted',
@@ -321,18 +335,7 @@ def submit_report(assignment_id):
         )
 
         # Update sample status
-        sample = assignment.sample
-        all_submitted = all(
-            a.status in (
-                AssignmentStatus.REPORT_SUBMITTED,
-                AssignmentStatus.UNDER_REVIEW,
-                AssignmentStatus.ACCEPTED,
-                AssignmentStatus.COMPLETED,
-            )
-            for a in sample.assignments.all()
-        )
-        if all_submitted:
-            sample.status = SampleStatus.REPORT_SUBMITTED
+        _update_sample_status(assignment.sample)
 
         db.session.commit()
 
@@ -352,7 +355,70 @@ def submit_report(assignment_id):
 
 
 # ---------------------------------------------------------------------------
-# Review report (branch head / senior chemist)
+# Preliminary review (Officer / Senior Chemist Technologist)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/assignment/<int:assignment_id>/preliminary-review', methods=['GET', 'POST'])
+@login_required
+def preliminary_review(assignment_id):
+    assignment = SampleAssignment.query.get_or_404(assignment_id)
+
+    # Only Officer who uploaded the sample, HOD, or Admin can do preliminary review
+    sample = assignment.sample
+    if current_user.role == Role.OFFICER and current_user.id != sample.uploaded_by:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+    if current_user.role not in (Role.OFFICER, Role.HOD, Role.ADMIN):
+        flash('Only Officers can perform preliminary reviews.', 'danger')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    if assignment.status != AssignmentStatus.REPORT_SUBMITTED:
+        flash('This report is not awaiting preliminary review.', 'warning')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    form = PreliminaryReviewForm()
+    if form.validate_on_submit():
+        action = form.action.data
+        assignment.preliminary_review_comments = form.review_comments.data
+        assignment.preliminary_reviewed_by = current_user.id
+        assignment.preliminary_reviewed_at = datetime.now(timezone.utc)
+
+        if action == 'approved':
+            assignment.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
+            _add_history(
+                sample, 'Preliminary Review Approved',
+                f'{current_user.full_name} approved preliminary review for '
+                f'test "{assignment.test_name}". '
+                f'Forwarded to Senior Chemist for technical review.',
+            )
+        else:  # returned
+            assignment.status = AssignmentStatus.RETURNED
+            assignment.return_stage = 'preliminary'
+            assignment.date_completed = None
+            _add_history(
+                sample, 'Preliminary Review Returned',
+                f'{current_user.full_name} returned report for test '
+                f'"{assignment.test_name}" for correction. '
+                f'Comments: {form.review_comments.data or "N/A"}',
+            )
+
+        _update_sample_status(sample)
+        db.session.commit()
+
+        notify_preliminary_review_completed(assignment, action)
+        db.session.commit()
+
+        action_text = 'approved and forwarded' if action == 'approved' else 'returned for correction'
+        flash(f'Report has been {action_text}.', 'success')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    return render_template(
+        'samples/preliminary_review.html', form=form, assignment=assignment
+    )
+
+
+# ---------------------------------------------------------------------------
+# Technical review (Senior Chemist)
 # ---------------------------------------------------------------------------
 
 @samples_bp.route('/assignment/<int:assignment_id>/review', methods=['GET', 'POST'])
@@ -361,14 +427,11 @@ def review_report(assignment_id):
     assignment = SampleAssignment.query.get_or_404(assignment_id)
 
     if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
-        flash('Only branch heads can review reports.', 'danger')
+        flash('Only Senior Chemists / Branch Heads can review reports.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
-    if assignment.status not in (
-        AssignmentStatus.REPORT_SUBMITTED,
-        AssignmentStatus.UNDER_REVIEW,
-    ):
-        flash('No report to review in the current state.', 'warning')
+    if assignment.status != AssignmentStatus.UNDER_TECHNICAL_REVIEW:
+        flash('This report is not awaiting technical review.', 'warning')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     form = ReportReviewForm()
@@ -378,31 +441,26 @@ def review_report(assignment_id):
         assignment.reviewed_by = current_user.id
         assignment.reviewed_at = datetime.now(timezone.utc)
 
-        status_map = {
-            'accepted': AssignmentStatus.ACCEPTED,
-            'returned': AssignmentStatus.RETURNED,
-            'rejected': AssignmentStatus.REJECTED,
-            'completed': AssignmentStatus.COMPLETED,
-        }
-        assignment.status = status_map[action]
-
-        if action == 'returned':
+        if action == 'accepted':
+            assignment.status = AssignmentStatus.ACCEPTED
+            assignment.date_completed = datetime.now(timezone.utc)
+        elif action == 'returned':
+            assignment.status = AssignmentStatus.RETURNED
+            assignment.return_stage = 'technical'
             assignment.date_completed = None
-
-        if action in ('accepted', 'completed'):
+        elif action == 'rejected':
+            assignment.status = AssignmentStatus.REJECTED
             assignment.date_completed = datetime.now(timezone.utc)
 
         _add_history(
             assignment.sample,
-            f'Report {action.title()}',
+            f'Technical Review – {action.title()}',
             f'{current_user.full_name} {action} report for test '
             f'"{assignment.test_name}". '
             f'Comments: {form.review_comments.data or "N/A"}',
         )
 
-        # Update overall sample status
         _update_sample_status(assignment.sample)
-
         db.session.commit()
 
         notify_report_reviewed(assignment, action)
@@ -413,6 +471,264 @@ def review_report(assignment_id):
 
     return render_template(
         'samples/review_report.html', form=form, assignment=assignment
+    )
+
+
+# ---------------------------------------------------------------------------
+# Submit to Deputy Government Chemist (Senior Chemist)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/submit-to-deputy', methods=['GET', 'POST'])
+@login_required
+def submit_to_deputy(sample_id):
+    sample = Sample.query.get_or_404(sample_id)
+
+    if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
+        flash('Only Senior Chemists can submit to Deputy.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    if sample.status != SampleStatus.ACCEPTED:
+        flash('Sample must have all reports accepted before submitting to Deputy.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    is_pharma = sample.sample_type == Branch.PHARMACEUTICAL
+    form = SubmitToDeputyForm()
+
+    if form.validate_on_submit():
+        # For pharmaceutical, require summary report
+        if is_pharma and not form.summary_report.data:
+            flash('Summary report is required for pharmaceutical samples.', 'danger')
+            return render_template(
+                'samples/submit_to_deputy.html', form=form, sample=sample,
+                is_pharma=is_pharma,
+            )
+
+        if form.summary_report.data:
+            sample.summary_report = form.summary_report.data
+            sample.summary_report_by = current_user.id
+            sample.summary_report_at = datetime.now(timezone.utc)
+
+        if form.summary_report_file.data:
+            stored, original = _save_file(form.summary_report_file.data)
+            sample.summary_report_file = stored
+            sample.summary_report_file_original_name = original
+
+        sample.status = SampleStatus.DEPUTY_REVIEW
+
+        detail_parts = [f'Submitted to Deputy Government Chemist by {current_user.full_name}.']
+        if is_pharma:
+            detail_parts.append('Summary report included (Pharmaceutical sample).')
+
+        _add_history(sample, 'Submitted to Deputy', ' '.join(detail_parts))
+        db.session.commit()
+
+        notify_submitted_to_deputy(sample)
+        db.session.commit()
+
+        flash('Reports submitted to Deputy Government Chemist.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    return render_template(
+        'samples/submit_to_deputy.html', form=form, sample=sample,
+        is_pharma=is_pharma,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Deputy Government Chemist review
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/deputy-review', methods=['GET', 'POST'])
+@login_required
+def deputy_review(sample_id):
+    sample = Sample.query.get_or_404(sample_id)
+
+    if current_user.role not in (Role.DEPUTY, Role.HOD, Role.ADMIN):
+        flash('Only the Deputy Government Chemist can perform this review.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    if sample.status != SampleStatus.DEPUTY_REVIEW:
+        flash('Sample is not awaiting Deputy review.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    form = DeputyReviewForm()
+    if form.validate_on_submit():
+        action = form.action.data
+        sample.deputy_review_comments = form.review_comments.data
+        sample.deputy_reviewed_by = current_user.id
+        sample.deputy_reviewed_at = datetime.now(timezone.utc)
+
+        if action == 'approved':
+            sample.status = SampleStatus.CERTIFICATE_PREPARATION
+            _add_history(
+                sample, 'Deputy Review Approved',
+                f'{current_user.full_name} approved the submission. '
+                f'Certificate of Analysis to be prepared.',
+            )
+        else:  # returned
+            sample.status = SampleStatus.DEPUTY_RETURNED
+            _add_history(
+                sample, 'Deputy Review Returned',
+                f'{current_user.full_name} returned submission to '
+                f'Senior Chemist. Comments: {form.review_comments.data or "N/A"}',
+            )
+
+        db.session.commit()
+
+        notify_deputy_review_completed(sample, action)
+        db.session.commit()
+
+        action_text = 'approved' if action == 'approved' else 'returned to Senior Chemist'
+        flash(f'Submission has been {action_text}.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    assignments = sample.assignments.all()
+    return render_template(
+        'samples/deputy_review.html', form=form, sample=sample,
+        assignments=assignments,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Resubmit to Deputy (Senior Chemist, after deputy return)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/resubmit-to-deputy', methods=['POST'])
+@login_required
+def resubmit_to_deputy(sample_id):
+    sample = Sample.query.get_or_404(sample_id)
+
+    if not current_user.is_branch_head() and current_user.role != Role.ADMIN:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    if sample.status != SampleStatus.DEPUTY_RETURNED:
+        flash('Sample is not in a returned-by-Deputy state.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    sample.status = SampleStatus.DEPUTY_REVIEW
+    _add_history(
+        sample, 'Resubmitted to Deputy',
+        f'{current_user.full_name} resubmitted to Deputy Government Chemist '
+        f'after corrections.',
+    )
+    db.session.commit()
+
+    notify_submitted_to_deputy(sample)
+    db.session.commit()
+
+    flash('Resubmitted to Deputy Government Chemist.', 'success')
+    return redirect(url_for('samples.detail', sample_id=sample.id))
+
+
+# ---------------------------------------------------------------------------
+# Prepare Certificate of Analysis (Deputy Government Chemist)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/prepare-certificate', methods=['GET', 'POST'])
+@login_required
+def prepare_certificate(sample_id):
+    sample = Sample.query.get_or_404(sample_id)
+
+    if current_user.role not in (Role.DEPUTY, Role.HOD, Role.ADMIN):
+        flash('Only the Deputy Government Chemist can prepare certificates.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    if sample.status not in (SampleStatus.CERTIFICATE_PREPARATION, SampleStatus.HOD_RETURNED):
+        flash('Sample is not ready for certificate preparation.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    form = CertificateForm()
+    if form.validate_on_submit():
+        sample.certificate_text = form.certificate_text.data
+        sample.certificate_prepared_by = current_user.id
+        sample.certificate_prepared_at = datetime.now(timezone.utc)
+
+        if form.certificate_file.data:
+            stored, original = _save_file(form.certificate_file.data)
+            sample.certificate_file = stored
+            sample.certificate_file_original_name = original
+
+        sample.status = SampleStatus.HOD_REVIEW
+
+        _add_history(
+            sample, 'Certificate Prepared',
+            f'Certificate of Analysis prepared by {current_user.full_name}. '
+            f'Submitted to Government Chemist for review and signing.',
+        )
+        db.session.commit()
+
+        notify_certificate_prepared(sample)
+        db.session.commit()
+
+        flash('Certificate of Analysis submitted for Government Chemist review.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    # Pre-fill if resubmitting after HOD return
+    if request.method == 'GET' and sample.certificate_text:
+        form.certificate_text.data = sample.certificate_text
+
+    return render_template(
+        'samples/prepare_certificate.html', form=form, sample=sample,
+    )
+
+
+# ---------------------------------------------------------------------------
+# HOD (Government Chemist) review & sign certificate
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/hod-review', methods=['GET', 'POST'])
+@login_required
+def hod_review(sample_id):
+    sample = Sample.query.get_or_404(sample_id)
+
+    if current_user.role not in (Role.HOD, Role.ADMIN):
+        flash('Only the Government Chemist can review and sign certificates.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    if sample.status != SampleStatus.HOD_REVIEW:
+        flash('Sample is not awaiting Government Chemist review.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    form = HODReviewForm()
+    if form.validate_on_submit():
+        action = form.action.data
+        sample.hod_review_comments = form.review_comments.data
+        sample.hod_reviewed_by = current_user.id
+        sample.hod_reviewed_at = datetime.now(timezone.utc)
+
+        if action == 'sign':
+            sample.certified_at = datetime.now(timezone.utc)
+            sample.certified_by = current_user.id
+            sample.status = SampleStatus.CERTIFIED
+            _add_history(
+                sample, 'Certificate Signed',
+                f'Certificate of Analysis signed by '
+                f'Government Chemist {current_user.full_name}. '
+                f'Sample analysis process completed.',
+            )
+        else:  # returned
+            sample.status = SampleStatus.HOD_RETURNED
+            _add_history(
+                sample, 'Certificate Returned by HOD',
+                f'Government Chemist {current_user.full_name} returned '
+                f'certificate for correction. '
+                f'Comments: {form.review_comments.data or "N/A"}',
+            )
+
+        db.session.commit()
+
+        notify_certificate_signed(sample, action)
+        db.session.commit()
+
+        if action == 'sign':
+            flash('Certificate of Analysis signed. Process completed.', 'success')
+        else:
+            flash('Certificate returned to Deputy for correction.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    return render_template(
+        'samples/hod_review.html', form=form, sample=sample,
     )
 
 
@@ -432,8 +748,10 @@ def _update_sample_status(sample):
         sample.status = SampleStatus.REJECTED
     elif any(s == AssignmentStatus.RETURNED for s in statuses):
         sample.status = SampleStatus.RETURNED
-    elif any(s in (AssignmentStatus.UNDER_REVIEW, AssignmentStatus.REPORT_SUBMITTED) for s in statuses):
-        sample.status = SampleStatus.UNDER_REVIEW
+    elif any(s == AssignmentStatus.UNDER_TECHNICAL_REVIEW for s in statuses):
+        sample.status = SampleStatus.UNDER_TECHNICAL_REVIEW
+    elif any(s == AssignmentStatus.REPORT_SUBMITTED for s in statuses):
+        sample.status = SampleStatus.REPORT_SUBMITTED
     elif any(s == AssignmentStatus.IN_PROGRESS for s in statuses):
         sample.status = SampleStatus.IN_PROGRESS
 

@@ -3,22 +3,24 @@
 
 {% block content %}
 {% set sample = assignment.sample %}
+{% set a_colors = {
+    'Assigned': 'primary',
+    'In Progress': 'info',
+    'Report Submitted': 'warning',
+    'Preliminary Review': 'warning',
+    'Technical Review': 'warning',
+    'Returned for Correction': 'danger',
+    'Accepted': 'success',
+    'Rejected': 'danger',
+    'Completed': 'success',
+} %}
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2><i class="bi bi-clipboard2-check"></i> Test Assignment</h2>
         <p class="text-muted mb-0">{{ sample.lab_number }} — {{ sample.sample_name }}</p>
     </div>
     <div class="d-flex gap-2 align-items-center">
-        {% set a_colors = {
-            'Assigned': 'primary',
-            'In Progress': 'info',
-            'Report Submitted': 'warning',
-            'Under Review': 'warning',
-            'Returned for Correction': 'danger',
-            'Accepted': 'success',
-            'Rejected': 'danger',
-            'Completed': 'success',
-        } %}
         <span class="badge bg-{{ a_colors.get(assignment.status.value, 'secondary') }} fs-6">
             {{ assignment.status.value }}
         </span>
@@ -27,9 +29,14 @@
             <i class="bi bi-upload"></i> Submit Report
         </a>
         {% endif %}
-        {% if (current_user.is_branch_head() or current_user.role.value == 'Admin') and assignment.status.value in ['Report Submitted', 'Under Review'] %}
+        {% if (current_user.role.value in ['Officer', 'HOD', 'Admin'] or current_user.id == sample.uploaded_by) and assignment.status.value == 'Report Submitted' %}
+        <a href="{{ url_for('samples.preliminary_review', assignment_id=assignment.id) }}" class="btn btn-info btn-sm">
+            <i class="bi bi-clipboard-check"></i> Preliminary Review
+        </a>
+        {% endif %}
+        {% if (current_user.is_branch_head() or current_user.role.value == 'Admin') and assignment.status.value == 'Technical Review' %}
         <a href="{{ url_for('samples.review_report', assignment_id=assignment.id) }}" class="btn btn-warning btn-sm">
-            <i class="bi bi-clipboard-check"></i> Review Report
+            <i class="bi bi-clipboard-check"></i> Technical Review
         </a>
         {% endif %}
     </div>
@@ -107,10 +114,28 @@
 </div>
 {% endif %}
 
-<!-- Review Section -->
+<!-- Preliminary Review Section -->
+{% if assignment.preliminary_review_comments or assignment.preliminary_reviewed_at %}
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-check2-circle"></i> Preliminary Review</h5></div>
+    <div class="card-body">
+        {% if assignment.preliminary_reviewer %}
+        <p><strong>Reviewed by:</strong> {{ assignment.preliminary_reviewer.full_name }}</p>
+        {% endif %}
+        {% if assignment.preliminary_reviewed_at %}
+        <p><strong>Reviewed at:</strong> {{ assignment.preliminary_reviewed_at.strftime('%d %b %Y %H:%M') }}</p>
+        {% endif %}
+        {% if assignment.preliminary_review_comments %}
+        <div class="border rounded p-3 bg-light">{{ assignment.preliminary_review_comments }}</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Technical Review Section -->
 {% if assignment.review_comments or assignment.reviewed_at %}
 <div class="card mb-4">
-    <div class="card-header"><h5 class="mb-0">Review</h5></div>
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Technical Review</h5></div>
     <div class="card-body">
         {% if assignment.reviewer %}
         <p><strong>Reviewed by:</strong> {{ assignment.reviewer.full_name }}</p>

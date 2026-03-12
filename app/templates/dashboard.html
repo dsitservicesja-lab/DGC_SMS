@@ -61,17 +61,51 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #3498db;">
+        <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">In Progress</h6>
-                <h2 class="card-title text-primary">{{ stats.in_progress }}</h2>
+                <h6 class="card-subtitle mb-2 text-muted">Preliminary Reviews</h6>
+                <h2 class="card-title" style="color: #9b59b6;">{{ stats.preliminary_review }}</h2>
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card stat-card h-100" style="border-left-color: #27ae60;">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Completed</h6>
+                <h6 class="card-subtitle mb-2 text-muted">Certified</h6>
+                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+            </div>
+        </div>
+    </div>
+
+    {% elif current_user.role.value == 'Deputy' %}
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Total Samples</h6>
+                <h2 class="card-title">{{ stats.total_samples }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Awaiting Review</h6>
+                <h2 class="card-title" style="color: #9b59b6;">{{ stats.deputy_review }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #3498db;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Certificate Prep</h6>
+                <h2 class="card-title text-primary">{{ stats.certificate_prep }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Certified</h6>
                 <h2 class="card-title text-success">{{ stats.completed }}</h2>
             </div>
         </div>

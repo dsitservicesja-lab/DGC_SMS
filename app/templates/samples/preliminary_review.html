@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Technical Review - DGC SMS{% endblock %}
+{% block title %}Preliminary Review - DGC SMS{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -7,7 +7,7 @@
         <!-- Report Preview -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-file-text"></i> Report to Review (Technical)</h5>
+                <h5 class="mb-0"><i class="bi bi-file-text"></i> Report – Preliminary Review</h5>
                 <small class="text-muted">
                     {{ assignment.sample.lab_number }} — Test: {{ assignment.test_name }}
                     — Analyst: {{ assignment.chemist.full_name }}
@@ -33,26 +33,14 @@
             </div>
         </div>
 
-        <!-- Preliminary Review Info -->
-        {% if assignment.preliminary_reviewed_at %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <h6 class="mb-0"><i class="bi bi-check2-circle"></i> Preliminary Review (Passed)</h6>
-            </div>
-            <div class="card-body">
-                <p class="mb-1"><strong>Reviewed by:</strong> {{ assignment.preliminary_reviewer.full_name }}</p>
-                <p class="mb-1"><strong>Date:</strong> {{ assignment.preliminary_reviewed_at.strftime('%d %b %Y %H:%M') }}</p>
-                {% if assignment.preliminary_review_comments %}
-                <p class="mb-0"><strong>Comments:</strong> {{ assignment.preliminary_review_comments }}</p>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Review Form -->
+        <!-- Preliminary Review Form -->
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Technical Review Decision</h4>
+                <h4 class="mb-0"><i class="bi bi-check2-circle"></i> Preliminary Review Decision</h4>
+                <small class="text-muted">
+                    Administrative and completeness check. If approved, the report
+                    will be forwarded to the Senior Chemist for technical review.
+                </small>
             </div>
             <div class="card-body">
                 <form method="POST">

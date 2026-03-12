@@ -33,8 +33,12 @@ def dashboard():
                 AssignmentStatus.RETURNED,
             ])
         ).count()
-        stats['submitted'] = my_assignments.filter_by(
-            status=AssignmentStatus.REPORT_SUBMITTED
+        stats['submitted'] = my_assignments.filter(
+            SampleAssignment.status.in_([
+                AssignmentStatus.REPORT_SUBMITTED,
+                AssignmentStatus.UNDER_PRELIMINARY_REVIEW,
+                AssignmentStatus.UNDER_TECHNICAL_REVIEW,
+            ])
         ).count()
         stats['completed'] = my_assignments.filter(
             SampleAssignment.status.in_([
@@ -49,15 +53,40 @@ def dashboard():
         stats['registered'] = my_samples.filter_by(
             status=SampleStatus.REGISTERED
         ).count()
+        stats['preliminary_review'] = my_samples.filter(
+            Sample.status.in_([
+                SampleStatus.REPORT_SUBMITTED,
+            ])
+        ).count()
         stats['in_progress'] = my_samples.filter(
             Sample.status.in_([
                 SampleStatus.ASSIGNED,
                 SampleStatus.IN_PROGRESS,
+                SampleStatus.UNDER_TECHNICAL_REVIEW,
             ])
         ).count()
         stats['completed'] = my_samples.filter(
             Sample.status.in_([
-                SampleStatus.ACCEPTED,
+                SampleStatus.CERTIFIED,
+                SampleStatus.COMPLETED,
+            ])
+        ).count()
+
+    elif current_user.role == Role.DEPUTY:
+        query = Sample.query
+        stats['total_samples'] = query.count()
+        stats['deputy_review'] = query.filter_by(
+            status=SampleStatus.DEPUTY_REVIEW
+        ).count()
+        stats['certificate_prep'] = query.filter(
+            Sample.status.in_([
+                SampleStatus.CERTIFICATE_PREPARATION,
+                SampleStatus.HOD_RETURNED,
+            ])
+        ).count()
+        stats['completed'] = query.filter(
+            Sample.status.in_([
+                SampleStatus.CERTIFIED,
                 SampleStatus.COMPLETED,
             ])
         ).count()
@@ -72,12 +101,15 @@ def dashboard():
         stats['awaiting_assignment'] = query.filter_by(
             status=SampleStatus.REGISTERED
         ).count()
-        stats['reports_pending_review'] = SampleAssignment.query.filter_by(
-            status=AssignmentStatus.REPORT_SUBMITTED
+        stats['reports_pending_review'] = SampleAssignment.query.filter(
+            SampleAssignment.status.in_([
+                AssignmentStatus.REPORT_SUBMITTED,
+                AssignmentStatus.UNDER_TECHNICAL_REVIEW,
+            ])
         ).count()
         stats['completed'] = query.filter(
             Sample.status.in_([
-                SampleStatus.ACCEPTED,
+                SampleStatus.CERTIFIED,
                 SampleStatus.COMPLETED,
             ])
         ).count()

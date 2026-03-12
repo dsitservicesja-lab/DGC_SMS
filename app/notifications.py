@@ -99,40 +99,75 @@ def notify_sample_assigned(assignment):
 def notify_report_submitted(assignment):
     """Called when a chemist submits a report."""
     sample = assignment.sample
-    # Notify the officer who uploaded the sample
+    # Notify the officer who uploaded the sample (for preliminary review)
     title = f'Report Submitted: {sample.lab_number}'
     message = (
         f'Analyst {assignment.chemist.full_name} has submitted a report '
         f'for test "{assignment.test_name}" on sample '
-        f'"{sample.sample_name}" (Lab# {sample.lab_number}).'
+        f'"{sample.sample_name}" (Lab# {sample.lab_number}). '
+        f'A preliminary review is required.'
     )
     link = f'/samples/assignment/{assignment.id}'
     create_notification(sample.uploaded_by, title, message, link)
 
-    # Notify branch heads for review
-    notify_branch_heads(
-        sample.sample_type,
-        f'Report Ready for Review: {sample.lab_number}',
-        message,
-        link,
+    # If returning directly to technical review, also notify branch heads
+    from app.models import AssignmentStatus
+    if assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW:
+        notify_branch_heads(
+            sample.sample_type,
+            f'Report Ready for Technical Review: {sample.lab_number}',
+            f'Analyst {assignment.chemist.full_name} has resubmitted '
+            f'report for test "{assignment.test_name}" on sample '
+            f'"{sample.sample_name}" (Lab# {sample.lab_number}). '
+            f'Technical review required.',
+            link,
+        )
+
+
+def notify_preliminary_review_completed(assignment, action):
+    """Called when an Officer completes preliminary review."""
+    sample = assignment.sample
+    action_text = 'approved' if action == 'approved' else 'returned for correction'
+
+    # Notify the chemist
+    title = f'Preliminary Review – {action_text.title()}: {sample.lab_number}'
+    message = (
+        f'Your report for test "{assignment.test_name}" on sample '
+        f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
+        f'{action_text} during preliminary review.'
     )
+    if assignment.preliminary_review_comments:
+        message += f'\n\nComments: {assignment.preliminary_review_comments}'
+    link = f'/samples/assignment/{assignment.id}'
+    create_notification(assignment.chemist_id, title, message, link)
+
+    # If approved, notify Senior Chemist for technical review
+    if action == 'approved':
+        notify_branch_heads(
+            sample.sample_type,
+            f'Report Ready for Technical Review: {sample.lab_number}',
+            f'Report for test "{assignment.test_name}" on sample '
+            f'"{sample.sample_name}" (Lab# {sample.lab_number}) '
+            f'has passed preliminary review and is ready for '
+            f'technical review.',
+            link,
+        )
 
 
 def notify_report_reviewed(assignment, action):
-    """Called when a branch head reviews a report."""
+    """Called when a Senior Chemist completes technical review."""
     sample = assignment.sample
     action_text = {
         'accepted': 'accepted',
         'rejected': 'rejected',
         'returned': 'returned for correction',
-        'completed': 'marked as completed',
     }.get(action, action)
 
-    title = f'Report {action_text.title()}: {sample.lab_number}'
+    title = f'Technical Review – {action_text.title()}: {sample.lab_number}'
     message = (
         f'Your report for test "{assignment.test_name}" on sample '
         f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
-        f'{action_text}.'
+        f'{action_text} during technical review.'
     )
     if assignment.review_comments:
         message += f'\n\nComments: {assignment.review_comments}'
@@ -145,6 +180,117 @@ def notify_report_reviewed(assignment, action):
         sample.uploaded_by,
         title,
         f'Report for sample "{sample.sample_name}" '
-        f'(Lab# {sample.lab_number}) has been {action_text}.',
+        f'(Lab# {sample.lab_number}) has been {action_text} '
+        f'during technical review.',
         link,
     )
+
+    # If all assignments accepted, notify Senior Chemist to submit to Deputy
+    if action == 'accepted':
+        from app.models import AssignmentStatus
+        all_accepted = all(
+            a.status in (AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED)
+            for a in sample.assignments.all()
+        )
+        if all_accepted:
+            sample_link = f'/samples/{sample.id}'
+            notify_branch_heads(
+                sample.sample_type,
+                f'All Reports Accepted: {sample.lab_number}',
+                f'All analyst reports for sample "{sample.sample_name}" '
+                f'(Lab# {sample.lab_number}) have been accepted. '
+                f'Please prepare submission for the Deputy Government '
+                f'Chemist.',
+                sample_link,
+            )
+
+
+def notify_submitted_to_deputy(sample):
+    """Called when Senior Chemist submits reports to Deputy."""
+    title = f'Reports Submitted for Review: {sample.lab_number}'
+    message = (
+        f'Reports for sample "{sample.sample_name}" '
+        f'(Lab# {sample.lab_number}) have been submitted for '
+        f'review by the Deputy Government Chemist.'
+    )
+    link = f'/samples/{sample.id}'
+    # Notify Deputy and HOD
+    from app.models import Role
+    deputies = User.query.filter(
+        User.role.in_([Role.DEPUTY, Role.HOD]),
+        User.is_active_user.is_(True),
+    ).all()
+    for user in deputies:
+        create_notification(user.id, title, message, link)
+
+
+def notify_deputy_review_completed(sample, action):
+    """Called when Deputy completes review."""
+    action_text = 'approved' if action == 'approved' else 'returned to Senior Chemist'
+    title = f'Deputy Review – {action_text.title()}: {sample.lab_number}'
+    message = (
+        f'Sample "{sample.sample_name}" (Lab# {sample.lab_number}) '
+        f'has been {action_text} by the Deputy Government Chemist.'
+    )
+    if sample.deputy_review_comments:
+        message += f'\n\nComments: {sample.deputy_review_comments}'
+    link = f'/samples/{sample.id}'
+
+    # Notify branch heads (Senior Chemist)
+    notify_branch_heads(sample.sample_type, title, message, link)
+
+    # Notify the uploading officer
+    create_notification(sample.uploaded_by, title, message, link)
+
+
+def notify_certificate_prepared(sample):
+    """Called when Deputy prepares Certificate of Analysis."""
+    title = f'Certificate Ready for Review: {sample.lab_number}'
+    message = (
+        f'Certificate of Analysis for sample "{sample.sample_name}" '
+        f'(Lab# {sample.lab_number}) has been prepared and is '
+        f'awaiting review and signing by the Government Chemist.'
+    )
+    link = f'/samples/{sample.id}'
+    # Notify HOD
+    from app.models import Role
+    hods = User.query.filter(
+        User.role == Role.HOD,
+        User.is_active_user.is_(True),
+    ).all()
+    for hod in hods:
+        create_notification(hod.id, title, message, link)
+
+
+def notify_certificate_signed(sample, action):
+    """Called when Government Chemist reviews the certificate."""
+    if action == 'sign':
+        title = f'Certificate Signed: {sample.lab_number}'
+        message = (
+            f'Certificate of Analysis for sample "{sample.sample_name}" '
+            f'(Lab# {sample.lab_number}) has been signed by the '
+            f'Government Chemist. The sample analysis process is complete.'
+        )
+    else:  # returned
+        title = f'Certificate Returned: {sample.lab_number}'
+        message = (
+            f'Certificate of Analysis for sample "{sample.sample_name}" '
+            f'(Lab# {sample.lab_number}) has been returned by the '
+            f'Government Chemist for correction.'
+        )
+        if sample.hod_review_comments:
+            message += f'\n\nComments: {sample.hod_review_comments}'
+
+    link = f'/samples/{sample.id}'
+
+    # Notify Deputy, branch heads, and the uploading officer
+    from app.models import Role
+    deputies = User.query.filter(
+        User.role == Role.DEPUTY,
+        User.is_active_user.is_(True),
+    ).all()
+    for dep in deputies:
+        create_notification(dep.id, title, message, link)
+
+    notify_branch_heads(sample.sample_type, title, message, link)
+    create_notification(sample.uploaded_by, title, message, link)

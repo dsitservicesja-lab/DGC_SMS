@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Government Chemist Review - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <!-- Sample Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clipboard2-data"></i> {{ sample.lab_number }} — {{ sample.sample_name }}</h5>
+                <small class="text-muted">{{ sample.sample_type.value }}</small>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl>
+                            <dt>Source</dt><dd>{{ sample.source or 'N/A' }}</dd>
+                            <dt>Date Received</dt><dd>{{ sample.date_received.strftime('%d %b %Y') }}</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        {% if sample.certificate_preparer %}
+                        <dl>
+                            <dt>Certificate Prepared By</dt><dd>{{ sample.certificate_preparer.full_name }}</dd>
+                            <dt>Prepared On</dt><dd>{{ sample.certificate_prepared_at.strftime('%d %b %Y %H:%M') }}</dd>
+                        </dl>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Certificate Preview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-medical"></i> Certificate of Analysis</h5>
+            </div>
+            <div class="card-body">
+                {% if sample.certificate_text %}
+                <div class="border rounded p-3 bg-light mb-3">{{ sample.certificate_text }}</div>
+                {% endif %}
+                {% if sample.certificate_file %}
+                <a href="{{ url_for('samples.download_file', filename=sample.certificate_file) }}"
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-download"></i> {{ sample.certificate_file_original_name }}
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Review Form -->
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-pen"></i> Government Chemist Review &amp; Signing</h4>
+                <small class="text-muted">
+                    Review the Certificate of Analysis. Signing the certificate completes
+                    the sample analysis process.
+                </small>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.action.label(class="form-label") }}
+                        {{ form.action(class="form-select") }}
+                        {% for error in form.action.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.review_comments.label(class="form-label") }}
+                        {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-success") }}
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

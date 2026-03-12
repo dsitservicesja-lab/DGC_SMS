@@ -185,7 +185,23 @@ class ReportSubmitForm(FlaskForm):
     submit = SubmitField('Submit Report')
 
 
+class PreliminaryReviewForm(FlaskForm):
+    """Preliminary administrative / completeness review by Officer."""
+    action = SelectField(
+        'Decision',
+        choices=[
+            ('', '-- Select Action --'),
+            ('approved', 'Approve – Forward to Senior Chemist'),
+            ('returned', 'Return for Correction'),
+        ],
+        validators=[DataRequired()],
+    )
+    review_comments = TextAreaField('Comments', validators=[Optional()])
+    submit = SubmitField('Submit Review')
+
+
 class ReportReviewForm(FlaskForm):
+    """Technical review by Senior Chemist."""
     action = SelectField(
         'Decision',
         choices=[
@@ -193,9 +209,69 @@ class ReportReviewForm(FlaskForm):
             ('accepted', 'Accept Report'),
             ('returned', 'Return for Correction'),
             ('rejected', 'Reject Report'),
-            ('completed', 'Mark as Completed'),
         ],
         validators=[DataRequired()],
     )
     review_comments = TextAreaField('Comments', validators=[Optional()])
     submit = SubmitField('Submit Review')
+
+
+class SubmitToDeputyForm(FlaskForm):
+    """Senior Chemist submits report package to Deputy Government Chemist."""
+    summary_report = TextAreaField(
+        'Summary Report (required for Pharmaceutical samples)',
+        validators=[Optional()],
+    )
+    summary_report_file = FileField(
+        'Attach Summary Report File',
+        validators=[FileAllowed(
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
+            'Only PDF and image files allowed.'
+        )],
+    )
+    submit = SubmitField('Submit to Deputy Government Chemist')
+
+
+class DeputyReviewForm(FlaskForm):
+    """Deputy Government Chemist reviews submission."""
+    action = SelectField(
+        'Decision',
+        choices=[
+            ('', '-- Select Action --'),
+            ('approved', 'Approve – Proceed to Certificate'),
+            ('returned', 'Return to Senior Chemist'),
+        ],
+        validators=[DataRequired()],
+    )
+    review_comments = TextAreaField('Comments', validators=[Optional()])
+    submit = SubmitField('Submit Review')
+
+
+class CertificateForm(FlaskForm):
+    """Deputy Government Chemist prepares Certificate of Analysis."""
+    certificate_text = TextAreaField(
+        'Certificate of Analysis', validators=[DataRequired()]
+    )
+    certificate_file = FileField(
+        'Attach Certificate File',
+        validators=[FileAllowed(
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
+            'Only PDF and image files allowed.'
+        )],
+    )
+    submit = SubmitField('Submit Certificate for HOD Review')
+
+
+class HODReviewForm(FlaskForm):
+    """Government Chemist (HOD) reviews and signs Certificate of Analysis."""
+    action = SelectField(
+        'Decision',
+        choices=[
+            ('', '-- Select Action --'),
+            ('sign', 'Sign Certificate – Complete Process'),
+            ('returned', 'Return to Deputy for Correction'),
+        ],
+        validators=[DataRequired()],
+    )
+    review_comments = TextAreaField('Comments', validators=[Optional()])
+    submit = SubmitField('Submit Decision')

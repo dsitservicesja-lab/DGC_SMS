@@ -12,11 +12,23 @@
                 </small>
             </div>
             <div class="card-body">
-                {% if assignment.status.value == 'Returned for Correction' and assignment.review_comments %}
+                {% if assignment.status.value == 'Returned for Correction' %}
+                {% if assignment.return_stage == 'technical' and assignment.review_comments %}
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Report returned by Senior Chemist (Technical Review)</h6>
+                    <p class="mb-0">{{ assignment.review_comments }}</p>
+                </div>
+                {% elif assignment.return_stage == 'preliminary' and assignment.preliminary_review_comments %}
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Report returned during Preliminary Review</h6>
+                    <p class="mb-0">{{ assignment.preliminary_review_comments }}</p>
+                </div>
+                {% elif assignment.review_comments %}
                 <div class="alert alert-warning">
                     <h6><i class="bi bi-exclamation-triangle"></i> Report was returned for correction</h6>
                     <p class="mb-0">{{ assignment.review_comments }}</p>
                 </div>
+                {% endif %}
                 {% endif %}
 
                 <form method="POST" enctype="multipart/form-data">

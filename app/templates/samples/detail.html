@@ -2,23 +2,31 @@
 {% block title %}{{ sample.lab_number }} - DGC SMS{% endblock %}
 
 {% block content %}
+{% set status_colors = {
+    'Registered': 'secondary',
+    'Assigned': 'primary',
+    'In Progress': 'info',
+    'Report Submitted': 'warning',
+    'Preliminary Review': 'warning',
+    'Technical Review': 'warning',
+    'Returned for Correction': 'danger',
+    'Accepted': 'success',
+    'Deputy Review': 'info',
+    'Returned by Deputy': 'danger',
+    'Certificate Preparation': 'info',
+    'HOD Review': 'info',
+    'Returned by HOD': 'danger',
+    'Certified': 'success',
+    'Rejected': 'danger',
+    'Completed': 'success',
+} %}
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2><i class="bi bi-clipboard2-data"></i> {{ sample.lab_number }}</h2>
         <p class="text-muted mb-0">{{ sample.sample_name }}</p>
     </div>
-    <div class="d-flex gap-2">
-        {% set status_colors = {
-            'Registered': 'secondary',
-            'Assigned': 'primary',
-            'In Progress': 'info',
-            'Report Submitted': 'warning',
-            'Under Review': 'warning',
-            'Returned for Correction': 'danger',
-            'Accepted': 'success',
-            'Rejected': 'danger',
-            'Completed': 'success',
-        } %}
+    <div class="d-flex gap-2 flex-wrap align-items-center">
         <span class="badge bg-{{ status_colors.get(sample.status.value, 'secondary') }} fs-6 align-self-center">
             {{ sample.status.value }}
         </span>
@@ -34,6 +42,90 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Workflow Actions Banner -->
+{% set sv = sample.status.value %}
+{% if sv == 'Accepted' and (current_user.is_branch_head() or current_user.role.value == 'Admin') %}
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <i class="bi bi-check-circle"></i>
+        <strong>All reports accepted.</strong> Submit to Deputy Government Chemist for review.
+        {% if sample.sample_type.value == 'Pharmaceutical' %}
+        <br><small class="text-muted">A summary report is required for pharmaceutical samples.</small>
+        {% endif %}
+    </div>
+    <a href="{{ url_for('samples.submit_to_deputy', sample_id=sample.id) }}" class="btn btn-primary">
+        <i class="bi bi-send"></i> Submit to Deputy
+    </a>
+</div>
+{% elif sv == 'Deputy Review' and current_user.role.value in ['Deputy', 'HOD', 'Admin'] %}
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <i class="bi bi-clipboard-check"></i>
+        <strong>Awaiting Deputy Government Chemist review.</strong>
+    </div>
+    <a href="{{ url_for('samples.deputy_review', sample_id=sample.id) }}" class="btn btn-primary">
+        <i class="bi bi-clipboard-check"></i> Review Submission
+    </a>
+</div>
+{% elif sv == 'Returned by Deputy' and (current_user.is_branch_head() or current_user.role.value == 'Admin') %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center">
+    <div>
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Submission returned by Deputy Government Chemist.</strong>
+        {% if sample.deputy_review_comments %}
+        <br><small>Comments: {{ sample.deputy_review_comments }}</small>
+        {% endif %}
+    </div>
+    <form method="POST" action="{{ url_for('samples.resubmit_to_deputy', sample_id=sample.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-warning">
+            <i class="bi bi-arrow-repeat"></i> Resubmit to Deputy
+        </button>
+    </form>
+</div>
+{% elif sv == 'Certificate Preparation' and current_user.role.value in ['Deputy', 'HOD', 'Admin'] %}
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <i class="bi bi-file-earmark-medical"></i>
+        <strong>Prepare Certificate of Analysis.</strong>
+    </div>
+    <a href="{{ url_for('samples.prepare_certificate', sample_id=sample.id) }}" class="btn btn-primary">
+        <i class="bi bi-file-earmark-medical"></i> Prepare Certificate
+    </a>
+</div>
+{% elif sv == 'HOD Review' and current_user.role.value in ['HOD', 'Admin'] %}
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <i class="bi bi-pen"></i>
+        <strong>Certificate of Analysis awaiting Government Chemist review and signing.</strong>
+    </div>
+    <a href="{{ url_for('samples.hod_review', sample_id=sample.id) }}" class="btn btn-success">
+        <i class="bi bi-pen"></i> Review &amp; Sign Certificate
+    </a>
+</div>
+{% elif sv == 'Returned by HOD' and current_user.role.value in ['Deputy', 'HOD', 'Admin'] %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center">
+    <div>
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Certificate returned by Government Chemist for correction.</strong>
+        {% if sample.hod_review_comments %}
+        <br><small>Comments: {{ sample.hod_review_comments }}</small>
+        {% endif %}
+    </div>
+    <a href="{{ url_for('samples.prepare_certificate', sample_id=sample.id) }}" class="btn btn-warning">
+        <i class="bi bi-pencil"></i> Revise Certificate
+    </a>
+</div>
+{% elif sv == 'Certified' %}
+<div class="alert alert-success">
+    <i class="bi bi-patch-check-fill"></i>
+    <strong>Sample analysis completed.</strong>
+    Certificate of Analysis signed by Government Chemist
+    {% if sample.certifier %}{{ sample.certifier.full_name }}{% endif %}
+    {% if sample.certified_at %}on {{ sample.certified_at.strftime('%d %b %Y %H:%M') }}{% endif %}.
+</div>
+{% endif %}
 
 <!-- Sample Details -->
 <div class="row g-3 mb-4">
@@ -91,6 +183,56 @@
     </div>
 </div>
 
+<!-- Summary Report (Pharmaceutical) -->
+{% if sample.summary_report %}
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-text"></i> Summary Report (Pharmaceutical)</h5></div>
+    <div class="card-body">
+        <div class="border rounded p-3 bg-light mb-2">{{ sample.summary_report }}</div>
+        {% if sample.summary_report_file %}
+        <a href="{{ url_for('samples.download_file', filename=sample.summary_report_file) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-download"></i> {{ sample.summary_report_file_original_name }}
+        </a>
+        {% endif %}
+        {% if sample.summary_report_user %}
+        <p class="text-muted small mt-2 mb-0">
+            Prepared by {{ sample.summary_report_user.full_name }}
+            {% if sample.summary_report_at %} on {{ sample.summary_report_at.strftime('%d %b %Y %H:%M') }}{% endif %}
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Certificate of Analysis -->
+{% if sample.certificate_text %}
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-medical"></i> Certificate of Analysis</h5></div>
+    <div class="card-body">
+        <div class="border rounded p-3 bg-light mb-2">{{ sample.certificate_text }}</div>
+        {% if sample.certificate_file %}
+        <a href="{{ url_for('samples.download_file', filename=sample.certificate_file) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-download"></i> {{ sample.certificate_file_original_name }}
+        </a>
+        {% endif %}
+        {% if sample.certificate_preparer %}
+        <p class="text-muted small mt-2 mb-0">
+            Prepared by {{ sample.certificate_preparer.full_name }}
+            {% if sample.certificate_prepared_at %} on {{ sample.certificate_prepared_at.strftime('%d %b %Y %H:%M') }}{% endif %}
+        </p>
+        {% endif %}
+        {% if sample.certified_at %}
+        <p class="text-success small mt-1 mb-0">
+            <i class="bi bi-patch-check-fill"></i>
+            Signed by {{ sample.certifier.full_name }} on {{ sample.certified_at.strftime('%d %b %Y %H:%M') }}
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Assignments -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -115,6 +257,17 @@
             </thead>
             <tbody>
                 {% for a in assignments %}
+                {% set a_colors = {
+                    'Assigned': 'primary',
+                    'In Progress': 'info',
+                    'Report Submitted': 'warning',
+                    'Preliminary Review': 'warning',
+                    'Technical Review': 'warning',
+                    'Returned for Correction': 'danger',
+                    'Accepted': 'success',
+                    'Rejected': 'danger',
+                    'Completed': 'success',
+                } %}
                 <tr>
                     <td>
                         <strong>{{ a.test_name }}</strong>
@@ -123,16 +276,6 @@
                     <td>{{ a.chemist.full_name }}</td>
                     <td>{{ a.assigned_date.strftime('%d %b %Y') }}</td>
                     <td>
-                        {% set a_colors = {
-                            'Assigned': 'primary',
-                            'In Progress': 'info',
-                            'Report Submitted': 'warning',
-                            'Under Review': 'warning',
-                            'Returned for Correction': 'danger',
-                            'Accepted': 'success',
-                            'Rejected': 'danger',
-                            'Completed': 'success',
-                        } %}
                         <span class="badge bg-{{ a_colors.get(a.status.value, 'secondary') }}">{{ a.status.value }}</span>
                     </td>
                     <td>
@@ -146,10 +289,16 @@
                             <i class="bi bi-upload"></i> Submit Report
                         </a>
                         {% endif %}
-                        {% if (current_user.is_branch_head() or current_user.role.value == 'Admin') and a.status.value in ['Report Submitted', 'Under Review'] %}
+                        {% if (current_user.role.value in ['Officer', 'HOD', 'Admin'] or current_user.id == sample.uploaded_by) and a.status.value == 'Report Submitted' %}
+                        <a href="{{ url_for('samples.preliminary_review', assignment_id=a.id) }}"
+                           class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-clipboard-check"></i> Preliminary Review
+                        </a>
+                        {% endif %}
+                        {% if (current_user.is_branch_head() or current_user.role.value == 'Admin') and a.status.value == 'Technical Review' %}
                         <a href="{{ url_for('samples.review_report', assignment_id=a.id) }}"
                            class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-clipboard-check"></i> Review
+                            <i class="bi bi-clipboard-check"></i> Technical Review
                         </a>
                         {% endif %}
                     </td>
