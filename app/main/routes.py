@@ -1,10 +1,10 @@
-from flask import render_template, redirect, url_for, flash, jsonify, request
+from flask import render_template, redirect, url_for, flash, jsonify, request, current_app
 from flask_login import login_required, current_user
 
 from app import db
 from app.main import main_bp
 from app.models import (
-    Sample, SampleAssignment, Notification, User,
+    Sample, SampleAssignment, SampleHistory, Notification, User,
     Role, SampleStatus, AssignmentStatus, Setting,
 )
 
@@ -175,4 +175,37 @@ def settings():
         return redirect(url_for('main.settings'))
 
     email_enabled = Setting.get_bool('email_enabled', default=True)
-    return render_template('settings.html', email_enabled=email_enabled)
+    sample_count = Sample.query.count()
+    return render_template('settings.html', email_enabled=email_enabled,
+                           sample_count=sample_count)
+
+
+@main_bp.route('/clear-sample-data', methods=['POST'])
+@login_required
+def clear_sample_data():
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    # Remove uploaded files
+    import shutil, os
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    if upload_folder and os.path.isdir(upload_folder):
+        for entry in os.listdir(upload_folder):
+            path = os.path.join(upload_folder, entry)
+            if os.path.isfile(path):
+                os.remove(path)
+            elif os.path.isdir(path):
+                shutil.rmtree(path)
+
+    # Delete in order respecting FK constraints
+    Notification.query.filter(
+        Notification.link.like('%/samples/%')
+    ).delete(synchronize_session=False)
+    SampleHistory.query.delete()
+    SampleAssignment.query.delete()
+    Sample.query.delete()
+    db.session.commit()
+
+    flash('All sample data has been cleared.', 'success')
+    return redirect(url_for('main.settings'))
