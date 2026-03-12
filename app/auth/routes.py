@@ -4,7 +4,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.auth import auth_bp
 from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm
-from app.models import User, Role, Branch
+from app.models import User, Role, Branch, Notification, SampleHistory, SampleAssignment, Sample
 from app.notifications import send_email
 
 
@@ -158,14 +158,37 @@ def user_delete(user_id):
     if user.id == current_user.id:
         flash('You cannot delete your own account.', 'danger')
         return redirect(url_for('auth.user_list'))
-    # Check for related records
-    if user.uploaded_samples.count() or user.assignments.count():
+
+    # Block deletion if the user owns samples, is assigned as chemist,
+    # performed actions in history, or is referenced as a reviewer/assigner.
+    has_samples = user.uploaded_samples.count() > 0
+    has_assignments = user.assignments.count() > 0
+    has_history = SampleHistory.query.filter_by(performed_by=user.id).first() is not None
+    is_assigner = SampleAssignment.query.filter_by(assigned_by=user.id).first() is not None
+    is_reviewer = SampleAssignment.query.filter_by(reviewed_by=user.id).first() is not None
+    is_prelim_reviewer = SampleAssignment.query.filter_by(preliminary_reviewed_by=user.id).first() is not None
+    is_sample_ref = (
+        Sample.query.filter(
+            (Sample.summary_report_by == user.id)
+            | (Sample.deputy_reviewed_by == user.id)
+            | (Sample.certificate_prepared_by == user.id)
+            | (Sample.hod_reviewed_by == user.id)
+            | (Sample.certified_by == user.id)
+        ).first()
+        is not None
+    )
+
+    if any([has_samples, has_assignments, has_history, is_assigner,
+            is_reviewer, is_prelim_reviewer, is_sample_ref]):
         flash(
-            f'Cannot delete {user.username} — they have samples or assignments. '
+            f'Cannot delete {user.username} — they have related records. '
             'Deactivate the account instead.',
             'warning',
         )
         return redirect(url_for('auth.user_list'))
+
+    # Safe to delete — clean up notifications first
+    Notification.query.filter_by(user_id=user.id).delete()
     db.session.delete(user)
     db.session.commit()
     flash(f'User {user.username} has been deleted.', 'success')
