@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Idempotent database migration script for DGC SMS.
+
+Adds any columns required by the current codebase that are missing from the
+existing SQLite database.  Safe to run repeatedly — columns that already
+exist are silently skipped.
+
+Usage (from project root):
+    python migrate_db.py              # uses instance/dgc_sms.db
+    python migrate_db.py /path/to/db  # explicit path
+"""
+
+import sqlite3
+import sys
+import os
+
+DEFAULT_DB = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'instance', 'dgc_sms.db'
+)
+
+# ---- Schema additions -------------------------------------------------------
+# Each entry: (table, column_name, column_definition)
+
+MIGRATIONS = [
+    # samples – summary report
+    ('samples', 'summary_report', 'TEXT'),
+    ('samples', 'summary_report_file', 'VARCHAR(500)'),
+    ('samples', 'summary_report_file_original_name', 'VARCHAR(255)'),
+    ('samples', 'summary_report_by', 'INTEGER REFERENCES users(id)'),
+    ('samples', 'summary_report_at', 'DATETIME'),
+    # samples – deputy review
+    ('samples', 'deputy_review_comments', 'TEXT'),
+    ('samples', 'deputy_reviewed_by', 'INTEGER REFERENCES users(id)'),
+    ('samples', 'deputy_reviewed_at', 'DATETIME'),
+    # samples – certificate
+    ('samples', 'certificate_text', 'TEXT'),
+    ('samples', 'certificate_file', 'VARCHAR(500)'),
+    ('samples', 'certificate_file_original_name', 'VARCHAR(255)'),
+    ('samples', 'certificate_prepared_by', 'INTEGER REFERENCES users(id)'),
+    ('samples', 'certificate_prepared_at', 'DATETIME'),
+    # samples – HOD review / certification
+    ('samples', 'hod_review_comments', 'TEXT'),
+    ('samples', 'hod_reviewed_by', 'INTEGER REFERENCES users(id)'),
+    ('samples', 'hod_reviewed_at', 'DATETIME'),
+    ('samples', 'certified_at', 'DATETIME'),
+    ('samples', 'certified_by', 'INTEGER REFERENCES users(id)'),
+    # sample_assignments – preliminary review
+    ('sample_assignments', 'preliminary_review_comments', 'TEXT'),
+    ('sample_assignments', 'preliminary_reviewed_by', 'INTEGER REFERENCES users(id)'),
+    ('sample_assignments', 'preliminary_reviewed_at', 'DATETIME'),
+    ('sample_assignments', 'return_stage', 'VARCHAR(20)'),
+]
+
+NEW_TABLES = [
+    (
+        'settings',
+        'CREATE TABLE IF NOT EXISTS settings ('
+        '  key VARCHAR(120) PRIMARY KEY,'
+        '  value VARCHAR(500) NOT NULL DEFAULT ""'
+        ')',
+    ),
+]
+
+# ------------------------------------------------------------------------------
+
+
+def _existing_columns(cursor, table):
+    cursor.execute(f'PRAGMA table_info("{table}")')
+    return {row[1] for row in cursor.fetchall()}
+
+
+def migrate(db_path):
+    if not os.path.exists(db_path):
+        print(f'Database not found at {db_path} — nothing to migrate.')
+        return
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    # Create any missing tables
+    for table_name, ddl in NEW_TABLES:
+        cur.execute(ddl)
+        print(f'  Table  {table_name}: ensured')
+
+    # Add any missing columns
+    cache = {}
+    for table, col, typedef in MIGRATIONS:
+        if table not in cache:
+            cache[table] = _existing_columns(cur, table)
+        if col in cache[table]:
+            continue
+        cur.execute(f'ALTER TABLE "{table}" ADD COLUMN "{col}" {typedef}')
+        cache[table].add(col)
+        print(f'  Column {table}.{col}: added')
+
+    conn.commit()
+    conn.close()
+    print('Migration complete.')
+
+
+if __name__ == '__main__':
+    db_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_DB
+    print(f'Migrating {db_path} ...')
+    migrate(db_path)

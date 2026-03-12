@@ -49,7 +49,10 @@ echo "[3/5] Installing/updating Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip
 "$VENV_DIR/bin/pip" install -r "$APP_DIR/requirements.txt"
 
-echo "[4/5] Setting ownership and permissions..."
+echo "[4/6] Running database migrations..."
+"$VENV_DIR/bin/python" "$APP_DIR/migrate_db.py" "$APP_DIR/instance/dgc_sms.db"
+
+echo "[5/6] Setting ownership and permissions..."
 if id "$APP_USER" &>/dev/null; then
     chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 fi
@@ -57,7 +60,7 @@ if [ -f "$APP_DIR/.env" ]; then
     chmod 600 "$APP_DIR/.env"
 fi
 
-echo "[5/5] Restarting application service..."
+echo "[6/6] Restarting application service..."
 systemctl daemon-reload
 systemctl restart dgc_sms
 systemctl status dgc_sms --no-pager -l || true
