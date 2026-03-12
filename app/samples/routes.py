@@ -367,11 +367,8 @@ def submit_report(assignment_id):
 def preliminary_review(assignment_id):
     assignment = SampleAssignment.query.get_or_404(assignment_id)
 
-    # Only Officer who uploaded the sample, HOD, or Admin can do preliminary review
+    # Officers, HOD, or Admin can do preliminary review
     sample = assignment.sample
-    if current_user.has_role(Role.OFFICER) and current_user.id != sample.uploaded_by:
-        flash('Access denied.', 'danger')
-        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
     if not current_user.has_any_role(Role.OFFICER, Role.HOD, Role.ADMIN):
         flash('Only Officers can perform preliminary reviews.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
