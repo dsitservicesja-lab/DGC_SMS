@@ -26,6 +26,7 @@ def seed():
             first_name='System',
             last_name='Administrator',
             role=Role.ADMIN,
+            must_change_password=False,
         )
         admin.set_password('admin123')
         db.session.add(admin)

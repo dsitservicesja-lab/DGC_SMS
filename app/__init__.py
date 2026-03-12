@@ -44,4 +44,16 @@ def create_app(config_name=None):
     from app.main import main_bp
     app.register_blueprint(main_bp)
 
+    @app.before_request
+    def check_password_change():
+        from flask_login import current_user
+        if (
+            current_user.is_authenticated
+            and current_user.must_change_password
+            and request.endpoint
+            and request.endpoint not in ('auth.change_password', 'auth.logout', 'static')
+        ):
+            from flask import redirect, url_for
+            return redirect(url_for('auth.change_password'))
+
     return app

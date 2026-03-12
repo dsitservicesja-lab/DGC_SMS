@@ -39,6 +39,15 @@ class ResetPasswordForm(FlaskForm):
     submit = SubmitField('Reset Password')
 
 
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    password2 = PasswordField(
+        'Confirm New Password', validators=[DataRequired(), EqualTo('password')]
+    )
+    submit = SubmitField('Change Password')
+
+
 class UserCreateForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=120)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=120)])

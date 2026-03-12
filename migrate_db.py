@@ -44,6 +44,8 @@ MIGRATIONS = [
     ('samples', 'hod_reviewed_at', 'DATETIME'),
     ('samples', 'certified_at', 'DATETIME'),
     ('samples', 'certified_by', 'INTEGER REFERENCES users(id)'),
+    # users – force password change on first login
+    ('users', 'must_change_password', 'BOOLEAN DEFAULT 0'),
     # sample_assignments – preliminary review
     ('sample_assignments', 'preliminary_review_comments', 'TEXT'),
     ('sample_assignments', 'preliminary_reviewed_by', 'INTEGER REFERENCES users(id)'),

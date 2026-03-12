@@ -76,6 +76,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.Enum(Role), nullable=False, default=Role.CHEMIST)
     branch = db.Column(db.Enum(Branch), nullable=True)
     is_active_user = db.Column(db.Boolean, default=True)
+    must_change_password = db.Column(db.Boolean, default=True)
     created_at = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc)
     )

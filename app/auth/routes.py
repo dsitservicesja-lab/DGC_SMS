@@ -3,7 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from app import db
 from app.auth import auth_bp
-from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm
+from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
 from app.models import User, Role, Branch, Notification, SampleHistory, SampleAssignment, Sample
 from app.notifications import send_email
 
@@ -17,6 +17,9 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.check_password(form.password.data) and user.is_active_user:
             login_user(user, remember=form.remember_me.data)
+            if user.must_change_password:
+                flash('Please change your password before continuing.', 'warning')
+                return redirect(url_for('auth.change_password'))
             next_page = request.args.get('next')
             # Only allow relative redirects to prevent open-redirect
             if next_page and not next_page.startswith('/'):
@@ -69,6 +72,22 @@ def reset_password(token):
     return render_template('auth/reset_password.html', form=form)
 
 
+@auth_bp.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not current_user.check_password(form.current_password.data):
+            flash('Current password is incorrect.', 'danger')
+        else:
+            current_user.set_password(form.password.data)
+            current_user.must_change_password = False
+            db.session.commit()
+            flash('Your password has been changed.', 'success')
+            return redirect(url_for('main.dashboard'))
+    return render_template('auth/change_password.html', form=form)
+
+
 @auth_bp.route('/logout')
 @login_required
 def logout():
@@ -108,6 +127,7 @@ def user_create():
             branch=Branch[form.branch.data] if form.branch.data else None,
         )
         user.set_password(form.password.data)
+        user.must_change_password = True
         db.session.add(user)
         db.session.commit()
         flash(f'User {user.username} created successfully.', 'success')

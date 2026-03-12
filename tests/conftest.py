@@ -31,6 +31,7 @@ def _create_user(role=Role.OFFICER, branch=None, username='testuser'):
         last_name='User',
         role=role,
         branch=branch,
+        must_change_password=False,
     )
     user.set_password('password123')
     db.session.add(user)
