@@ -1,5 +1,6 @@
 """WTForms for the DGC Samples Management System."""
 
+from markupsafe import Markup
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from wtforms import (
@@ -62,6 +63,11 @@ class UserEditForm(FlaskForm):
         validators=[Optional()],
     )
     is_active_user = BooleanField('Active')
+    new_password = PasswordField('New Password', validators=[Optional(), Length(min=6)])
+    confirm_password = PasswordField(
+        'Confirm New Password',
+        validators=[Optional(), EqualTo('new_password', message='Passwords must match.')],
+    )
     submit = SubmitField('Update User')
 
 
@@ -134,7 +140,7 @@ class CheckboxSelectMultiple(widgets.ListWidget):
                 f'{label}</label></div></div>'
             )
         html.append('</div>')
-        return ''.join(html)
+        return Markup(''.join(html))
 
 
 class SampleAssignForm(FlaskForm):

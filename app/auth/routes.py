@@ -96,6 +96,8 @@ def user_edit(user_id):
             user.role = Role[form.role.data]
             user.branch = Branch[form.branch.data] if form.branch.data else None
             user.is_active_user = form.is_active_user.data
+            if form.new_password.data:
+                user.set_password(form.new_password.data)
             db.session.commit()
             flash(f'User {user.username} updated.', 'success')
             return redirect(url_for('auth.user_list'))
