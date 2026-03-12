@@ -146,3 +146,27 @@ def user_edit(user_id):
             flash(f'User {user.username} updated.', 'success')
             return redirect(url_for('auth.user_list'))
     return render_template('auth/user_form.html', form=form, title='Edit User', user=user)
+
+
+@auth_bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+def user_delete(user_id):
+    if current_user.role != Role.ADMIN:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        flash('You cannot delete your own account.', 'danger')
+        return redirect(url_for('auth.user_list'))
+    # Check for related records
+    if user.uploaded_samples.count() or user.assignments.count():
+        flash(
+            f'Cannot delete {user.username} — they have samples or assignments. '
+            'Deactivate the account instead.',
+            'warning',
+        )
+        return redirect(url_for('auth.user_list'))
+    db.session.delete(user)
+    db.session.commit()
+    flash(f'User {user.username} has been deleted.', 'success')
+    return redirect(url_for('auth.user_list'))
