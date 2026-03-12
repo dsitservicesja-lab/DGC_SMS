@@ -52,6 +52,12 @@ class MultiCheckboxField(SelectMultipleField):
     widget = widgets.ListWidget(prefix_label=False)
     option_widget = widgets.CheckboxInput()
 
+    def pre_validate(self, form):
+        valid = {v for v, _ in self.choices}
+        for d in self.data:
+            if d not in valid:
+                raise ValidationError(f'Invalid choice: {d}')
+
 
 class UserCreateForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=120)])
@@ -62,12 +68,16 @@ class UserCreateForm(FlaskForm):
     password2 = PasswordField(
         'Confirm Password', validators=[DataRequired(), EqualTo('password')]
     )
-    roles = MultiCheckboxField('Roles', choices=[(r.name, r.value) for r in Role], validators=[DataRequired()])
+    roles = MultiCheckboxField('Roles', choices=[(r.name, r.value) for r in Role])
     branches = MultiCheckboxField(
         'Branches / Labs',
         choices=[(b.name, b.value) for b in Branch],
     )
     submit = SubmitField('Create User')
+
+    def validate_roles(self, field):
+        if not field.data:
+            raise ValidationError('Please select at least one role.')
 
     def validate_username(self, field):
         if User.query.filter_by(username=field.data).first():
@@ -82,12 +92,16 @@ class UserEditForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=120)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=120)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
-    roles = MultiCheckboxField('Roles', choices=[(r.name, r.value) for r in Role], validators=[DataRequired()])
+    roles = MultiCheckboxField('Roles', choices=[(r.name, r.value) for r in Role])
     branches = MultiCheckboxField(
         'Branches / Labs',
         choices=[(b.name, b.value) for b in Branch],
     )
     is_active_user = BooleanField('Active')
+
+    def validate_roles(self, field):
+        if not field.data:
+            raise ValidationError('Please select at least one role.')
     new_password = PasswordField('New Password', validators=[Optional(), Length(min=6)])
     confirm_password = PasswordField(
         'Confirm New Password',
