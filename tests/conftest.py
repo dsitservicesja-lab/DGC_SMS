@@ -23,13 +23,14 @@ def runner(app):
     return app.test_cli_runner()
 
 
-def _create_user(role=Role.OFFICER, branch=None, username='testuser'):
+def _create_user(role=Role.OFFICER, branch=None, username='testuser',
+                 must_change_password=False):
     user = User(
         username=username,
         email=f'{username}@test.com',
         first_name='Test',
         last_name='User',
-        must_change_password=False,
+        must_change_password=must_change_password,
     )
     user.set_password('password123')
     user.roles = {role}
