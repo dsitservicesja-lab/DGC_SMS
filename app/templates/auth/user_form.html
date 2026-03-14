@@ -2,69 +2,74 @@
 {% block title %}{{ title }} - DGC SMS{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-person"></i> {{ title }}</h2>
+    <a href="{{ url_for('auth.user_list') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Users
+    </a>
+</div>
+
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-lg-8">
         <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-person"></i> {{ title }}</h4>
-            </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <form method="POST">
                     {{ form.hidden_tag() }}
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.first_name.label(class="form-label") }}
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            {{ form.first_name.label(class="form-label fw-semibold") }}
                             {{ form.first_name(class="form-control") }}
                             {% for error in form.first_name.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.last_name.label(class="form-label") }}
+                        <div class="col-md-6">
+                            {{ form.last_name.label(class="form-label fw-semibold") }}
                             {{ form.last_name(class="form-control") }}
                             {% for error in form.last_name.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                    </div>
-                    {% if form.username %}
-                    <div class="mb-3">
-                        {{ form.username.label(class="form-label") }}
-                        {{ form.username(class="form-control") }}
-                        {% for error in form.username.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    <div class="mb-3">
-                        {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control", type="email") }}
-                        {% for error in form.email.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    {% if form.password %}
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.password.label(class="form-label") }}
+
+                        {% if form.username %}
+                        <div class="col-12">
+                            {{ form.username.label(class="form-label fw-semibold") }}
+                            {{ form.username(class="form-control") }}
+                            {% for error in form.username.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="col-12">
+                            {{ form.email.label(class="form-label fw-semibold") }}
+                            {{ form.email(class="form-control", type="email") }}
+                            {% for error in form.email.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        {% if form.password %}
+                        <div class="col-md-6">
+                            {{ form.password.label(class="form-label fw-semibold") }}
                             {{ form.password(class="form-control") }}
                             {% for error in form.password.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.password2.label(class="form-label") }}
+                        <div class="col-md-6">
+                            {{ form.password2.label(class="form-label fw-semibold") }}
                             {{ form.password2(class="form-control") }}
                             {% for error in form.password2.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                    </div>
-                    {% endif %}
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.roles.label(class="form-label") }}
-                            <div class="border rounded p-2">
+                        {% endif %}
+
+                        <div class="col-md-6">
+                            {{ form.roles.label(class="form-label fw-semibold") }}
+                            <div class="border rounded p-2" style="background: var(--bs-body-bg);">
                                 {% for subfield in form.roles %}
                                 <div class="form-check">
                                     {{ subfield(class="form-check-input") }}
@@ -76,9 +81,10 @@
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.branches.label(class="form-label") }}
-                            <div class="border rounded p-2">
+
+                        <div class="col-md-6">
+                            {{ form.branches.label(class="form-label fw-semibold") }}
+                            <div class="border rounded p-2" style="background: var(--bs-body-bg);">
                                 {% for subfield in form.branches %}
                                 <div class="form-check">
                                     {{ subfield(class="form-check-input") }}
@@ -90,36 +96,43 @@
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                    </div>
-                    {% if form.is_active_user is defined and form.is_active_user %}
-                    <div class="mb-3 form-check">
-                        {{ form.is_active_user(class="form-check-input") }}
-                        {{ form.is_active_user.label(class="form-check-label") }}
-                    </div>
-                    {% endif %}
-                    {% if form.new_password is defined %}
-                    <hr>
-                    <p class="text-muted small mb-2"><i class="bi bi-lock"></i> Leave blank to keep current password.</p>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.new_password.label(class="form-label") }}
+
+                        {% if form.is_active_user is defined and form.is_active_user %}
+                        <div class="col-12">
+                            <div class="form-check">
+                                {{ form.is_active_user(class="form-check-input") }}
+                                {{ form.is_active_user.label(class="form-check-label fw-semibold") }}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if form.new_password is defined %}
+                        <div class="col-12">
+                            <hr class="my-1">
+                            <p class="text-muted small mb-0">
+                                <i class="bi bi-lock me-1"></i>Leave password fields blank to keep the current password.
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.new_password.label(class="form-label fw-semibold") }}
                             {{ form.new_password(class="form-control", placeholder="New password") }}
                             {% for error in form.new_password.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.confirm_password.label(class="form-label") }}
+                        <div class="col-md-6">
+                            {{ form.confirm_password.label(class="form-label fw-semibold") }}
                             {{ form.confirm_password(class="form-control", placeholder="Confirm new password") }}
                             {% for error in form.confirm_password.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                    </div>
-                    {% endif %}
-                    <div class="d-flex gap-2">
-                        {{ form.submit(class="btn btn-primary") }}
-                        <a href="{{ url_for('auth.user_list') }}" class="btn btn-outline-secondary">Cancel</a>
+                        {% endif %}
+
+                        <div class="col-12 d-flex gap-2 pt-2">
+                            {{ form.submit(class="btn btn-primary") }}
+                            <a href="{{ url_for('auth.user_list') }}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
                     </div>
                 </form>
             </div>

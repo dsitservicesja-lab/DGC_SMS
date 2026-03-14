@@ -2,192 +2,218 @@
 {% block title %}Dashboard - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="page-header">
     <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
-    <span class="text-muted">Welcome, {{ current_user.full_name }}</span>
+    <span class="text-muted" style="font-size:.875rem;">
+        Welcome back, <strong>{{ current_user.full_name }}</strong>
+        <span class="badge bg-secondary ms-1" style="font-size:.72rem;">{{ current_user.role_names }}</span>
+    </span>
 </div>
 
-<!-- Stats Cards -->
+<!-- ── Stat Cards ──────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
     {% if current_user.has_role(Role.CHEMIST) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
-    <div class="col-md-3">
-        <div class="card stat-card h-100">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-blue">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Total Assignments</h6>
-                <h2 class="card-title">{{ stats.total_assignments }}</h2>
+                <div class="stat-label">Total Assignments</div>
+                <div class="stat-value">{{ stats.total_assignments }}</div>
             </div>
+            <i class="bi bi-clipboard2-data stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #e67e22;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-orange">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Pending Tests</h6>
-                <h2 class="card-title text-warning">{{ stats.pending }}</h2>
+                <div class="stat-label">Pending Tests</div>
+                <div class="stat-value">{{ stats.pending }}</div>
             </div>
+            <i class="bi bi-hourglass-split stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #3498db;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-purple">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Reports Submitted</h6>
-                <h2 class="card-title text-primary">{{ stats.submitted }}</h2>
+                <div class="stat-label">Reports Submitted</div>
+                <div class="stat-value">{{ stats.submitted }}</div>
             </div>
+            <i class="bi bi-send stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-green">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Completed</h6>
-                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+                <div class="stat-label">Completed</div>
+                <div class="stat-value">{{ stats.completed }}</div>
             </div>
+            <i class="bi bi-patch-check stat-icon"></i>
         </div>
     </div>
 
     {% elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
-    <div class="col-md-3">
-        <div class="card stat-card h-100">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-blue">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Total Samples</h6>
-                <h2 class="card-title">{{ stats.total_samples }}</h2>
+                <div class="stat-label">Total Samples</div>
+                <div class="stat-value">{{ stats.total_samples }}</div>
             </div>
+            <i class="bi bi-collection stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #f39c12;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-orange">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Awaiting Assignment</h6>
-                <h2 class="card-title text-warning">{{ stats.registered }}</h2>
+                <div class="stat-label">Awaiting Assignment</div>
+                <div class="stat-value">{{ stats.registered }}</div>
             </div>
+            <i class="bi bi-person-plus stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-purple">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Preliminary Reviews</h6>
-                <h2 class="card-title" style="color: #9b59b6;">{{ stats.preliminary_review }}</h2>
+                <div class="stat-label">Preliminary Reviews</div>
+                <div class="stat-value">{{ stats.preliminary_review }}</div>
             </div>
+            <i class="bi bi-eye stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-green">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Certified</h6>
-                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+                <div class="stat-label">Certified</div>
+                <div class="stat-value">{{ stats.completed }}</div>
             </div>
+            <i class="bi bi-patch-check stat-icon"></i>
         </div>
     </div>
 
     {% elif current_user.has_role(Role.DEPUTY) and not current_user.has_any_role(Role.HOD, Role.ADMIN) %}
-    <div class="col-md-3">
-        <div class="card stat-card h-100">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-blue">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Total Samples</h6>
-                <h2 class="card-title">{{ stats.total_samples }}</h2>
+                <div class="stat-label">Total Samples</div>
+                <div class="stat-value">{{ stats.total_samples }}</div>
             </div>
+            <i class="bi bi-collection stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-purple">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Awaiting Review</h6>
-                <h2 class="card-title" style="color: #9b59b6;">{{ stats.deputy_review }}</h2>
+                <div class="stat-label">Awaiting Review</div>
+                <div class="stat-value">{{ stats.deputy_review }}</div>
             </div>
+            <i class="bi bi-clipboard-check stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #3498db;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-orange">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Certificate Prep</h6>
-                <h2 class="card-title text-primary">{{ stats.certificate_prep }}</h2>
+                <div class="stat-label">Certificate Prep</div>
+                <div class="stat-value">{{ stats.certificate_prep }}</div>
             </div>
+            <i class="bi bi-file-earmark-medical stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-green">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Certified</h6>
-                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+                <div class="stat-label">Certified</div>
+                <div class="stat-value">{{ stats.completed }}</div>
             </div>
+            <i class="bi bi-patch-check stat-icon"></i>
         </div>
     </div>
 
     {% else %}
-    <div class="col-md-3">
-        <div class="card stat-card h-100">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-blue">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Total Samples</h6>
-                <h2 class="card-title">{{ stats.total_samples }}</h2>
+                <div class="stat-label">Total Samples</div>
+                <div class="stat-value">{{ stats.total_samples }}</div>
             </div>
+            <i class="bi bi-collection stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #e67e22;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-orange">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Awaiting Assignment</h6>
-                <h2 class="card-title text-warning">{{ stats.awaiting_assignment }}</h2>
+                <div class="stat-label">Awaiting Assignment</div>
+                <div class="stat-value">{{ stats.awaiting_assignment }}</div>
             </div>
+            <i class="bi bi-person-plus stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #9b59b6;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-purple">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Reports Pending Review</h6>
-                <h2 class="card-title text-purple">{{ stats.reports_pending_review }}</h2>
+                <div class="stat-label">Reports Pending Review</div>
+                <div class="stat-value">{{ stats.reports_pending_review }}</div>
             </div>
+            <i class="bi bi-eye stat-icon"></i>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card h-100" style="border-left-color: #27ae60;">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card stat-green">
             <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted">Completed</h6>
-                <h2 class="card-title text-success">{{ stats.completed }}</h2>
+                <div class="stat-label">Completed</div>
+                <div class="stat-value">{{ stats.completed }}</div>
             </div>
+            <i class="bi bi-patch-check stat-icon"></i>
         </div>
     </div>
     {% endif %}
 </div>
 
-<!-- Quick Actions -->
-<div class="row g-3 mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header"><h5 class="mb-0">Quick Actions</h5></div>
-            <div class="card-body">
-                <div class="d-flex gap-2 flex-wrap">
-                    {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
-                    <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> Register New Sample
-                    </a>
-                    {% endif %}
-                    <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-collection"></i> View All Samples
-                    </a>
-                    <a href="{{ url_for('main.notifications') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-bell"></i> View Notifications
-                    </a>
-                </div>
-            </div>
-        </div>
+<!-- ── Quick Actions ───────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header">Quick Actions</div>
+    <div class="card-body d-flex gap-2 flex-wrap">
+        {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
+        <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Register New Sample
+        </a>
+        {% endif %}
+        <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-collection me-1"></i>View All Samples
+        </a>
+        <a href="{{ url_for('main.notifications') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-bell me-1"></i>Notifications
+        </a>
     </div>
 </div>
 
-<!-- Recent Notifications -->
+<!-- ── Recent Notifications ───────────────────────────────── -->
 {% if notifications %}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Recent Notifications</h5>
+        <span>Recent Notifications</span>
         <a href="{{ url_for('main.notifications') }}" class="btn btn-sm btn-outline-primary">View All</a>
     </div>
     <div class="list-group list-group-flush">
         {% for notif in notifications[:5] %}
-        <div class="list-group-item {% if not notif.is_read %}list-group-item-light{% endif %}">
-            <div class="d-flex justify-content-between">
-                <div>
-                    <strong>{{ notif.title }}</strong>
-                    {% if not notif.is_read %}<span class="badge bg-primary badge-status ms-1">New</span>{% endif %}
-                    <p class="mb-0 text-muted small">{{ notif.message | truncate(120) }}</p>
+        <div class="list-group-item border-0 py-3 {% if not notif.is_read %}bg-light{% endif %}">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="d-flex gap-2 align-items-start">
+                    <div class="mt-1">
+                        {% if not notif.is_read %}
+                        <i class="bi bi-circle-fill text-primary" style="font-size:.5rem;"></i>
+                        {% else %}
+                        <i class="bi bi-circle text-muted" style="font-size:.5rem;"></i>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="fw-600 mb-1" style="font-size:.875rem;">
+                            {{ notif.title }}
+                            {% if not notif.is_read %}<span class="badge bg-primary ms-1" style="font-size:.65rem;">New</span>{% endif %}
+                        </div>
+                        <div class="text-muted" style="font-size:.8rem;">{{ notif.message | truncate(120) }}</div>
+                    </div>
                 </div>
-                <small class="text-muted text-nowrap ms-3">{{ notif.created_at.strftime('%d %b %Y %H:%M') }}</small>
+                <small class="text-muted text-nowrap" style="font-size:.75rem;">
+                    {{ notif.created_at.strftime('%d %b %Y') }}
+                </small>
             </div>
         </div>
         {% endfor %}

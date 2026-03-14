@@ -2,35 +2,35 @@
 {% block title %}Users - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="page-header">
     <h2><i class="bi bi-people"></i> Users</h2>
     <a href="{{ url_for('auth.user_create') }}" class="btn btn-primary">
-        <i class="bi bi-person-plus"></i> Create User
+        <i class="bi bi-person-plus me-1"></i>Create User
     </a>
 </div>
 
 <div class="card">
     <div class="table-responsive">
         <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead>
                 <tr>
                     <th>Name</th>
                     <th>Username</th>
                     <th>Email</th>
-                    <th>Role</th>
-                    <th>Branch</th>
+                    <th>Roles</th>
+                    <th>Branches</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for user in users %}
                 <tr>
-                    <td>{{ user.full_name }}</td>
-                    <td>{{ user.username }}</td>
+                    <td class="fw-semibold">{{ user.full_name }}</td>
+                    <td><code>{{ user.username }}</code></td>
                     <td>{{ user.email }}</td>
                     <td>{% for r in user.roles %}<span class="badge bg-secondary me-1">{{ r.value }}</span>{% else %}&mdash;{% endfor %}</td>
-                    <td>{% for b in user.branches %}<span class="badge bg-info me-1">{{ b.value }}</span>{% else %}&mdash;{% endfor %}</td>
+                    <td>{% for b in user.branches %}<span class="badge bg-info text-dark me-1">{{ b.value }}</span>{% else %}&mdash;{% endfor %}</td>
                     <td>
                         {% if user.is_active_user %}
                         <span class="badge bg-success">Active</span>
@@ -39,17 +39,22 @@
                         {% endif %}
                     </td>
                     <td>
-                        <a href="{{ url_for('auth.user_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-pencil"></i>
-                        </a>
-                        {% if current_user.has_role(Role.ADMIN) and user.id != current_user.id %}
-                        <form action="{{ url_for('auth.user_delete', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete user {{ user.username }}? This cannot be undone.')">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </form>
-                        {% endif %}
+                        <div class="d-flex gap-1">
+                            <a href="{{ url_for('auth.user_edit', user_id=user.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% if current_user.has_role(Role.ADMIN) and user.id != current_user.id %}
+                            <form action="{{ url_for('auth.user_delete', user_id=user.id) }}"
+                                  method="POST" class="d-inline"
+                                  onsubmit="return confirm('Delete {{ user.username }}? This cannot be undone.')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

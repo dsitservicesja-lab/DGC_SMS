@@ -2,11 +2,11 @@
 {% block title %}Samples - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="page-header">
     <h2><i class="bi bi-collection"></i> Samples</h2>
     {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
     <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Register Sample
+        <i class="bi bi-plus-circle me-1"></i>Register Sample
     </a>
     {% endif %}
 </div>
@@ -15,13 +15,15 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <form method="GET" class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Search</label>
-                <input type="text" name="q" class="form-control form-control-sm"
-                       placeholder="Lab # or Sample Name" value="{{ search }}">
+            <div class="col-sm-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Search</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" class="form-control" placeholder="Lab # or name" value="{{ search }}">
+                </div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Status</label>
+            <div class="col-sm-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Status</label>
                 <select name="status" class="form-select form-select-sm">
                     <option value="">All Statuses</option>
                     {% for s in SampleStatus %}
@@ -29,8 +31,8 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Type</label>
+            <div class="col-sm-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Type</label>
                 <select name="type" class="form-select form-select-sm">
                     <option value="">All Types</option>
                     {% for b in Branch %}
@@ -38,67 +40,73 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Filter</button>
+            <div class="col-sm-6 col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-funnel me-1"></i>Filter
+                </button>
                 <a href="{{ url_for('samples.sample_list') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Samples Table -->
+{% set status_colors = {
+    'Registered': 'secondary',
+    'Assigned': 'primary',
+    'In Progress': 'info',
+    'Report Submitted': 'warning',
+    'Preliminary Review': 'warning',
+    'Technical Review': 'warning',
+    'Returned for Correction': 'danger',
+    'Accepted': 'success',
+    'Deputy Review': 'info',
+    'Returned by Deputy': 'danger',
+    'Certificate Preparation': 'info',
+    'HOD Review': 'info',
+    'Returned by HOD': 'danger',
+    'Certified': 'success',
+    'Rejected': 'danger',
+    'Completed': 'success',
+} %}
+
 <div class="card">
     <div class="table-responsive">
         <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead>
                 <tr>
                     <th>Lab #</th>
                     <th>Sample Name</th>
                     <th>Type</th>
                     <th>Date Received</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for sample in samples %}
                 <tr>
-                    <td><strong>{{ sample.lab_number }}</strong></td>
+                    <td><span class="fw-semibold">{{ sample.lab_number }}</span></td>
                     <td>{{ sample.sample_name }}</td>
-                    <td><span class="badge bg-info">{{ sample.sample_type.value }}</span></td>
+                    <td><span class="badge bg-info text-dark">{{ sample.sample_type.value }}</span></td>
                     <td>{{ sample.date_received.strftime('%d %b %Y') }}</td>
                     <td>
-                        {% set status_colors = {
-                            'Registered': 'secondary',
-                            'Assigned': 'primary',
-                            'In Progress': 'info',
-                            'Report Submitted': 'warning',
-                            'Preliminary Review': 'warning',
-                            'Technical Review': 'warning',
-                            'Returned for Correction': 'danger',
-                            'Accepted': 'success',
-                            'Deputy Review': 'info',
-                            'Returned by Deputy': 'danger',
-                            'Certificate Preparation': 'info',
-                            'HOD Review': 'info',
-                            'Returned by HOD': 'danger',
-                            'Certified': 'success',
-                            'Rejected': 'danger',
-                            'Completed': 'success',
-                        } %}
                         <span class="badge bg-{{ status_colors.get(sample.status.value, 'secondary') }}">
                             {{ sample.status.value }}
                         </span>
                     </td>
                     <td>
-                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-eye"></i> View
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                           class="btn btn-sm btn-outline-primary" title="View">
+                            <i class="bi bi-eye"></i>
                         </a>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No samples found.</td>
+                    <td colspan="6" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox d-block mb-2" style="font-size:2rem;"></i>
+                        No samples found.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

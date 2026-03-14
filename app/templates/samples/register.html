@@ -2,91 +2,91 @@
 {% block title %}Register Sample - DGC SMS{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-plus-circle"></i> Register New Sample</h2>
+    <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
 <div class="row justify-content-center">
-    <div class="col-md-9">
+    <div class="col-lg-9">
         <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Register New Sample</h4>
-            </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <form method="POST" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
 
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            {{ form.lab_number.label(class="form-label") }}
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            {{ form.lab_number.label(class="form-label fw-semibold") }}
                             {{ form.lab_number(class="form-control") }}
                             {% for error in form.lab_number.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.sample_name.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.sample_name.label(class="form-label fw-semibold") }}
                             {{ form.sample_name(class="form-control") }}
                             {% for error in form.sample_name.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.sample_type.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.sample_type.label(class="form-label fw-semibold") }}
                             {{ form.sample_type(class="form-select") }}
                             {% for error in form.sample_type.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        {{ form.description.label(class="form-label") }}
-                        {{ form.description(class="form-control", rows=3) }}
-                    </div>
+                        <div class="col-12">
+                            {{ form.description.label(class="form-label fw-semibold") }}
+                            {{ form.description(class="form-control", rows=3) }}
+                        </div>
 
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            {{ form.quantity.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.quantity.label(class="form-label fw-semibold") }}
                             {{ form.quantity(class="form-control") }}
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.parish.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.parish.label(class="form-label fw-semibold") }}
                             {{ form.parish(class="form-control") }}
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.source.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.source.label(class="form-label fw-semibold") }}
                             {{ form.source(class="form-control") }}
                         </div>
-                    </div>
 
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            {{ form.patient_name.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.patient_name.label(class="form-label fw-semibold") }}
                             {{ form.patient_name(class="form-control") }}
                             <div class="form-text">For Toxicology samples only</div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.date_received.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.date_received.label(class="form-label fw-semibold") }}
                             {{ form.date_received(class="form-control", type="date") }}
                             {% for error in form.date_received.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.expected_report_date.label(class="form-label") }}
+                        <div class="col-md-4">
+                            {{ form.expected_report_date.label(class="form-label fw-semibold") }}
                             {{ form.expected_report_date(class="form-control", type="date") }}
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        {{ form.scanned_file.label(class="form-label") }}
-                        {{ form.scanned_file(class="form-control") }}
-                        <div class="form-text">Upload scanned sample information (PDF, PNG, JPG, TIFF)</div>
-                        {% for error in form.scanned_file.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
+                        <div class="col-12">
+                            {{ form.scanned_file.label(class="form-label fw-semibold") }}
+                            {{ form.scanned_file(class="form-control") }}
+                            <div class="form-text">Upload scanned sample information (PDF, PNG, JPG, TIFF)</div>
+                            {% for error in form.scanned_file.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
 
-                    <div class="d-flex gap-2">
-                        {{ form.submit(class="btn btn-primary") }}
-                        <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary">Cancel</a>
+                        <div class="col-12 d-flex gap-2 pt-2">
+                            {{ form.submit(class="btn btn-primary") }}
+                            <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
                     </div>
                 </form>
             </div>

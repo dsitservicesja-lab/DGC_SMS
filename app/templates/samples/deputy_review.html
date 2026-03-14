@@ -2,36 +2,47 @@
 {% block title %}Deputy Review - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-10">
+<div class="page-header">
+    <h2><i class="bi bi-clipboard-check"></i> Deputy Government Chemist Review</h2>
+    <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-10 mx-auto">
         <!-- Sample Info -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-clipboard2-data"></i> Sample Details</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard2-data me-2"></i>Sample Details</h5></div>
             <div class="card-body">
-                <div class="row">
+                <div class="row g-3">
                     <div class="col-md-4">
-                        <dl>
-                            <dt>Lab Number</dt><dd>{{ sample.lab_number }}</dd>
-                            <dt>Sample Name</dt><dd>{{ sample.sample_name }}</dd>
-                            <dt>Type</dt><dd><span class="badge bg-info">{{ sample.sample_type.value }}</span></dd>
+                        <dl class="mb-0">
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Lab Number</dt>
+                            <dd class="fw-semibold mb-3">{{ sample.lab_number }}</dd>
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Sample Name</dt>
+                            <dd class="mb-0">{{ sample.sample_name }}</dd>
                         </dl>
                     </div>
                     <div class="col-md-4">
-                        <dl>
-                            <dt>Date Received</dt><dd>{{ sample.date_received.strftime('%d %b %Y') }}</dd>
-                            {% if sample.source %}<dt>Source</dt><dd>{{ sample.source }}</dd>{% endif %}
-                            {% if sample.parish %}<dt>Parish</dt><dd>{{ sample.parish }}</dd>{% endif %}
+                        <dl class="mb-0">
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Type</dt>
+                            <dd class="mb-3"><span class="badge bg-info text-dark">{{ sample.sample_type.value }}</span></dd>
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Date Received</dt>
+                            <dd class="mb-3">{{ sample.date_received.strftime('%d %b %Y') }}</dd>
+                            {% if sample.source %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Source</dt>
+                            <dd class="mb-0">{{ sample.source }}</dd>
+                            {% endif %}
                         </dl>
                     </div>
                     <div class="col-md-4">
                         {% if sample.scanned_file %}
-                        <dt>Scanned Document</dt>
-                        <dd>
+                        <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Scanned Document</dt>
+                        <dd class="mt-1">
                             <a href="{{ url_for('samples.download_file', filename=sample.scanned_file) }}"
                                class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-download"></i> {{ sample.scanned_file_original_name }}
+                                <i class="bi bi-download me-1"></i>{{ sample.scanned_file_original_name }}
                             </a>
                         </dd>
                         {% endif %}
@@ -42,26 +53,24 @@
 
         <!-- Analyst Reports -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Analyst Reports</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Analyst Reports</h5></div>
             <div class="card-body">
                 {% for a in assignments %}
-                <div class="border rounded p-3 mb-3">
-                    <div class="d-flex justify-content-between align-items-start">
+                <div class="border rounded p-3 mb-3 {% if not loop.last %}mb-3{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
                         <div>
-                            <h6>{{ a.test_name }} — {{ a.chemist.full_name }}</h6>
+                            <h6 class="fw-semibold mb-0">{{ a.test_name }} &mdash; {{ a.chemist.full_name }}</h6>
                             {% if a.test_reference %}
                             <small class="text-muted">Ref: {{ a.test_reference }}</small>
                             {% endif %}
                         </div>
                         <span class="badge bg-success">{{ a.status.value }}</span>
                     </div>
-                    <div class="mt-2 bg-light rounded p-2">{{ a.report_text }}</div>
+                    <div class="border rounded p-2 mb-2" style="background: var(--bs-tertiary-bg); white-space: pre-wrap; font-size:.875rem;">{{ a.report_text }}</div>
                     {% if a.report_file %}
                     <a href="{{ url_for('samples.download_file', filename=a.report_file) }}"
-                       class="btn btn-sm btn-outline-primary mt-2">
-                        <i class="bi bi-download"></i> {{ a.report_file_original_name }}
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-download me-1"></i>{{ a.report_file_original_name }}
                     </a>
                     {% endif %}
                 </div>
@@ -72,19 +81,17 @@
         <!-- Summary Report (Pharmaceutical) -->
         {% if sample.summary_report %}
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-file-text"></i> Summary Report (Pharmaceutical)</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-text me-2"></i>Summary Report (Pharmaceutical)</h5></div>
             <div class="card-body">
-                <div class="bg-light rounded p-3 mb-2">{{ sample.summary_report }}</div>
+                <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg); white-space: pre-wrap; font-size:.875rem;">{{ sample.summary_report }}</div>
                 {% if sample.summary_report_file %}
                 <a href="{{ url_for('samples.download_file', filename=sample.summary_report_file) }}"
-                   class="btn btn-sm btn-outline-primary">
-                    <i class="bi bi-download"></i> {{ sample.summary_report_file_original_name }}
+                   class="btn btn-sm btn-outline-primary mb-2">
+                    <i class="bi bi-download me-1"></i>{{ sample.summary_report_file_original_name }}
                 </a>
                 {% endif %}
                 {% if sample.summary_report_user %}
-                <p class="text-muted small mt-2 mb-0">
+                <p class="text-muted small mb-0">
                     Prepared by {{ sample.summary_report_user.full_name }}
                     {% if sample.summary_report_at %} on {{ sample.summary_report_at.strftime('%d %b %Y %H:%M') }}{% endif %}
                 </p>
@@ -96,33 +103,35 @@
         <!-- Review Form -->
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Deputy Government Chemist Review</h4>
+                <h5 class="mb-0">Review Decision</h5>
                 <small class="text-muted">
                     Review the submission for completeness and accuracy.
                     If approved, proceed to prepare the Certificate of Analysis.
                 </small>
             </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <form method="POST">
                     {{ form.hidden_tag() }}
 
-                    <div class="mb-3">
-                        {{ form.action.label(class="form-label") }}
-                        {{ form.action(class="form-select") }}
-                        {% for error in form.action.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            {{ form.action.label(class="form-label fw-semibold") }}
+                            {{ form.action(class="form-select") }}
+                            {% for error in form.action.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
 
-                    <div class="mb-3">
-                        {{ form.review_comments.label(class="form-label") }}
-                        {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
-                    </div>
+                        <div class="col-12">
+                            {{ form.review_comments.label(class="form-label fw-semibold") }}
+                            {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
+                        </div>
 
-                    <div class="d-flex gap-2">
-                        {{ form.submit(class="btn btn-primary") }}
-                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
-                           class="btn btn-outline-secondary">Cancel</a>
+                        <div class="col-12 d-flex gap-2 pt-2">
+                            {{ form.submit(class="btn btn-primary") }}
+                            <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                               class="btn btn-outline-secondary">Cancel</a>
+                        </div>
                     </div>
                 </form>
             </div>

@@ -2,27 +2,37 @@
 {% block title %}Government Chemist Review - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
+<div class="page-header">
+    <h2><i class="bi bi-pen"></i> Government Chemist Review &amp; Signing</h2>
+    <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
         <!-- Sample Info -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-clipboard2-data"></i> {{ sample.lab_number }} — {{ sample.sample_name }}</h5>
-                <small class="text-muted">{{ sample.sample_type.value }}</small>
-            </div>
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard2-data me-2"></i>{{ sample.lab_number }} &mdash; {{ sample.sample_name }}</h5></div>
             <div class="card-body">
-                <div class="row">
+                <div class="row g-3">
                     <div class="col-md-6">
-                        <dl>
-                            <dt>Source</dt><dd>{{ sample.source or 'N/A' }}</dd>
-                            <dt>Date Received</dt><dd>{{ sample.date_received.strftime('%d %b %Y') }}</dd>
+                        <dl class="mb-0">
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Type</dt>
+                            <dd class="mb-3"><span class="badge bg-info text-dark">{{ sample.sample_type.value }}</span></dd>
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Source</dt>
+                            <dd class="mb-3">{{ sample.source or 'N/A' }}</dd>
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Date Received</dt>
+                            <dd class="mb-0">{{ sample.date_received.strftime('%d %b %Y') }}</dd>
                         </dl>
                     </div>
                     <div class="col-md-6">
                         {% if sample.certificate_preparer %}
-                        <dl>
-                            <dt>Certificate Prepared By</dt><dd>{{ sample.certificate_preparer.full_name }}</dd>
-                            <dt>Prepared On</dt><dd>{{ sample.certificate_prepared_at.strftime('%d %b %Y %H:%M') }}</dd>
+                        <dl class="mb-0">
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Certificate Prepared By</dt>
+                            <dd class="mb-3">{{ sample.certificate_preparer.full_name }}</dd>
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Prepared On</dt>
+                            <dd class="mb-0">{{ sample.certificate_prepared_at.strftime('%d %b %Y %H:%M') }}</dd>
                         </dl>
                         {% endif %}
                     </div>
@@ -32,17 +42,15 @@
 
         <!-- Certificate Preview -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-medical"></i> Certificate of Analysis</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-file-earmark-medical me-2"></i>Certificate of Analysis</h5></div>
             <div class="card-body">
                 {% if sample.certificate_text %}
-                <div class="border rounded p-3 bg-light mb-3">{{ sample.certificate_text }}</div>
+                <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg); white-space: pre-wrap; font-size:.875rem;">{{ sample.certificate_text }}</div>
                 {% endif %}
                 {% if sample.certificate_file %}
                 <a href="{{ url_for('samples.download_file', filename=sample.certificate_file) }}"
                    class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-download"></i> {{ sample.certificate_file_original_name }}
+                    <i class="bi bi-download me-1"></i>{{ sample.certificate_file_original_name }}
                 </a>
                 {% endif %}
             </div>
@@ -51,33 +59,32 @@
         <!-- Review Form -->
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-pen"></i> Government Chemist Review &amp; Signing</h4>
-                <small class="text-muted">
-                    Review the Certificate of Analysis. Signing the certificate completes
-                    the sample analysis process.
-                </small>
+                <h5 class="mb-0">Review Decision</h5>
+                <small class="text-muted">Review the Certificate of Analysis. Signing the certificate completes the sample analysis process.</small>
             </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <form method="POST">
                     {{ form.hidden_tag() }}
 
-                    <div class="mb-3">
-                        {{ form.action.label(class="form-label") }}
-                        {{ form.action(class="form-select") }}
-                        {% for error in form.action.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            {{ form.action.label(class="form-label fw-semibold") }}
+                            {{ form.action(class="form-select") }}
+                            {% for error in form.action.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
 
-                    <div class="mb-3">
-                        {{ form.review_comments.label(class="form-label") }}
-                        {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
-                    </div>
+                        <div class="col-12">
+                            {{ form.review_comments.label(class="form-label fw-semibold") }}
+                            {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
+                        </div>
 
-                    <div class="d-flex gap-2">
-                        {{ form.submit(class="btn btn-success") }}
-                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
-                           class="btn btn-outline-secondary">Cancel</a>
+                        <div class="col-12 d-flex gap-2 pt-2">
+                            {{ form.submit(class="btn btn-success") }}
+                            <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                               class="btn btn-outline-secondary">Cancel</a>
+                        </div>
                     </div>
                 </form>
             </div>

@@ -2,62 +2,73 @@
 {% block title %}Submit Report - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-upload"></i> Submit Report</h4>
-                <small class="text-muted">
-                    {{ assignment.sample.lab_number }} — Test: {{ assignment.test_name }}
-                </small>
-            </div>
-            <div class="card-body">
-                {% if assignment.status.value == 'Returned for Correction' %}
-                {% if assignment.return_stage == 'technical' and assignment.review_comments %}
-                <div class="alert alert-warning">
-                    <h6><i class="bi bi-exclamation-triangle"></i> Report returned by Senior Chemist (Technical Review)</h6>
-                    <p class="mb-0">{{ assignment.review_comments }}</p>
-                </div>
-                {% elif assignment.return_stage == 'preliminary' and assignment.preliminary_review_comments %}
-                <div class="alert alert-warning">
-                    <h6><i class="bi bi-exclamation-triangle"></i> Report returned during Preliminary Review</h6>
-                    <p class="mb-0">{{ assignment.preliminary_review_comments }}</p>
-                </div>
-                {% elif assignment.review_comments %}
-                <div class="alert alert-warning">
-                    <h6><i class="bi bi-exclamation-triangle"></i> Report was returned for correction</h6>
-                    <p class="mb-0">{{ assignment.review_comments }}</p>
-                </div>
-                {% endif %}
-                {% endif %}
+<div class="page-header">
+    <h2><i class="bi bi-upload"></i> Submit Report</h2>
+    <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
 
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body py-2 px-3">
+                <span class="text-muted" style="font-size:.875rem;">
+                    {{ assignment.sample.lab_number }} &mdash; Test: <strong>{{ assignment.test_name }}</strong>
+                </span>
+            </div>
+        </div>
+
+        {% if assignment.status.value == 'Returned for Correction' %}
+        {% if assignment.return_stage == 'technical' and assignment.review_comments %}
+        <div class="alert alert-warning">
+            <h6 class="mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Report returned by Senior Chemist (Technical Review)</h6>
+            <p class="mb-0">{{ assignment.review_comments }}</p>
+        </div>
+        {% elif assignment.return_stage == 'preliminary' and assignment.preliminary_review_comments %}
+        <div class="alert alert-warning">
+            <h6 class="mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Report returned during Preliminary Review</h6>
+            <p class="mb-0">{{ assignment.preliminary_review_comments }}</p>
+        </div>
+        {% elif assignment.review_comments %}
+        <div class="alert alert-warning">
+            <h6 class="mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Report was returned for correction</h6>
+            <p class="mb-0">{{ assignment.review_comments }}</p>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div class="card">
+            <div class="card-body p-4">
                 <form method="POST" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
 
-                    <div class="mb-3">
-                        {{ form.report_text.label(class="form-label") }}
-                        {{ form.report_text(class="form-control", rows=8) }}
-                        {% for error in form.report_text.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form.report_file.label(class="form-label") }}
-                        {{ form.report_file(class="form-control") }}
-                        <div class="form-text">Optional: attach a report document (PDF, image)</div>
-                        {% if assignment.report_file %}
-                        <div class="form-text text-info">
-                            Current file: {{ assignment.report_file_original_name }}
-                            — uploading a new file will replace it.
+                    <div class="row g-3">
+                        <div class="col-12">
+                            {{ form.report_text.label(class="form-label fw-semibold") }}
+                            {{ form.report_text(class="form-control", rows=8) }}
+                            {% for error in form.report_text.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
                         </div>
-                        {% endif %}
-                    </div>
 
-                    <div class="d-flex gap-2">
-                        {{ form.submit(class="btn btn-success") }}
-                        <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}"
-                           class="btn btn-outline-secondary">Cancel</a>
+                        <div class="col-12">
+                            {{ form.report_file.label(class="form-label fw-semibold") }}
+                            {{ form.report_file(class="form-control") }}
+                            <div class="form-text">Optional: attach a report document (PDF, image)</div>
+                            {% if assignment.report_file %}
+                            <div class="form-text">
+                                Current file: <strong>{{ assignment.report_file_original_name }}</strong>
+                                — uploading a new file will replace it.
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12 d-flex gap-2 pt-2">
+                            {{ form.submit(class="btn btn-success") }}
+                            <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}"
+                               class="btn btn-outline-secondary">Cancel</a>
+                        </div>
                     </div>
                 </form>
             </div>

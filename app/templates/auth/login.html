@@ -1,43 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Login - DGC SMS{% endblock %}
+{% block title %}Sign In - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5 col-lg-4">
-        <div class="card shadow">
+<div class="d-flex align-items-center justify-content-center" style="min-height: calc(100vh - var(--topbar-h) - 40px);">
+    <div style="width: 100%; max-width: 400px;">
+        <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="DGC Logo"
+                 style="height: 80px; width: auto;" class="mb-3">
+            <h2 class="fw-bold mb-1" style="color: var(--dgc-primary);">DGC SMS</h2>
+            <p class="text-muted mb-0" style="font-size:.875rem;">Sample Management System</p>
+        </div>
+
+        <div class="card shadow-sm">
             <div class="card-body p-4">
-                <div class="text-center mb-4">
-                    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="DGC Logo" style="height:90px; width:auto;" class="mb-2">
-                    <h3 class="mt-2">DGC SMS</h3>
-                    <p class="text-muted">Sample Management System</p>
-                </div>
+                <h5 class="fw-semibold mb-4">Sign in to your account</h5>
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
-                        {{ form.username.label(class="form-label") }}
-                        {{ form.username(class="form-control", placeholder="Enter username") }}
+                        {{ form.username.label(class="form-label fw-semibold") }}
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            {{ form.username(class="form-control", placeholder="Username") }}
+                        </div>
                         {% for error in form.username.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                         {% endfor %}
                     </div>
                     <div class="mb-3">
-                        {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control", placeholder="Enter password") }}
+                        {{ form.password.label(class="form-label fw-semibold") }}
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            {{ form.password(class="form-control", placeholder="Password", id="loginPassword") }}
+                            <button class="btn btn-outline-secondary" type="button" id="togglePwd"
+                                    tabindex="-1" aria-label="Show password">
+                                <i class="bi bi-eye" id="togglePwdIcon"></i>
+                            </button>
+                        </div>
                         {% for error in form.password.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                         {% endfor %}
                     </div>
-                    <div class="mb-3 form-check">
-                        {{ form.remember_me(class="form-check-input") }}
-                        {{ form.remember_me.label(class="form-check-label") }}
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="form-check mb-0">
+                            {{ form.remember_me(class="form-check-input") }}
+                            {{ form.remember_me.label(class="form-check-label") }}
+                        </div>
+                        <a href="{{ url_for('auth.forgot_password') }}" style="font-size:.875rem;">
+                            Forgot password?
+                        </a>
                     </div>
                     {{ form.submit(class="btn btn-primary w-100") }}
-                    <div class="text-center mt-3">
-                        <a href="{{ url_for('auth.forgot_password') }}">Forgot Password?</a>
-                    </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('togglePwd').addEventListener('click', function () {
+        const input = document.getElementById('loginPassword');
+        const icon  = document.getElementById('togglePwdIcon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'bi bi-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'bi bi-eye';
+        }
+    });
+</script>
 {% endblock %}

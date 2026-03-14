@@ -2,32 +2,39 @@
 {% block title %}Submit to Deputy - DGC SMS{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-send"></i> Submit to Deputy</h2>
+    <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-lg-8">
         <!-- Reports Summary -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Reports Summary</h5>
-                <small class="text-muted">{{ sample.lab_number }} — {{ sample.sample_name }}</small>
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Reports Summary</h5>
+                <small class="text-muted">{{ sample.lab_number }} &mdash; {{ sample.sample_name }}</small>
             </div>
             <div class="card-body">
-                <p class="text-muted">
+                <p class="text-muted mb-3" style="font-size:.875rem;">
                     The following analyst reports have been reviewed and accepted.
                     {% if is_pharma %}
                     <strong>A summary report is required for pharmaceutical samples.</strong>
                     {% endif %}
                 </p>
                 {% for a in sample.assignments.all() %}
-                <div class="border rounded p-3 mb-3 bg-light">
-                    <h6>{{ a.test_name }} — {{ a.chemist.full_name }}</h6>
+                <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg);">
+                    <h6 class="fw-semibold mb-1">{{ a.test_name }} &mdash; {{ a.chemist.full_name }}</h6>
                     {% if a.test_reference %}
-                    <small class="text-muted">Ref: {{ a.test_reference }}</small>
+                    <small class="text-muted d-block mb-2">Ref: {{ a.test_reference }}</small>
                     {% endif %}
-                    <div class="mt-2">{{ a.report_text | truncate(200) }}</div>
+                    <div style="font-size:.875rem;">{{ a.report_text | truncate(200) }}</div>
                     {% if a.report_file %}
                     <a href="{{ url_for('samples.download_file', filename=a.report_file) }}"
-                       class="btn btn-sm btn-outline-primary mt-1">
-                        <i class="bi bi-download"></i> {{ a.report_file_original_name }}
+                       class="btn btn-sm btn-outline-primary mt-2">
+                        <i class="bi bi-download me-1"></i>{{ a.report_file_original_name }}
                     </a>
                     {% endif %}
                 </div>
@@ -38,35 +45,37 @@
         <!-- Submit Form -->
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-send"></i> Submit to Deputy Government Chemist</h4>
+                <h5 class="mb-0">Submit to Deputy Government Chemist</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-4">
                 <form method="POST" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
 
                     {% if is_pharma %}
-                    <div class="mb-3">
-                        {{ form.summary_report.label(class="form-label fw-bold") }}
-                        {{ form.summary_report(class="form-control", rows=8, placeholder="Enter the summary report to accompany the analyst's report...") }}
-                        <div class="form-text text-danger">Required for pharmaceutical samples.</div>
-                        {% for error in form.summary_report.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            {{ form.summary_report.label(class="form-label fw-semibold") }}
+                            {{ form.summary_report(class="form-control", rows=8, placeholder="Enter the summary report to accompany the analyst's report...") }}
+                            <div class="form-text text-danger">Required for pharmaceutical samples.</div>
+                            {% for error in form.summary_report.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
 
-                    <div class="mb-3">
-                        {{ form.summary_report_file.label(class="form-label") }}
-                        {{ form.summary_report_file(class="form-control") }}
-                        <div class="form-text">Optional: attach a summary report document.</div>
+                        <div class="col-12">
+                            {{ form.summary_report_file.label(class="form-label fw-semibold") }}
+                            {{ form.summary_report_file(class="form-control") }}
+                            <div class="form-text">Optional: attach a summary report document.</div>
+                        </div>
                     </div>
                     {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i>
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle me-1"></i>
                         The analyst's report(s) will be forwarded to the Deputy Government Chemist for review.
                     </div>
                     {% endif %}
 
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 {% if is_pharma %}mt-3{% endif %}">
                         {{ form.submit(class="btn btn-primary") }}
                         <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
                            class="btn btn-outline-secondary">Cancel</a>
