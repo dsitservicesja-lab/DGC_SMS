@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from flask import current_app
 from flask_login import UserMixin
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from sqlalchemy import delete, event, insert, select
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, login_manager
@@ -128,7 +129,7 @@ class User(UserMixin, db.Model):
             self._roles = set()
             return self._roles
         rows = db.session.execute(
-            user_roles.select().where(user_roles.c.user_id == self.id)
+            select(user_roles).where(user_roles.c.user_id == self.id)
         ).fetchall()
         self._roles = {row.role for row in rows}
         return self._roles
@@ -146,7 +147,7 @@ class User(UserMixin, db.Model):
             self._branches = set()
             return self._branches
         rows = db.session.execute(
-            user_branches.select().where(user_branches.c.user_id == self.id)
+            select(user_branches).where(user_branches.c.user_id == self.id)
         ).fetchall()
         self._branches = {row.branch for row in rows}
         return self._branches
@@ -214,26 +215,24 @@ def load_user(user_id):
 
 
 # Flush pending roles/branches to the association tables after insert or update
-from sqlalchemy import event as _sa_event
 
-
-@_sa_event.listens_for(User, 'after_insert')
-@_sa_event.listens_for(User, 'after_update')
+@event.listens_for(User, 'after_insert')
+@event.listens_for(User, 'after_update')
 def _flush_user_roles_branches(mapper, connection, target):
     if target._roles is not None:
         connection.execute(
-            user_roles.delete().where(user_roles.c.user_id == target.id)
+            delete(user_roles).where(user_roles.c.user_id == target.id)
         )
         for r in target._roles:
-            connection.execute(user_roles.insert().values(
+            connection.execute(insert(user_roles).values(
                 user_id=target.id, role=r
             ))
     if target._branches is not None:
         connection.execute(
-            user_branches.delete().where(user_branches.c.user_id == target.id)
+            delete(user_branches).where(user_branches.c.user_id == target.id)
         )
         for b in target._branches:
-            connection.execute(user_branches.insert().values(
+            connection.execute(insert(user_branches).values(
                 user_id=target.id, branch=b
             ))
 

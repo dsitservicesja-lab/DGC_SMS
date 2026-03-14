@@ -163,7 +163,7 @@ def register():
 @samples_bp.route('/<int:sample_id>')
 @login_required
 def detail(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
     assignments = sample.assignments.all()
     history = sample.history.all()
     return render_template(
@@ -181,7 +181,7 @@ def detail(sample_id):
 @samples_bp.route('/<int:sample_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
     if not current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) and \
        current_user.id != sample.uploaded_by:
         flash('Access denied.', 'danger')
@@ -217,7 +217,7 @@ def edit(sample_id):
 @samples_bp.route('/<int:sample_id>/assign', methods=['GET', 'POST'])
 @login_required
 def assign(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
     if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Only Senior Chemists / Branch Heads can assign samples.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
@@ -271,7 +271,7 @@ def assign(sample_id):
 @samples_bp.route('/assignment/<int:assignment_id>')
 @login_required
 def assignment_detail(assignment_id):
-    assignment = SampleAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
     # Access: the assigned chemist, branch heads, officer who uploaded, admin
     if not _can_view_assignment(assignment):
         abort(403)
@@ -298,7 +298,7 @@ def _can_view_assignment(assignment):
 @samples_bp.route('/assignment/<int:assignment_id>/report', methods=['GET', 'POST'])
 @login_required
 def submit_report(assignment_id):
-    assignment = SampleAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
     if current_user.id != assignment.chemist_id:
         flash('Only the assigned chemist can submit a report.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
@@ -365,7 +365,7 @@ def submit_report(assignment_id):
 @samples_bp.route('/assignment/<int:assignment_id>/preliminary-review', methods=['GET', 'POST'])
 @login_required
 def preliminary_review(assignment_id):
-    assignment = SampleAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
 
     # Officers, HOD, or Admin can do preliminary review
     sample = assignment.sample
@@ -425,7 +425,7 @@ def preliminary_review(assignment_id):
 @samples_bp.route('/assignment/<int:assignment_id>/review', methods=['GET', 'POST'])
 @login_required
 def review_report(assignment_id):
-    assignment = SampleAssignment.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
 
     if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Only Senior Chemists / Branch Heads can review reports.', 'danger')
@@ -482,7 +482,7 @@ def review_report(assignment_id):
 @samples_bp.route('/<int:sample_id>/submit-to-deputy', methods=['GET', 'POST'])
 @login_required
 def submit_to_deputy(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
 
     if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Only Senior Chemists can submit to Deputy.', 'danger')
@@ -542,7 +542,7 @@ def submit_to_deputy(sample_id):
 @samples_bp.route('/<int:sample_id>/deputy-review', methods=['GET', 'POST'])
 @login_required
 def deputy_review(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
 
     if not current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN):
         flash('Only the Deputy Government Chemist can perform this review.', 'danger')
@@ -597,7 +597,7 @@ def deputy_review(sample_id):
 @samples_bp.route('/<int:sample_id>/resubmit-to-deputy', methods=['POST'])
 @login_required
 def resubmit_to_deputy(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
 
     if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
         flash('Access denied.', 'danger')
@@ -629,7 +629,7 @@ def resubmit_to_deputy(sample_id):
 @samples_bp.route('/<int:sample_id>/prepare-certificate', methods=['GET', 'POST'])
 @login_required
 def prepare_certificate(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
 
     if not current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN):
         flash('Only the Deputy Government Chemist can prepare certificates.', 'danger')
@@ -681,7 +681,7 @@ def prepare_certificate(sample_id):
 @samples_bp.route('/<int:sample_id>/hod-review', methods=['GET', 'POST'])
 @login_required
 def hod_review(sample_id):
-    sample = Sample.query.get_or_404(sample_id)
+    sample = db.get_or_404(Sample, sample_id)
 
     if not current_user.has_any_role(Role.HOD, Role.ADMIN):
         flash('Only the Government Chemist can review and sign certificates.', 'danger')

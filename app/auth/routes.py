@@ -141,7 +141,7 @@ def user_edit(user_id):
     if not current_user.has_any_role(Role.ADMIN, Role.HOD):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     form = UserEditForm(obj=user)
     if request.method == 'GET':
         form.roles.data = [r.name for r in user.roles]
@@ -174,7 +174,7 @@ def user_delete(user_id):
     if not current_user.has_role(Role.ADMIN):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     if user.id == current_user.id:
         flash('You cannot delete your own account.', 'danger')
         return redirect(url_for('auth.user_list'))
@@ -198,8 +198,8 @@ def user_delete(user_id):
         is not None
     )
 
-    if any([has_samples, has_assignments, has_history, is_assigner,
-            is_reviewer, is_prelim_reviewer, is_sample_ref]):
+    if any((has_samples, has_assignments, has_history, is_assigner,
+            is_reviewer, is_prelim_reviewer, is_sample_ref)):
         flash(
             f'Cannot delete {user.username} — they have related records. '
             'Deactivate the account instead.',

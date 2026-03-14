@@ -136,7 +136,7 @@ def notifications():
 @main_bp.route('/notifications/<int:notif_id>/read', methods=['POST'])
 @login_required
 def mark_notification_read(notif_id):
-    notif = Notification.query.get_or_404(notif_id)
+    notif = db.get_or_404(Notification, notif_id)
     if notif.user_id != current_user.id:
         flash('Access denied.', 'danger')
         return redirect(url_for('main.notifications'))
