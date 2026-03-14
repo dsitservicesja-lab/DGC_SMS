@@ -1,5 +1,9 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "unzip": true
+        "unzip": true,
+        "/^python -m pytest tests/test_auth\\.py::test_create_user -v 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

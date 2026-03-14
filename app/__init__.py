@@ -51,6 +51,7 @@ def create_app(config_name=None):
 
     @app.before_request
     def check_password_change():
+        from flask import request, redirect, url_for
         from flask_login import current_user
         if (
             current_user.is_authenticated
@@ -58,7 +59,6 @@ def create_app(config_name=None):
             and request.endpoint
             and request.endpoint not in ('auth.change_password', 'auth.logout', 'static')
         ):
-            from flask import redirect, url_for
             return redirect(url_for('auth.change_password'))
 
     return app
