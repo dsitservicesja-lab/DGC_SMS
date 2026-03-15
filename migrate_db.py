@@ -77,6 +77,19 @@ NEW_TABLES = [
         '  PRIMARY KEY (user_id, branch)'
         ')',
     ),
+    (
+        'notifications',
+        'CREATE TABLE IF NOT EXISTS notifications ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  user_id INTEGER NOT NULL REFERENCES users(id),'
+        '  title VARCHAR(255) NOT NULL,'
+        '  message TEXT NOT NULL,'
+        '  link VARCHAR(500),'
+        '  is_read BOOLEAN DEFAULT 0,'
+        '  email_sent BOOLEAN DEFAULT 0,'
+        '  created_at DATETIME'
+        ')',
+    ),
 ]
 
 # ------------------------------------------------------------------------------

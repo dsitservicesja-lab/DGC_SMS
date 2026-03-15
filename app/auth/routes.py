@@ -127,9 +127,14 @@ def user_create():
         user.set_password(form.password.data)
         user.must_change_password = True
         user.roles = {Role[r] for r in form.roles.data}
-        user.branches = {Branch[b] for b in form.branches.data}
+        user.branches = {Branch[b] for b in (form.branches.data or [])}
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('An error occurred while creating the user. Please try again.', 'danger')
+            return render_template('auth/user_form.html', form=form, title='Create User')
         flash(f'User {user.username} created successfully.', 'success')
         return redirect(url_for('auth.user_list'))
     return render_template('auth/user_form.html', form=form, title='Create User')

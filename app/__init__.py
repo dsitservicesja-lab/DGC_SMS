@@ -34,6 +34,10 @@ def create_app(config_name=None):
     import os
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+    # Ensure all database tables exist
+    with app.app_context():
+        db.create_all()
+
     # Register blueprints
     from app.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
