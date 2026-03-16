@@ -1,11 +1,28 @@
+import time
+
 from flask import render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy.exc import OperationalError
 
 from app import db
 from app.auth import auth_bp
 from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
 from app.models import User, Role, Branch, Notification, SampleHistory, SampleAssignment, Sample
 from app.notifications import send_email
+
+
+def _commit_with_retry(max_attempts=3, base_delay=0.2):
+    """Commit with a short retry loop for transient SQLite lock errors."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            db.session.commit()
+            return
+        except OperationalError as exc:
+            db.session.rollback()
+            if 'database is locked' in str(exc).lower() and attempt < max_attempts:
+                time.sleep(base_delay * attempt)
+                continue
+            raise
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -130,10 +147,12 @@ def user_create():
         user.branches = {Branch[b] for b in (form.branches.data or [])}
         db.session.add(user)
         try:
-            db.session.commit()
-        except Exception:
+            _commit_with_retry()
+        except Exception as exc:
             db.session.rollback()
             current_app.logger.exception('Failed to create user %r', form.username.data)
+            if current_app.debug or current_app.testing:
+                flash(f'Create user error: {exc}', 'warning')
             flash('An error occurred while creating the user. Please try again.', 'danger')
             return render_template('auth/user_form.html', form=form, title='Create User')
         flash(f'User {user.username} created successfully.', 'success')
@@ -169,10 +188,12 @@ def user_edit(user_id):
             if form.new_password.data:
                 user.set_password(form.new_password.data)
             try:
-                db.session.commit()
-            except Exception:
+                _commit_with_retry()
+            except Exception as exc:
                 db.session.rollback()
                 current_app.logger.exception('Failed to update user %r', user.username)
+                if current_app.debug or current_app.testing:
+                    flash(f'Update user error: {exc}', 'warning')
                 flash('An error occurred while updating the user. Please try again.', 'danger')
                 return render_template('auth/user_form.html', form=form, title='Edit User', user=user)
             flash(f'User {user.username} updated.', 'success')
