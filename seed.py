@@ -28,6 +28,7 @@ def seed():
             must_change_password=False,
         )
         admin.set_password('admin123')
+        admin.role = Role.ADMIN
         admin.roles = {Role.ADMIN}
         db.session.add(admin)
 
@@ -39,6 +40,7 @@ def seed():
             last_name='Department',
         )
         hod.set_password('hod123')
+        hod.role = Role.HOD
         hod.roles = {Role.HOD}
         db.session.add(hod)
 
@@ -50,6 +52,7 @@ def seed():
             last_name='Director',
         )
         deputy.set_password('deputy123')
+        deputy.role = Role.DEPUTY
         deputy.roles = {Role.DEPUTY}
         db.session.add(deputy)
 
@@ -68,6 +71,8 @@ def seed():
                 last_name=lname,
             )
             sc.set_password('senior123')
+            sc.role = Role.SENIOR_CHEMIST
+            sc.branch = branch
             sc.roles = {Role.SENIOR_CHEMIST}
             sc.branches = {branch}
             db.session.add(sc)
@@ -91,6 +96,8 @@ def seed():
                 last_name=lname,
             )
             c.set_password('chemist123')
+            c.role = Role.CHEMIST
+            c.branch = branch
             c.roles = {Role.CHEMIST}
             c.branches = {branch}
             db.session.add(c)
@@ -103,6 +110,7 @@ def seed():
             last_name='Officer',
         )
         officer.set_password('officer123')
+        officer.role = Role.OFFICER
         officer.roles = {Role.OFFICER}
         db.session.add(officer)
 

@@ -33,8 +33,10 @@ def _create_user(role=Role.OFFICER, branch=None, username='testuser',
         must_change_password=must_change_password,
     )
     user.set_password('password123')
+    user.role = role           # legacy column (may be NOT NULL on older DBs)
     user.roles = {role}
     if branch:
+        user.branch = branch   # legacy column
         user.branches = {branch}
     db.session.add(user)
     db.session.commit()

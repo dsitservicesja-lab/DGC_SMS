@@ -143,8 +143,13 @@ def user_create():
         )
         user.set_password(form.password.data)
         user.must_change_password = True
-        user.roles = {Role[r] for r in form.roles.data}
-        user.branches = {Branch[b] for b in (form.branches.data or [])}
+        roles_set = {Role[r] for r in form.roles.data}
+        branches_set = {Branch[b] for b in (form.branches.data or [])}
+        user.roles = roles_set
+        user.branches = branches_set
+        # Populate legacy single-value columns (production DB may have NOT NULL)
+        user.role = next(iter(roles_set), None)
+        user.branch = next(iter(branches_set), None)
         db.session.add(user)
         try:
             _commit_with_retry()
@@ -182,8 +187,13 @@ def user_edit(user_id):
             user.first_name = form.first_name.data
             user.last_name = form.last_name.data
             user.email = form.email.data
-            user.roles = {Role[r] for r in form.roles.data}
-            user.branches = {Branch[b] for b in form.branches.data}
+            roles_set = {Role[r] for r in form.roles.data}
+            branches_set = {Branch[b] for b in form.branches.data}
+            user.roles = roles_set
+            user.branches = branches_set
+            # Keep legacy single-value columns in sync
+            user.role = next(iter(roles_set), None)
+            user.branch = next(iter(branches_set), None)
             user.is_active_user = form.is_active_user.data
             if form.new_password.data:
                 user.set_password(form.new_password.data)
