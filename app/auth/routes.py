@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 
 from app import db
@@ -133,6 +133,7 @@ def user_create():
             db.session.commit()
         except Exception:
             db.session.rollback()
+            current_app.logger.exception('Failed to create user %r', form.username.data)
             flash('An error occurred while creating the user. Please try again.', 'danger')
             return render_template('auth/user_form.html', form=form, title='Create User')
         flash(f'User {user.username} created successfully.', 'success')
@@ -167,7 +168,13 @@ def user_edit(user_id):
             user.is_active_user = form.is_active_user.data
             if form.new_password.data:
                 user.set_password(form.new_password.data)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception('Failed to update user %r', user.username)
+                flash('An error occurred while updating the user. Please try again.', 'danger')
+                return render_template('auth/user_form.html', form=form, title='Edit User', user=user)
             flash(f'User {user.username} updated.', 'success')
             return redirect(url_for('auth.user_list'))
     return render_template('auth/user_form.html', form=form, title='Edit User', user=user)

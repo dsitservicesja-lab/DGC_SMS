@@ -1,13 +1,29 @@
 import enum
+import sqlite3
 from datetime import datetime, timezone
 
 from flask import current_app
 from flask_login import UserMixin
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from sqlalchemy import delete, event, insert, select
+from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, login_manager
+
+
+# ---------------------------------------------------------------------------
+# SQLite tuning – enable WAL journal mode and a generous busy-timeout so that
+# concurrent gunicorn workers don't produce "database is locked" errors.
+# This listener fires for every new DBAPI connection; it is a no-op for any
+# non-SQLite backend.
+# ---------------------------------------------------------------------------
+
+@event.listens_for(Engine, 'connect')
+def _configure_sqlite(dbapi_conn, _connection_record):
+    if isinstance(dbapi_conn, sqlite3.Connection):
+        dbapi_conn.execute('PRAGMA journal_mode=WAL')
+        dbapi_conn.execute('PRAGMA busy_timeout=5000')
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +133,10 @@ class User(UserMixin, db.Model):
 
     # ----- role / branch helpers (backed by association tables) -----
 
-    _roles = None   # in-memory cache / pending value
+    _roles = None        # in-memory cache / pending value
+    _roles_dirty = False  # True only when set via the setter (needs DB write)
     _branches = None
+    _branches_dirty = False
 
     @property
     def roles(self):
@@ -132,11 +150,13 @@ class User(UserMixin, db.Model):
             select(user_roles).where(user_roles.c.user_id == self.id)
         ).fetchall()
         self._roles = {row.role for row in rows}
+        # _roles_dirty intentionally NOT set – this is a DB read, not a write
         return self._roles
 
     @roles.setter
     def roles(self, value):
         self._roles = set(value)
+        self._roles_dirty = True
 
     @property
     def branches(self):
@@ -150,11 +170,13 @@ class User(UserMixin, db.Model):
             select(user_branches).where(user_branches.c.user_id == self.id)
         ).fetchall()
         self._branches = {row.branch for row in rows}
+        # _branches_dirty intentionally NOT set – this is a DB read, not a write
         return self._branches
 
     @branches.setter
     def branches(self, value):
         self._branches = set(value)
+        self._branches_dirty = True
 
     def has_role(self, role):
         return role in self.roles
@@ -214,12 +236,13 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
-# Flush pending roles/branches to the association tables after insert or update
+# Flush pending roles/branches to the association tables after insert or update.
+# Only fires when roles/branches were explicitly assigned (dirty flag is set).
 
 @event.listens_for(User, 'after_insert')
 @event.listens_for(User, 'after_update')
 def _flush_user_roles_branches(mapper, connection, target):
-    if target._roles is not None:
+    if target._roles_dirty:
         connection.execute(
             delete(user_roles).where(user_roles.c.user_id == target.id)
         )
@@ -227,7 +250,8 @@ def _flush_user_roles_branches(mapper, connection, target):
             connection.execute(insert(user_roles).values(
                 user_id=target.id, role=r
             ))
-    if target._branches is not None:
+        target._roles_dirty = False
+    if target._branches_dirty:
         connection.execute(
             delete(user_branches).where(user_branches.c.user_id == target.id)
         )
@@ -235,6 +259,7 @@ def _flush_user_roles_branches(mapper, connection, target):
             connection.execute(insert(user_branches).values(
                 user_id=target.id, branch=b
             ))
+        target._branches_dirty = False
 
 # ---------------------------------------------------------------------------
 # Sample
