@@ -20,6 +20,7 @@ from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
     ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
     SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
+    get_sample_register_form,
 )
 from app.notifications import (
     notify_sample_uploaded, notify_sample_assigned,
@@ -120,7 +121,13 @@ def register():
         flash('Only officers can register samples.', 'danger')
         return redirect(url_for('samples.sample_list'))
 
-    form = SampleRegisterForm()
+    selected_type = request.form.get('sample_type') if request.method == 'POST' else request.args.get('type')
+    FormClass = get_sample_register_form(selected_type) if selected_type else SampleRegisterForm
+    form = FormClass()
+
+    if request.method == 'GET' and selected_type in Branch.__members__:
+        form.sample_type.data = selected_type
+
     if form.validate_on_submit():
         sample = Sample(
             lab_number=form.lab_number.data,
@@ -135,6 +142,9 @@ def register():
             expected_report_date=form.expected_report_date.data,
             uploaded_by=current_user.id,
         )
+
+        if hasattr(form, 'milk_type') and form.milk_type.data:
+            sample.milk_type = form.milk_type.data
 
         if form.scanned_file.data:
             stored, original = _save_file(form.scanned_file.data)
@@ -323,7 +333,7 @@ def submit_report(assignment_id):
 
         # Route to correct review stage based on where it was returned from
         if assignment.return_stage == 'technical':
-            # Returned by Senior Chemist – skip preliminary, go back to
+            # Returned by Senior Chemist - skip preliminary, go back to
             # technical review directly
             assignment.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
         else:

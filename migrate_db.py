@@ -51,6 +51,8 @@ MIGRATIONS = [
     ('sample_assignments', 'preliminary_reviewed_by', 'INTEGER REFERENCES users(id)'),
     ('sample_assignments', 'preliminary_reviewed_at', 'DATETIME'),
     ('sample_assignments', 'return_stage', 'VARCHAR(20)'),
+    # samples – milk type (Food Milk)
+    ('samples', 'milk_type', 'VARCHAR(10)'),
 ]
 
 NEW_TABLES = [

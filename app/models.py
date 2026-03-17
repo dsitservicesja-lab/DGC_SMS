@@ -281,6 +281,9 @@ class Sample(db.Model):
         db.Enum(SampleStatus), nullable=False, default=SampleStatus.REGISTERED
     )
 
+    # Food (Milk) specific
+    milk_type = db.Column(db.String(10), nullable=True)  # 'R' = Raw, 'P' = Processed
+
     # Scanned document
     scanned_file = db.Column(db.String(500), nullable=True)
     scanned_file_original_name = db.Column(db.String(255), nullable=True)

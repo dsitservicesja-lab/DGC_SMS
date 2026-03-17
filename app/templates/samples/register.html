@@ -33,7 +33,7 @@
                         </div>
                         <div class="col-md-4">
                             {{ form.sample_type.label(class="form-label fw-semibold") }}
-                            {{ form.sample_type(class="form-select") }}
+                            {{ form.sample_type(class="form-select", id="sample_type_select") }}
                             {% for error in form.sample_type.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
@@ -48,20 +48,27 @@
                             {{ form.quantity.label(class="form-label fw-semibold") }}
                             {{ form.quantity(class="form-control") }}
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4" id="parish_field">
                             {{ form.parish.label(class="form-label fw-semibold") }}
                             {{ form.parish(class="form-control") }}
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4" id="source_field">
                             {{ form.source.label(class="form-label fw-semibold") }}
                             {{ form.source(class="form-control") }}
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-4" id="patient_name_field" style="display: none;">
                             {{ form.patient_name.label(class="form-label fw-semibold") }}
                             {{ form.patient_name(class="form-control") }}
-                            <div class="form-text">For Toxicology samples only</div>
+                            <div class="form-text">Required for Toxicology samples</div>
                         </div>
+                        <div class="col-md-4" id="milk_type_field" style="display: none;">
+                            {% if form.milk_type %}
+                            {{ form.milk_type.label(class="form-label fw-semibold") }}
+                            {{ form.milk_type(class="form-select") }}
+                            {% endif %}
+                        </div>
+
                         <div class="col-md-4">
                             {{ form.date_received.label(class="form-label fw-semibold") }}
                             {{ form.date_received(class="form-control", type="date") }}
@@ -93,4 +100,64 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sampleTypeSelect = document.getElementById('sample_type_select');
+    const patientNameField = document.getElementById('patient_name_field');
+    const milkTypeField = document.getElementById('milk_type_field');
+    const parishField = document.getElementById('parish_field');
+    const sourceField = document.getElementById('source_field');
+    
+    // Get required/optional validator for patient_name field
+    const patientNameInput = document.querySelector('[name="patient_name"]');
+    const quantityInput = document.querySelector('[name="quantity"]');
+    const parishInput = document.querySelector('[name="parish"]');
+    const milkTypeInput = document.querySelector('[name="milk_type"]');
+    
+    function updateFieldVisibility() {
+        const selectedType = sampleTypeSelect.value;
+        
+        // Reset all conditional fields
+        patientNameField.style.display = 'none';
+        milkTypeField.style.display = 'none';
+        
+        // Update required attributes
+        patientNameInput?.removeAttribute('required');
+        quantityInput?.removeAttribute('required');
+        parishInput?.removeAttribute('required');
+        milkTypeInput?.removeAttribute('required');
+        
+        // Show/hide and set requirements based on type
+        switch(selectedType) {
+            case 'TOXICOLOGY':
+                patientNameField.style.display = 'block';
+                patientNameInput?.setAttribute('required', 'required');
+                break;
+            case 'PHARMACEUTICAL':
+                quantityInput?.setAttribute('required', 'required');
+                break;
+            case 'FOOD_MILK':
+                parishField.style.display = 'block';
+                milkTypeField.style.display = 'block';
+                parishInput?.setAttribute('required', 'required');
+                milkTypeInput?.setAttribute('required', 'required');
+                break;
+            case 'FOOD_ALCOHOL':
+                quantityInput?.setAttribute('required', 'required');
+                break;
+        }
+    }
+    
+    // Initialize on page load
+    updateFieldVisibility();
+    
+    // Reload with ?type=... to render the correct server-side form class
+    sampleTypeSelect.addEventListener('change', function() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('type', sampleTypeSelect.value);
+        window.location.assign(url.toString());
+    });
+});
+</script>
 {% endblock %}

@@ -145,6 +145,80 @@ class SampleRegisterForm(FlaskForm):
             raise ValidationError('Lab number already exists.')
 
 
+# ---------------------------------------------------------------------------
+# Type-specific registration forms (for different lab types/sample types)
+# ---------------------------------------------------------------------------
+
+class ToxicologySampleRegisterForm(SampleRegisterForm):
+    """Registration form for Toxicology samples."""
+    patient_name = StringField(
+        'Patient Name',
+        validators=[Optional(), Length(max=255)]
+    )
+
+
+class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
+    """Registration form for Pharmaceutical samples."""
+    quantity = StringField(
+        'No./Quantity of Sample',
+        validators=[Optional(), Length(max=100)]
+    )
+
+
+class FoodMilkSampleRegisterForm(SampleRegisterForm):
+    """Registration form for Food (Milk) samples."""
+    parish = StringField(
+        'Parish',
+        validators=[Optional(), Length(max=100)]
+    )
+    milk_type = SelectField(
+        'Milk Type',
+        choices=[
+            ('R', 'Raw Milk'),
+            ('P', 'Processed Milk'),
+        ],
+        validators=[Optional()]
+    )
+
+
+class FoodAlcoholSampleRegisterForm(SampleRegisterForm):
+    """Registration form for Food (Alcohol) samples."""
+    quantity = StringField(
+        'No./Quantity of Sample',
+        validators=[Optional(), Length(max=100)]
+    )
+
+
+def get_sample_register_form(sample_type):
+    """
+    Factory function to get the appropriate registration form
+    based on the sample type (Branch enum).
+    
+    Args:
+        sample_type: Branch enum value or string
+        
+    Returns:
+        Form class appropriate for the sample type
+    """
+    from app.models import Branch
+    
+    # Handle string input (convert to Branch enum)
+    if isinstance(sample_type, str):
+        try:
+            sample_type = Branch[sample_type]
+        except (KeyError, TypeError):
+            return SampleRegisterForm
+    
+    form_map = {
+        Branch.TOXICOLOGY: ToxicologySampleRegisterForm,
+        Branch.PHARMACEUTICAL: PharmaceuticalSampleRegisterForm,
+        Branch.FOOD_MILK: FoodMilkSampleRegisterForm,
+        Branch.FOOD_ALCOHOL: FoodAlcoholSampleRegisterForm,
+    }
+    
+    return form_map.get(sample_type, SampleRegisterForm)
+
+
 class SampleEditForm(FlaskForm):
     sample_name = StringField('Sample Name', validators=[DataRequired(), Length(max=255)])
     description = TextAreaField('Description', validators=[Optional()])
