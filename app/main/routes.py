@@ -177,6 +177,13 @@ def latest_notifications():
     return jsonify({'notifications': data})
 
 
+@main_bp.route('/api/keep-alive')
+@login_required
+def keep_alive():
+    """Lightweight endpoint that refreshes the session cookie."""
+    return jsonify({'status': 'ok'})
+
+
 # ---------------------------------------------------------------------------
 # Quarterly KPI Dashboard
 # ---------------------------------------------------------------------------

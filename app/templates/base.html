@@ -639,15 +639,16 @@
             });
 
             document.getElementById('session-keep-alive').addEventListener('click', function() {
-                fetch('{{ url_for("main.unread_notification_count") }}', {credentials: 'same-origin'})
+                fetch('{{ url_for("main.keep_alive") }}', {credentials: 'same-origin'})
                     .finally(function() { resetIdle(); });
             });
 
-            setInterval(function() {
+            var tickInterval = setInterval(function() {
                 idleSeconds++;
                 var remaining = SESSION_LIFETIME - idleSeconds;
 
                 if (remaining <= 0) {
+                    clearInterval(tickInterval);
                     window.location.href = '{{ url_for("auth.logout") }}';
                     return;
                 }
