@@ -349,13 +349,12 @@
 
 <!-- Activity History -->
 <div class="card">
-    <div class="card-header"><h5 class="mb-0">Activity History</h5></div>
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Activity History</h5></div>
     <div class="card-body">
         {% if history %}
-        <div style="border-left: 2px solid var(--bs-border-color); padding-left: 1.25rem;">
+        <div class="ps-2">
             {% for entry in history %}
-            <div class="mb-4 position-relative">
-                <span class="position-absolute" style="left:-1.5rem; top:2px; width:10px; height:10px; background:var(--dgc-secondary); border-radius:50%; display:inline-block;"></span>
+            <div class="timeline-item mb-4 pb-1">
                 <div class="fw-semibold" style="font-size:.875rem;">
                     {{ entry.action }}
                     <span class="text-muted fw-normal">— {{ entry.performer.full_name }}</span>

@@ -3,48 +3,51 @@
 
 {% block content %}
 <div class="page-header">
-    <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
-    <span class="text-muted" style="font-size:.875rem;">
-        Welcome back, <strong>{{ current_user.full_name }}</strong>
-        <span class="badge bg-secondary ms-1" style="font-size:.72rem;">{{ current_user.role_names }}</span>
-    </span>
+    <div>
+        <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+        <p class="text-muted mb-0 mt-1" style="font-size:.83rem;">
+            Welcome back, <strong>{{ current_user.full_name }}</strong>
+            <span class="badge bg-secondary ms-1" style="font-size:.7rem; vertical-align:middle;">{{ current_user.role_names }}</span>
+        </p>
+    </div>
+    <span class="text-muted d-none d-md-block" id="dashboard-date" style="font-size:.82rem;"></span>
 </div>
 
 <!-- ── Stat Cards ──────────────────────────────────────────── -->
 <div class="row g-3 mb-4">
     {% if current_user.has_role(Role.CHEMIST) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-blue">
+        <div class="card stat-card stat-blue h-100">
             <div class="card-body">
                 <div class="stat-label">Total Assignments</div>
-                <div class="stat-value">{{ stats.total_assignments }}</div>
+                <div class="stat-value" data-count="{{ stats.total_assignments }}">{{ stats.total_assignments }}</div>
             </div>
             <i class="bi bi-clipboard2-data stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-orange">
+        <div class="card stat-card stat-orange h-100">
             <div class="card-body">
                 <div class="stat-label">Pending Tests</div>
-                <div class="stat-value">{{ stats.pending }}</div>
+                <div class="stat-value" data-count="{{ stats.pending }}">{{ stats.pending }}</div>
             </div>
             <i class="bi bi-hourglass-split stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-purple">
+        <div class="card stat-card stat-purple h-100">
             <div class="card-body">
                 <div class="stat-label">Reports Submitted</div>
-                <div class="stat-value">{{ stats.submitted }}</div>
+                <div class="stat-value" data-count="{{ stats.submitted }}">{{ stats.submitted }}</div>
             </div>
             <i class="bi bi-send stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-green">
+        <div class="card stat-card stat-green h-100">
             <div class="card-body">
                 <div class="stat-label">Completed</div>
-                <div class="stat-value">{{ stats.completed }}</div>
+                <div class="stat-value" data-count="{{ stats.completed }}">{{ stats.completed }}</div>
             </div>
             <i class="bi bi-patch-check stat-icon"></i>
         </div>
@@ -52,37 +55,37 @@
 
     {% elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-blue">
+        <div class="card stat-card stat-blue h-100">
             <div class="card-body">
                 <div class="stat-label">Total Samples</div>
-                <div class="stat-value">{{ stats.total_samples }}</div>
+                <div class="stat-value" data-count="{{ stats.total_samples }}">{{ stats.total_samples }}</div>
             </div>
             <i class="bi bi-collection stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-orange">
+        <div class="card stat-card stat-orange h-100">
             <div class="card-body">
                 <div class="stat-label">Awaiting Assignment</div>
-                <div class="stat-value">{{ stats.registered }}</div>
+                <div class="stat-value" data-count="{{ stats.registered }}">{{ stats.registered }}</div>
             </div>
             <i class="bi bi-person-plus stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-purple">
+        <div class="card stat-card stat-purple h-100">
             <div class="card-body">
                 <div class="stat-label">Preliminary Reviews</div>
-                <div class="stat-value">{{ stats.preliminary_review }}</div>
+                <div class="stat-value" data-count="{{ stats.preliminary_review }}">{{ stats.preliminary_review }}</div>
             </div>
             <i class="bi bi-eye stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-green">
+        <div class="card stat-card stat-green h-100">
             <div class="card-body">
                 <div class="stat-label">Certified</div>
-                <div class="stat-value">{{ stats.completed }}</div>
+                <div class="stat-value" data-count="{{ stats.completed }}">{{ stats.completed }}</div>
             </div>
             <i class="bi bi-patch-check stat-icon"></i>
         </div>
@@ -90,37 +93,37 @@
 
     {% elif current_user.has_role(Role.DEPUTY) and not current_user.has_any_role(Role.HOD, Role.ADMIN) %}
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-blue">
+        <div class="card stat-card stat-blue h-100">
             <div class="card-body">
                 <div class="stat-label">Total Samples</div>
-                <div class="stat-value">{{ stats.total_samples }}</div>
+                <div class="stat-value" data-count="{{ stats.total_samples }}">{{ stats.total_samples }}</div>
             </div>
             <i class="bi bi-collection stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-purple">
+        <div class="card stat-card stat-purple h-100">
             <div class="card-body">
                 <div class="stat-label">Awaiting Review</div>
-                <div class="stat-value">{{ stats.deputy_review }}</div>
+                <div class="stat-value" data-count="{{ stats.deputy_review }}">{{ stats.deputy_review }}</div>
             </div>
             <i class="bi bi-clipboard-check stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-orange">
+        <div class="card stat-card stat-orange h-100">
             <div class="card-body">
                 <div class="stat-label">Certificate Prep</div>
-                <div class="stat-value">{{ stats.certificate_prep }}</div>
+                <div class="stat-value" data-count="{{ stats.certificate_prep }}">{{ stats.certificate_prep }}</div>
             </div>
             <i class="bi bi-file-earmark-medical stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-green">
+        <div class="card stat-card stat-green h-100">
             <div class="card-body">
                 <div class="stat-label">Certified</div>
-                <div class="stat-value">{{ stats.completed }}</div>
+                <div class="stat-value" data-count="{{ stats.completed }}">{{ stats.completed }}</div>
             </div>
             <i class="bi bi-patch-check stat-icon"></i>
         </div>
@@ -128,37 +131,37 @@
 
     {% else %}
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-blue">
+        <div class="card stat-card stat-blue h-100">
             <div class="card-body">
                 <div class="stat-label">Total Samples</div>
-                <div class="stat-value">{{ stats.total_samples }}</div>
+                <div class="stat-value" data-count="{{ stats.total_samples }}">{{ stats.total_samples }}</div>
             </div>
             <i class="bi bi-collection stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-orange">
+        <div class="card stat-card stat-orange h-100">
             <div class="card-body">
                 <div class="stat-label">Awaiting Assignment</div>
-                <div class="stat-value">{{ stats.awaiting_assignment }}</div>
+                <div class="stat-value" data-count="{{ stats.awaiting_assignment }}">{{ stats.awaiting_assignment }}</div>
             </div>
             <i class="bi bi-person-plus stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-purple">
+        <div class="card stat-card stat-purple h-100">
             <div class="card-body">
                 <div class="stat-label">Reports Pending Review</div>
-                <div class="stat-value">{{ stats.reports_pending_review }}</div>
+                <div class="stat-value" data-count="{{ stats.reports_pending_review }}">{{ stats.reports_pending_review }}</div>
             </div>
             <i class="bi bi-eye stat-icon"></i>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-green">
+        <div class="card stat-card stat-green h-100">
             <div class="card-body">
                 <div class="stat-label">Completed</div>
-                <div class="stat-value">{{ stats.completed }}</div>
+                <div class="stat-value" data-count="{{ stats.completed }}">{{ stats.completed }}</div>
             </div>
             <i class="bi bi-patch-check stat-icon"></i>
         </div>
@@ -169,18 +172,27 @@
 <!-- ── Quick Actions ───────────────────────────────────────── -->
 <div class="card mb-4">
     <div class="card-header">Quick Actions</div>
-    <div class="card-body d-flex gap-2 flex-wrap">
+    <div class="card-body d-flex gap-3 flex-wrap">
         {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) %}
-        <a href="{{ url_for('samples.register') }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-1"></i>Register New Sample
+        <a href="{{ url_for('samples.register') }}" class="quick-action-btn qa-primary">
+            <i class="bi bi-plus-circle-fill"></i>
+            <span>Register Sample</span>
         </a>
         {% endif %}
-        <a href="{{ url_for('samples.sample_list') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-collection me-1"></i>View All Samples
+        <a href="{{ url_for('samples.sample_list') }}" class="quick-action-btn">
+            <i class="bi bi-collection"></i>
+            <span>All Samples</span>
         </a>
-        <a href="{{ url_for('main.notifications') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-bell me-1"></i>Notifications
+        <a href="{{ url_for('main.notifications') }}" class="quick-action-btn">
+            <i class="bi bi-bell"></i>
+            <span>Notifications</span>
         </a>
+        {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) %}
+        <a href="{{ url_for('main.kpi') }}" class="quick-action-btn">
+            <i class="bi bi-bar-chart-line"></i>
+            <span>KPI Report</span>
+        </a>
+        {% endif %}
     </div>
 </div>
 
@@ -188,27 +200,29 @@
 {% if notifications %}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Recent Notifications</span>
+        <span><i class="bi bi-bell me-2 text-primary"></i>Recent Notifications</span>
         <a href="{{ url_for('main.notifications') }}" class="btn btn-sm btn-outline-primary">View All</a>
     </div>
     <div class="list-group list-group-flush">
         {% for notif in notifications[:5] %}
-        <div class="list-group-item border-0 py-3 {% if not notif.is_read %}bg-light{% endif %}">
+        <div class="list-group-item border-0 py-3 {% if not notif.is_read %}notif-unread{% endif %}">
             <div class="d-flex justify-content-between align-items-start gap-3">
-                <div class="d-flex gap-2 align-items-start">
-                    <div class="mt-1">
+                <div class="d-flex gap-3 align-items-start">
+                    <div class="notif-dot-wrap mt-1">
                         {% if not notif.is_read %}
-                        <i class="bi bi-circle-fill text-primary" style="font-size:.5rem;"></i>
+                        <span class="notif-dot notif-dot-new"></span>
                         {% else %}
-                        <i class="bi bi-circle text-muted" style="font-size:.5rem;"></i>
+                        <span class="notif-dot notif-dot-read"></span>
                         {% endif %}
                     </div>
                     <div>
-                        <div class="fw-600 mb-1" style="font-size:.875rem;">
+                        <div class="fw-semibold mb-1" style="font-size:.875rem;">
                             {{ notif.title }}
-                            {% if not notif.is_read %}<span class="badge bg-primary ms-1" style="font-size:.65rem;">New</span>{% endif %}
+                            {% if not notif.is_read %}
+                            <span class="badge bg-primary ms-1" style="font-size:.63rem;">New</span>
+                            {% endif %}
                         </div>
-                        <div class="text-muted" style="font-size:.8rem;">{{ notif.message | truncate(120) }}</div>
+                        <div class="text-muted" style="font-size:.8rem;">{{ notif.message | truncate(130) }}</div>
                     </div>
                 </div>
                 <small class="text-muted text-nowrap" style="font-size:.75rem;">
@@ -220,4 +234,49 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.notif-unread { background: #f0f7ff; border-left: 3px solid var(--dgc-secondary) !important; }
+.notif-dot-wrap { width: 10px; flex-shrink: 0; display: flex; align-items: center; }
+.notif-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+}
+.notif-dot-new  { background: var(--dgc-secondary); box-shadow: 0 0 0 2px rgba(46,134,193,.3); }
+.notif-dot-read { background: #cbd5e1; }
+[data-bs-theme="dark"] .notif-unread { background: #1a2e47; border-left-color: var(--dgc-secondary) !important; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Live date/time in page header */
+(function () {
+    const el = document.getElementById('dashboard-date');
+    if (!el) return;
+    const fmt = new Intl.DateTimeFormat('en-JM', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    el.textContent = fmt.format(new Date());
+})();
+
+/* Animate stat counters on load */
+document.querySelectorAll('.stat-value[data-count]').forEach(function (el) {
+    const target = parseInt(el.dataset.count, 10);
+    if (isNaN(target) || target === 0) return;
+    const duration = 600;
+    const start    = performance.now();
+    el.textContent = '0';
+    function step(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3); /* ease-out cubic */
+        el.textContent = Math.round(ease * target);
+        if (progress < 1) requestAnimationFrame(step);
+        else el.textContent = target;
+    }
+    requestAnimationFrame(step);
+});
+</script>
 {% endblock %}

@@ -1,6 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Notifications - DGC SMS{% endblock %}
 
+{% block extra_css %}
+<style>
+.notif-item {
+    border-left: 3px solid transparent;
+    transition: background .15s, border-color .15s;
+}
+.notif-item.unread {
+    background: #f0f7ff;
+    border-left-color: var(--dgc-secondary);
+}
+.notif-item:hover { background: #f8fafc; }
+.notif-item.unread:hover { background: #e8f2fb; }
+.notif-indicator {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px;
+}
+.notif-indicator.unread {
+    background: var(--dgc-secondary);
+    box-shadow: 0 0 0 3px rgba(46,134,193,.2);
+}
+.notif-indicator.read { background: #cbd5e1; }
+.notif-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4rem 1rem; color: #94a3b8;
+}
+.notif-empty i { font-size: 3.5rem; margin-bottom: 1rem; opacity: .5; }
+[data-bs-theme="dark"] .notif-item.unread   { background: #1a2e47; }
+[data-bs-theme="dark"] .notif-item.unread:hover { background: #1e3553; }
+[data-bs-theme="dark"] .notif-item:hover    { background: #1e293b; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2><i class="bi bi-bell"></i> Notifications</h2>
@@ -14,22 +45,18 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit"
                     class="list-group-item list-group-item-action border-start-0 border-end-0 py-3 text-start
-                           {% if not notif.is_read %}bg-light{% endif %}">
+                           notif-item {% if not notif.is_read %}unread{% endif %}">
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div class="d-flex gap-3 align-items-start flex-grow-1">
-                        <div style="width:12px; flex-shrink:0; padding-top:4px;">
-                            {% if not notif.is_read %}
-                            <i class="bi bi-circle-fill text-primary" style="font-size:.5rem;"></i>
-                            {% endif %}
-                        </div>
+                        <span class="notif-indicator {% if not notif.is_read %}unread{% else %}read{% endif %}"></span>
                         <div class="flex-grow-1">
-                            <div class="fw-semibold mb-1 d-flex align-items-center gap-2">
+                            <div class="fw-semibold mb-1 d-flex align-items-center gap-2" style="font-size:.9rem;">
                                 {{ notif.title }}
                                 {% if not notif.is_read %}
-                                <span class="badge bg-primary" style="font-size:.65rem; font-weight:500;">New</span>
+                                <span class="badge bg-primary" style="font-size:.62rem; font-weight:500;">New</span>
                                 {% endif %}
                             </div>
-                            <div class="text-muted" style="font-size:.8rem;">{{ notif.message }}</div>
+                            <div class="text-muted" style="font-size:.82rem; line-height:1.5;">{{ notif.message }}</div>
                         </div>
                     </div>
                     <small class="text-muted text-nowrap" style="font-size:.75rem;">
@@ -42,9 +69,12 @@
     </div>
 </div>
 {% else %}
-<div class="text-center text-muted py-5">
-    <i class="bi bi-bell-slash d-block mb-3" style="font-size:3rem;"></i>
-    <p class="mb-0">No notifications yet.</p>
+<div class="card">
+    <div class="notif-empty">
+        <i class="bi bi-bell-slash"></i>
+        <p class="mb-0 fw-semibold">No notifications yet</p>
+        <p class="small mt-1">You'll see activity updates here as samples move through the workflow.</p>
+    </div>
 </div>
 {% endif %}
 {% endblock %}
