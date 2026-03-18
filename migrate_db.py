@@ -53,6 +53,11 @@ MIGRATIONS = [
     ('sample_assignments', 'return_stage', 'VARCHAR(20)'),
     # samples – milk type (Food Milk)
     ('samples', 'milk_type', 'VARCHAR(10)'),
+    # samples – new type-specific fields
+    ('samples', 'volume', 'VARCHAR(100)'),
+    ('samples', 'formulation_type', 'VARCHAR(100)'),
+    ('samples', 'alcohol_type', 'VARCHAR(100)'),
+    ('samples', 'claim_butt_number', 'VARCHAR(100)'),
 ]
 
 NEW_TABLES = [

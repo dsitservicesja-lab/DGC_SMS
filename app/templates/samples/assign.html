@@ -40,7 +40,11 @@
                         </div>
                         <div class="col-md-6">
                             {{ form.expected_completion.label(class="form-label fw-semibold") }}
-                            {{ form.expected_completion(class="form-control", type="date") }}
+                            {{ form.expected_completion(class="form-control", type="date", id="expected_completion",
+                               **{"min": today}) }}
+                            {% for error in form.expected_completion.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
                         </div>
 
                         <div class="col-12">

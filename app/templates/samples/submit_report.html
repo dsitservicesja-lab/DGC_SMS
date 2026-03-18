@@ -54,8 +54,12 @@
 
                         <div class="col-12">
                             {{ form.report_file.label(class="form-label fw-semibold") }}
+                            <span class="text-danger ms-1">*</span>
                             {{ form.report_file(class="form-control") }}
-                            <div class="form-text">Optional: attach a report document (PDF, image)</div>
+                            <div class="form-text">Required: attach a report document (PDF, Word DOC/DOCX, image)</div>
+                            {% for error in form.report_file.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
                             {% if assignment.report_file %}
                             <div class="form-text">
                                 Current file: <strong>{{ assignment.report_file_original_name }}</strong>

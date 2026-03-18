@@ -13,7 +13,7 @@ class Config:
         os.path.dirname(os.path.abspath(__file__)), 'uploads'
     )
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
-    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
+    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'}
 
     # Mail
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'localhost')

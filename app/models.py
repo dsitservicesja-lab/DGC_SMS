@@ -42,6 +42,7 @@ class Role(enum.Enum):
 class Branch(enum.Enum):
     TOXICOLOGY = 'Toxicology'
     PHARMACEUTICAL = 'Pharmaceutical'
+    PHARMACEUTICAL_NR = 'Not Registered Pharm'
     FOOD_MILK = 'Food (Milk)'
     FOOD_ALCOHOL = 'Food (Alcohol)'
 
@@ -283,6 +284,16 @@ class Sample(db.Model):
 
     # Food (Milk) specific
     milk_type = db.Column(db.String(10), nullable=True)  # 'R' = Raw, 'P' = Processed
+
+    # Volume (Toxicology and Milk samples)
+    volume = db.Column(db.String(100), nullable=True)
+
+    # Pharmaceutical specific
+    formulation_type = db.Column(db.String(100), nullable=True)
+
+    # Food (Alcohol) specific
+    alcohol_type = db.Column(db.String(100), nullable=True)
+    claim_butt_number = db.Column(db.String(100), nullable=True)
 
     # Scanned document
     scanned_file = db.Column(db.String(500), nullable=True)

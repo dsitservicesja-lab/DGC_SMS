@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 from flask import (
     render_template, redirect, url_for, flash, request,
@@ -40,6 +40,14 @@ def _save_file(file_storage):
         os.path.join(current_app.config['UPLOAD_FOLDER'], stored)
     )
     return stored, original
+
+
+def _get_field(form, name):
+    """Return the value of an optional form field, or None if absent/empty."""
+    field = getattr(form, name, None)
+    if field is None:
+        return None
+    return field.data or None
 
 
 def _add_history(sample, action, details=None):
@@ -99,6 +107,7 @@ def sample_list():
         query = query.filter(Sample.sample_type.in_(current_user.branches))
 
     samples = query.order_by(Sample.date_registered.desc()).all()
+    result_count = len(samples)
     return render_template(
         'samples/sample_list.html',
         samples=samples,
@@ -107,12 +116,38 @@ def sample_list():
         status_filter=status_filter,
         type_filter=type_filter,
         search=search,
+        result_count=result_count,
+        is_filtered=bool(status_filter or type_filter or search),
     )
 
 
 # ---------------------------------------------------------------------------
 # Register a new sample
 # ---------------------------------------------------------------------------
+
+def _generate_lab_number(branch):
+    """Auto-generate a unique lab number for pharmaceutical samples."""
+    from datetime import date
+    prefix_map = {
+        Branch.PHARMACEUTICAL: 'PH',
+        Branch.PHARMACEUTICAL_NR: 'PNR',
+    }
+    prefix = prefix_map.get(branch, 'LAB')
+    year = date.today().year
+    # Find the latest number with this prefix+year
+    pattern = f'{prefix}{year}%'
+    last = Sample.query.filter(
+        Sample.lab_number.like(pattern)
+    ).order_by(Sample.id.desc()).first()
+    if last:
+        try:
+            seq = int(last.lab_number[len(prefix) + 4:]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f'{prefix}{year}{seq:04d}'
+
 
 @samples_bp.route('/register', methods=['GET', 'POST'])
 @login_required
@@ -128,23 +163,56 @@ def register():
     if request.method == 'GET' and selected_type in Branch.__members__:
         form.sample_type.data = selected_type
 
+    is_pharma = selected_type in ('PHARMACEUTICAL', 'PHARMACEUTICAL_NR')
+
     if form.validate_on_submit():
+        branch = Branch[form.sample_type.data]
+        is_pharma_type = branch in (Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR)
+
+        # Auto-generate lab number for pharmaceutical samples if not provided
+        lab_number = form.lab_number.data if hasattr(form, 'lab_number') and form.lab_number.data else None
+        if not lab_number and is_pharma_type:
+            lab_number = _generate_lab_number(branch)
+        elif not lab_number:
+            flash('Lab number is required.', 'danger')
+            return render_template('samples/register.html', form=form, is_pharma=is_pharma)
+
+        # For pharmaceutical, date_received = date_registered (today)
+        if is_pharma_type:
+            date_received = date.today()
+        else:
+            date_received = form.date_received.data
+
         sample = Sample(
-            lab_number=form.lab_number.data,
+            lab_number=lab_number,
             sample_name=form.sample_name.data,
-            sample_type=Branch[form.sample_type.data],
+            sample_type=branch,
             description=form.description.data,
-            quantity=form.quantity.data,
-            parish=form.parish.data,
-            patient_name=form.patient_name.data,
-            source=form.source.data,
-            date_received=form.date_received.data,
-            expected_report_date=form.expected_report_date.data,
+            quantity=_get_field(form, 'quantity'),
+            parish=_get_field(form, 'parish'),
+            patient_name=_get_field(form, 'patient_name'),
+            source=_get_field(form, 'source'),
+            date_received=date_received,
+            expected_report_date=_get_field(form, 'expected_report_date'),
             uploaded_by=current_user.id,
         )
 
-        if hasattr(form, 'milk_type') and form.milk_type.data:
-            sample.milk_type = form.milk_type.data
+        # Type-specific fields
+        vol = _get_field(form, 'volume')
+        if vol:
+            sample.volume = vol
+        mt = _get_field(form, 'milk_type')
+        if mt:
+            sample.milk_type = mt
+        ft = _get_field(form, 'formulation_type')
+        if ft:
+            sample.formulation_type = ft
+        at = _get_field(form, 'alcohol_type')
+        if at:
+            sample.alcohol_type = at
+        cb = _get_field(form, 'claim_butt_number')
+        if cb:
+            sample.claim_butt_number = cb
 
         if form.scanned_file.data:
             stored, original = _save_file(form.scanned_file.data)
@@ -163,7 +231,7 @@ def register():
         flash(f'Sample {sample.lab_number} registered successfully.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
-    return render_template('samples/register.html', form=form)
+    return render_template('samples/register.html', form=form, is_pharma=is_pharma)
 
 
 # ---------------------------------------------------------------------------
@@ -200,11 +268,17 @@ def edit(sample_id):
     form = SampleEditForm(obj=sample)
     if form.validate_on_submit():
         sample.sample_name = form.sample_name.data
+        sample.sample_type = Branch[form.sample_type.data]
         sample.description = form.description.data
         sample.quantity = form.quantity.data
+        sample.volume = form.volume.data
         sample.parish = form.parish.data
         sample.patient_name = form.patient_name.data
         sample.source = form.source.data
+        sample.formulation_type = form.formulation_type.data
+        sample.alcohol_type = form.alcohol_type.data if form.alcohol_type.data else None
+        sample.claim_butt_number = form.claim_butt_number.data
+        sample.milk_type = form.milk_type.data if form.milk_type.data else None
         sample.expected_report_date = form.expected_report_date.data
 
         if form.scanned_file.data:
@@ -271,7 +345,8 @@ def assign(sample_id):
         flash('Sample assigned successfully.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
-    return render_template('samples/assign.html', form=form, sample=sample)
+    return render_template('samples/assign.html', form=form, sample=sample,
+                           today=datetime.now(timezone.utc).date().isoformat())
 
 
 # ---------------------------------------------------------------------------
@@ -768,7 +843,7 @@ def _update_sample_status(sample):
 
 
 # ---------------------------------------------------------------------------
-# File downloads
+# File downloads and inline preview
 # ---------------------------------------------------------------------------
 
 @samples_bp.route('/download/<path:filename>')
@@ -780,4 +855,16 @@ def download_file(filename):
         abort(404)
     return send_from_directory(
         current_app.config['UPLOAD_FOLDER'], safe_name, as_attachment=True
+    )
+
+
+@samples_bp.route('/view/<path:filename>')
+@login_required
+def view_file(filename):
+    """Serve a file inline (for PDF preview in browser)."""
+    safe_name = secure_filename(filename)
+    if safe_name != filename:
+        abort(404)
+    return send_from_directory(
+        current_app.config['UPLOAD_FOLDER'], safe_name, as_attachment=False
     )
