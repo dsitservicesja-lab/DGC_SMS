@@ -17,24 +17,33 @@
                     {{ form.hidden_tag() }}
 
                     <div class="row g-3">
-                        <div class="col-md-4">
-                            {{ form.lab_number.label(class="form-label fw-semibold") }}
-                            {{ form.lab_number(class="form-control") }}
-                            {% for error in form.lab_number.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        <div class="col-md-4">
-                            {{ form.sample_name.label(class="form-label fw-semibold") }}
-                            {{ form.sample_name(class="form-control") }}
-                            {% for error in form.sample_name.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </div>
+                        {# Sample Type (always first, drives reload) #}
                         <div class="col-md-4">
                             {{ form.sample_type.label(class="form-label fw-semibold") }}
                             {{ form.sample_type(class="form-select", id="sample_type_select") }}
                             {% for error in form.sample_type.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        {# Lab Number – hidden / auto for pharma #}
+                        {% if form.lab_number %}
+                        <div class="col-md-4" id="lab_number_field">
+                            {{ form.lab_number.label(class="form-label fw-semibold") }}
+                            {{ form.lab_number(class="form-control") }}
+                            {% if is_pharma %}
+                            <div class="form-text text-info">Leave blank to auto-generate.</div>
+                            {% endif %}
+                            {% for error in form.lab_number.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-4">
+                            {{ form.sample_name.label(class="form-label fw-semibold") }}
+                            {{ form.sample_name(class="form-control") }}
+                            {% for error in form.sample_name.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
@@ -44,31 +53,87 @@
                             {{ form.description(class="form-control", rows=3) }}
                         </div>
 
-                        <div class="col-md-4">
+                        {# Quantity (shown for Pharma & Alcohol) #}
+                        {% if form.quantity %}
+                        <div class="col-md-4" id="quantity_field">
                             {{ form.quantity.label(class="form-label fw-semibold") }}
                             {{ form.quantity(class="form-control") }}
                         </div>
+                        {% endif %}
+
+                        {# Volume (shown for Toxicology & Milk) #}
+                        {% if form.volume %}
+                        <div class="col-md-4" id="volume_field">
+                            {{ form.volume.label(class="form-label fw-semibold") }}
+                            {{ form.volume(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Parish (only for base/non-specialized) #}
+                        {% if form.parish %}
                         <div class="col-md-4" id="parish_field">
                             {{ form.parish.label(class="form-label fw-semibold") }}
                             {{ form.parish(class="form-control") }}
                         </div>
+                        {% endif %}
+
+                        {# Source (only for base/non-specialized, not Milk) #}
+                        {% if form.source %}
                         <div class="col-md-4" id="source_field">
                             {{ form.source.label(class="form-label fw-semibold") }}
                             {{ form.source(class="form-control") }}
                         </div>
+                        {% endif %}
 
-                        <div class="col-md-4" id="patient_name_field" style="display: none;">
+                        {# Patient Name (Toxicology) #}
+                        {% if form.patient_name %}
+                        <div class="col-md-4" id="patient_name_field">
                             {{ form.patient_name.label(class="form-label fw-semibold") }}
                             {{ form.patient_name(class="form-control") }}
                             <div class="form-text">Required for Toxicology samples</div>
                         </div>
-                        <div class="col-md-4" id="milk_type_field" style="display: none;">
-                            {% if form.milk_type %}
+                        {% endif %}
+
+                        {# Milk Type (Food Milk) #}
+                        {% if form.milk_type %}
+                        <div class="col-md-4" id="milk_type_field">
                             {{ form.milk_type.label(class="form-label fw-semibold") }}
                             {{ form.milk_type(class="form-select") }}
-                            {% endif %}
                         </div>
+                        {% endif %}
 
+                        {# Formulation Type (Pharmaceutical) #}
+                        {% if form.formulation_type %}
+                        <div class="col-md-4" id="formulation_type_field">
+                            {{ form.formulation_type.label(class="form-label fw-semibold") }}
+                            {{ form.formulation_type(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Alcohol Type (Food Alcohol) #}
+                        {% if form.alcohol_type %}
+                        <div class="col-md-4" id="alcohol_type_field">
+                            {{ form.alcohol_type.label(class="form-label fw-semibold") }}
+                            {{ form.alcohol_type(class="form-select") }}
+                        </div>
+                        {% endif %}
+
+                        {# Claim/Butt # (Food Alcohol) #}
+                        {% if form.claim_butt_number %}
+                        <div class="col-md-4" id="claim_butt_field">
+                            {{ form.claim_butt_number.label(class="form-label fw-semibold") }}
+                            {{ form.claim_butt_number(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Date Received (not for pharma – auto-set) #}
+                        {% if is_pharma %}
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Date Received</label>
+                            <input type="text" class="form-control" value="Today (auto-set on registration)" readonly>
+                            <div class="form-text text-info">Automatically set to today's date.</div>
+                        </div>
+                        {% elif form.date_received %}
                         <div class="col-md-4">
                             {{ form.date_received.label(class="form-label fw-semibold") }}
                             {{ form.date_received(class="form-control", type="date") }}
@@ -76,15 +141,20 @@
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
+                        {% endif %}
+
+                        {# Expected Report Date (not for Toxicology) #}
+                        {% if form.expected_report_date %}
                         <div class="col-md-4">
                             {{ form.expected_report_date.label(class="form-label fw-semibold") }}
                             {{ form.expected_report_date(class="form-control", type="date") }}
                         </div>
+                        {% endif %}
 
                         <div class="col-12">
                             {{ form.scanned_file.label(class="form-label fw-semibold") }}
                             {{ form.scanned_file(class="form-control") }}
-                            <div class="form-text">Upload scanned sample information (PDF, PNG, JPG, TIFF)</div>
+                            <div class="form-text">Upload scanned sample information (PDF, PNG, JPG, TIFF, DOC, DOCX)</div>
                             {% for error in form.scanned_file.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
@@ -104,54 +174,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const sampleTypeSelect = document.getElementById('sample_type_select');
-    const patientNameField = document.getElementById('patient_name_field');
-    const milkTypeField = document.getElementById('milk_type_field');
-    const parishField = document.getElementById('parish_field');
-    const sourceField = document.getElementById('source_field');
-    
-    // Get required/optional validator for patient_name field
-    const patientNameInput = document.querySelector('[name="patient_name"]');
-    const quantityInput = document.querySelector('[name="quantity"]');
-    const parishInput = document.querySelector('[name="parish"]');
-    const milkTypeInput = document.querySelector('[name="milk_type"]');
-    
-    function updateFieldVisibility() {
-        const selectedType = sampleTypeSelect.value;
-        
-        // Reset all conditional fields
-        patientNameField.style.display = 'none';
-        milkTypeField.style.display = 'none';
-        
-        // Update required attributes
-        patientNameInput?.removeAttribute('required');
-        quantityInput?.removeAttribute('required');
-        parishInput?.removeAttribute('required');
-        milkTypeInput?.removeAttribute('required');
-        
-        // Show/hide and set requirements based on type
-        switch(selectedType) {
-            case 'TOXICOLOGY':
-                patientNameField.style.display = 'block';
-                patientNameInput?.setAttribute('required', 'required');
-                break;
-            case 'PHARMACEUTICAL':
-                quantityInput?.setAttribute('required', 'required');
-                break;
-            case 'FOOD_MILK':
-                parishField.style.display = 'block';
-                milkTypeField.style.display = 'block';
-                parishInput?.setAttribute('required', 'required');
-                milkTypeInput?.setAttribute('required', 'required');
-                break;
-            case 'FOOD_ALCOHOL':
-                quantityInput?.setAttribute('required', 'required');
-                break;
-        }
-    }
-    
-    // Initialize on page load
-    updateFieldVisibility();
-    
+
     // Reload with ?type=... to render the correct server-side form class
     sampleTypeSelect.addEventListener('change', function() {
         const url = new URL(window.location.href);

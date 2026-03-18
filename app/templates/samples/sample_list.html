@@ -50,6 +50,22 @@
     </div>
 </div>
 
+<!-- Result count -->
+{% if is_filtered %}
+<div class="mb-2 text-muted small">
+    <i class="bi bi-info-circle me-1"></i>
+    Showing <strong>{{ result_count }}</strong> result{% if result_count != 1 %}s{% endif %}
+    {% if status_filter or type_filter or search %}
+    for the current filters
+    {% endif %}
+</div>
+{% else %}
+<div class="mb-2 text-muted small">
+    <i class="bi bi-collection me-1"></i>
+    Total: <strong>{{ result_count }}</strong> sample{% if result_count != 1 %}s{% endif %}
+</div>
+{% endif %}
+
 {% set status_colors = {
     'Registered': 'secondary',
     'Assigned': 'primary',
@@ -94,11 +110,23 @@
                             {{ sample.status.value }}
                         </span>
                     </td>
-                    <td>
+                    <td class="d-flex gap-1">
                         <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
                            class="btn btn-sm btn-outline-primary" title="View">
                             <i class="bi bi-eye"></i>
                         </a>
+                        {% if sample.scanned_file %}
+                        {% set ext = sample.scanned_file_original_name.rsplit('.', 1)[-1].lower() if sample.scanned_file_original_name and '.' in sample.scanned_file_original_name else '' %}
+                        {% if ext == 'pdf' %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                title="Preview PDF"
+                                data-bs-toggle="modal" data-bs-target="#pdfPreviewModal"
+                                data-pdf-url="{{ url_for('samples.view_file', filename=sample.scanned_file) }}"
+                                data-pdf-name="{{ sample.scanned_file_original_name }}">
+                            <i class="bi bi-file-earmark-pdf"></i>
+                        </button>
+                        {% endif %}
+                        {% endif %}
                     </td>
                 </tr>
                 {% else %}
@@ -113,4 +141,42 @@
         </table>
     </div>
 </div>
+
+<!-- PDF Preview Modal -->
+<div class="modal fade" id="pdfPreviewModal" tabindex="-1" aria-labelledby="pdfPreviewLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pdfPreviewLabel"><i class="bi bi-file-earmark-pdf me-2"></i><span id="pdf-filename">Document</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0" style="min-height:70vh;">
+                <iframe id="pdf-iframe" src="" style="width:100%;height:75vh;border:none;"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="pdf-download-link" href="#" class="btn btn-outline-primary btn-sm" download>
+                    <i class="bi bi-download me-1"></i>Download
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const pdfModal = document.getElementById('pdfPreviewModal');
+pdfModal.addEventListener('show.bs.modal', function(event) {
+    const btn = event.relatedTarget;
+    const pdfUrl = btn.getAttribute('data-pdf-url');
+    const pdfName = btn.getAttribute('data-pdf-name');
+    document.getElementById('pdf-iframe').src = pdfUrl;
+    document.getElementById('pdf-filename').textContent = pdfName || 'Document';
+    document.getElementById('pdf-download-link').href = pdfUrl.replace('/view/', '/download/');
+});
+pdfModal.addEventListener('hide.bs.modal', function() {
+    document.getElementById('pdf-iframe').src = '';
+});
+</script>
 {% endblock %}

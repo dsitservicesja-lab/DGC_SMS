@@ -1,3 +1,4 @@
+import io
 from datetime import date
 from app import db
 from app.models import (
@@ -5,6 +6,22 @@ from app.models import (
     SampleStatus, AssignmentStatus,
 )
 from tests.conftest import _create_user, _login
+
+
+# Minimal valid PDF bytes for use in file upload tests
+_MINIMAL_PDF = (
+    b'%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
+    b'2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n'
+    b'3 0 obj<</Type/Page/MediaBox[0 0 612 792]>>endobj\n'
+    b'xref\n0 4\n0000000000 65535 f\n0000000009 00000 n\n'
+    b'0000000058 00000 n\n0000000115 00000 n\n'
+    b'trailer<</Size 4/Root 1 0 R>>\nstartxref\n190\n%%EOF'
+)
+
+
+def _report_file():
+    """Return a (BytesIO, filename) tuple suitable for test file uploads."""
+    return (io.BytesIO(_MINIMAL_PDF), 'report.pdf')
 
 
 def _setup_users(app):
@@ -102,7 +119,8 @@ def test_submit_report(app, client):
         assignment = SampleAssignment.query.first()
     resp = client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'No harmful substances detected.',
-    }, follow_redirects=True)
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
     assert resp.status_code == 200
     assert b'submitted successfully' in resp.data
 
@@ -133,7 +151,8 @@ def test_preliminary_review(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Test results.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     # Officer does preliminary review
@@ -174,7 +193,8 @@ def test_preliminary_review_return(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Incomplete.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     # Officer returns for correction
@@ -199,7 +219,8 @@ def test_preliminary_review_return(app, client):
         assignment = SampleAssignment.query.first()
     resp = client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Complete findings with all sections.',
-    }, follow_redirects=True)
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
     assert b'submitted successfully' in resp.data
 
     with app.app_context():
@@ -228,7 +249,8 @@ def test_technical_review(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Results within acceptable range.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     # Preliminary review
@@ -280,7 +302,8 @@ def test_technical_review_return(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Initial findings.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     # Preliminary approve
@@ -313,7 +336,8 @@ def test_technical_review_return(app, client):
         assignment = SampleAssignment.query.first()
     resp = client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Updated detailed findings.',
-    }, follow_redirects=True)
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
     assert b'submitted successfully' in resp.data
 
     with app.app_context():
@@ -346,7 +370,8 @@ def test_full_workflow(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Comprehensive analysis results.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     # 4. Preliminary review (Officer)
@@ -458,7 +483,8 @@ def test_full_workflow_pharma_with_summary(app, client):
         ).first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Drug meets purity standards.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     # Preliminary review
@@ -523,7 +549,8 @@ def test_deputy_return(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Results.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     _login(client, 'officer')
@@ -594,7 +621,8 @@ def test_hod_return_certificate(app, client):
         assignment = SampleAssignment.query.first()
     client.post(f'/samples/assignment/{assignment.id}/report', data={
         'report_text': 'Results.',
-    })
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
     client.get('/auth/logout')
 
     _login(client, 'officer')

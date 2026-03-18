@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}KPI Dashboard - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-bar-chart-line"></i> Quarterly KPI Dashboard</h2>
+</div>
+
+<!-- Year Selector + Sort Controls -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Year</label>
+                <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                    {% if year not in available_years %}
+                    <option value="{{ year }}" selected>{{ year }}</option>
+                    {% endif %}
+                </select>
+            </div>
+            <input type="hidden" name="sort" value="{{ sort_by }}">
+            <input type="hidden" name="dir" value="{{ sort_dir }}">
+        </form>
+    </div>
+</div>
+
+<!-- KPI Table -->
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span>Quarterly Summary — {{ year }}</span>
+        <small class="text-muted">Click column headers to sort</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    {% set cols = [
+                        ('quarter', 'Quarter'),
+                        ('total', 'Total Registered'),
+                        ('certified', 'Certified'),
+                        ('in_progress', 'In Progress'),
+                        ('rejected', 'Rejected'),
+                        ('avg_tat', 'Avg. Turnaround (days)'),
+                    ] %}
+                    {% for col_key, col_label in cols %}
+                    <th>
+                        <a href="{{ url_for('main.kpi', year=year, sort=col_key, dir='asc' if sort_by == col_key and sort_dir == 'asc' else 'desc') }}"
+                           class="text-decoration-none text-inherit d-flex align-items-center gap-1"
+                           style="color:inherit;">
+                            {{ col_label }}
+                            {% if sort_by == col_key %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }}-short" style="font-size:.85rem;"></i>
+                            {% else %}
+                            <i class="bi bi-arrow-down-up text-muted" style="font-size:.75rem; opacity:.4;"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in quarters_data %}
+                <tr>
+                    <td class="fw-semibold">
+                        <span class="badge bg-primary">{{ q.label }}</span>
+                        <small class="text-muted ms-1">{{ year }}</small>
+                    </td>
+                    <td>{{ q.total }}</td>
+                    <td>
+                        {% if q.total > 0 %}
+                        <span class="text-success fw-semibold">{{ q.certified }}</span>
+                        <small class="text-muted">({{ ((q.certified / q.total) * 100)|round(1) }}%)</small>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ q.in_progress }}</td>
+                    <td>
+                        {% if q.rejected > 0 %}
+                        <span class="text-danger">{{ q.rejected }}</span>
+                        {% else %}
+                        <span class="text-muted">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if q.avg_tat is not none %}
+                        <span class="fw-semibold">{{ q.avg_tat }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">No data for {{ year }}.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if quarters_data %}
+            <tfoot class="table-light">
+                <tr class="fw-semibold">
+                    <td>Total</td>
+                    <td>{{ quarters_data | sum(attribute='total') }}</td>
+                    <td>{{ quarters_data | sum(attribute='certified') }}</td>
+                    <td>{{ quarters_data | sum(attribute='in_progress') }}</td>
+                    <td>{{ quarters_data | sum(attribute='rejected') }}</td>
+                    <td>
+                        {% set avg_tats = quarters_data | selectattr('avg_tat', 'ne', none) | map(attribute='avg_tat') | list %}
+                        {% if avg_tats %}
+                        {{ (avg_tats | sum / avg_tats | length) | round(1) }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<!-- By Branch Breakdown -->
+{% if quarters_data %}
+<div class="card mt-4">
+    <div class="card-header">By Branch / Sample Type</div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Quarter</th>
+                    {% for branch in Branch %}
+                    <th>{{ branch.value }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in quarters_data %}
+                <tr>
+                    <td class="fw-semibold"><span class="badge bg-primary">{{ q.label }}</span></td>
+                    {% for branch in Branch %}
+                    <td>{{ q.by_branch.get(branch.value, 0) }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

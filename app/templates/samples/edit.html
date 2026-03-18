@@ -25,8 +25,11 @@
                             {% endfor %}
                         </div>
                         <div class="col-md-6">
-                            {{ form.source.label(class="form-label fw-semibold") }}
-                            {{ form.source(class="form-control") }}
+                            {{ form.sample_type.label(class="form-label fw-semibold") }}
+                            {{ form.sample_type(class="form-select") }}
+                            {% for error in form.sample_type.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
                         </div>
 
                         <div class="col-12">
@@ -39,12 +42,36 @@
                             {{ form.quantity(class="form-control") }}
                         </div>
                         <div class="col-md-4">
+                            {{ form.volume.label(class="form-label fw-semibold") }}
+                            {{ form.volume(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
                             {{ form.parish.label(class="form-label fw-semibold") }}
                             {{ form.parish(class="form-control") }}
                         </div>
                         <div class="col-md-4">
                             {{ form.patient_name.label(class="form-label fw-semibold") }}
                             {{ form.patient_name(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.source.label(class="form-label fw-semibold") }}
+                            {{ form.source(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.formulation_type.label(class="form-label fw-semibold") }}
+                            {{ form.formulation_type(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.alcohol_type.label(class="form-label fw-semibold") }}
+                            {{ form.alcohol_type(class="form-select") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.claim_butt_number.label(class="form-label fw-semibold") }}
+                            {{ form.claim_butt_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.milk_type.label(class="form-label fw-semibold") }}
+                            {{ form.milk_type(class="form-select") }}
                         </div>
 
                         <div class="col-md-6">

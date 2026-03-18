@@ -57,17 +57,23 @@ def create_notification(user_id, title, message, link=None, send_mail=True):
 
 def notify_branch_heads(branch, title, message, link=None, exclude_user_id=None):
     """Notify Senior Chemist, Deputy and HOD for a given branch."""
+    from app.models import Branch
     head_roles = [Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD]
     heads = User.query.join(user_roles).filter(
         user_roles.c.role.in_(head_roles),
         User.is_active_user.is_(True),
     ).distinct().all()
 
+    # Treat PHARMACEUTICAL_NR as PHARMACEUTICAL for branch-head matching
+    effective_branch = branch
+    if branch == Branch.PHARMACEUTICAL_NR:
+        effective_branch = Branch.PHARMACEUTICAL
+
     # Filter by branch – HOD/Deputy may not have a branch (org-wide)
     for head in heads:
         if head.id == exclude_user_id:
             continue
-        if head.branches and branch not in head.branches:
+        if head.branches and effective_branch not in head.branches and branch not in head.branches:
             continue
         create_notification(head.id, title, message, link)
 
@@ -110,8 +116,22 @@ def notify_report_submitted(assignment):
     link = f'/samples/assignment/{assignment.id}'
     create_notification(sample.uploaded_by, title, message, link)
 
+    # For pharmaceutical samples, also notify the Senior Chemist
+    from app.models import AssignmentStatus, Branch
+    pharma_types = (Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR)
+    if sample.sample_type in pharma_types:
+        notify_branch_heads(
+            sample.sample_type,
+            f'Pharmaceutical Report Submitted: {sample.lab_number}',
+            f'Analyst {assignment.chemist.full_name} has submitted a report '
+            f'for test "{assignment.test_name}" on pharmaceutical sample '
+            f'"{sample.sample_name}" (Lab# {sample.lab_number}). '
+            f'Senior Chemist review required.',
+            link,
+            exclude_user_id=sample.uploaded_by,
+        )
+
     # If returning directly to technical review, also notify branch heads
-    from app.models import AssignmentStatus
     if assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW:
         notify_branch_heads(
             sample.sample_type,

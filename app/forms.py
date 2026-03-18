@@ -1,5 +1,6 @@
 """WTForms for the DGC Samples Management System."""
 
+from datetime import date as date_today
 from markupsafe import Markup
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
@@ -132,8 +133,8 @@ class SampleRegisterForm(FlaskForm):
     scanned_file = FileField(
         'Scanned Document',
         validators=[FileAllowed(
-            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-            'Only PDF and image files allowed.'
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+            'Only PDF, image, and Word document files allowed.'
         )],
     )
     submit = SubmitField('Register Sample')
@@ -150,25 +151,68 @@ class SampleRegisterForm(FlaskForm):
 # ---------------------------------------------------------------------------
 
 class ToxicologySampleRegisterForm(SampleRegisterForm):
-    """Registration form for Toxicology samples."""
+    """Registration form for Toxicology samples.
+    Uses volume (not quantity), no parish, no expected report date.
+    """
+    # Override quantity field to remove it (use volume instead)
+    quantity = None
+    parish = None
+    expected_report_date = None
+
     patient_name = StringField(
         'Patient Name',
         validators=[Optional(), Length(max=255)]
     )
-
-
-class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
-    """Registration form for Pharmaceutical samples."""
-    quantity = StringField(
-        'No./Quantity of Sample',
+    volume = StringField(
+        'Volume',
         validators=[Optional(), Length(max=100)]
     )
 
 
+class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
+    """Registration form for Pharmaceutical samples.
+    No parish, add Formulation Type, lab_number auto-generated,
+    date_received auto-set from date_registered.
+    """
+    # Remove parish
+    parish = None
+
+    # date_received is auto-set for pharma (not user-entered)
+    date_received = DateField('Date Received', validators=[Optional()])
+
+    # lab_number is auto-generated (not required on form)
+    lab_number = StringField('Lab Number', validators=[Optional(), Length(max=50)])
+
+    quantity = StringField(
+        'No./Quantity of Sample',
+        validators=[Optional(), Length(max=100)]
+    )
+    formulation_type = StringField(
+        'Formulation Type',
+        validators=[Optional(), Length(max=100)]
+    )
+
+    def validate_lab_number(self, field):
+        """Override: allow empty lab_number (will be auto-generated)."""
+        if field.data:
+            from app.models import Sample
+            existing = Sample.query.filter_by(lab_number=field.data).first()
+            if existing:
+                raise ValidationError('Lab number already exists.')
+
+
 class FoodMilkSampleRegisterForm(SampleRegisterForm):
-    """Registration form for Food (Milk) samples."""
-    parish = StringField(
-        'Parish',
+    """Registration form for Food (Milk) samples.
+    Uses volume, no parish, no source.
+    """
+    # Remove parish and source
+    parish = None
+    source = None
+
+    # Use volume instead of quantity
+    quantity = None
+    volume = StringField(
+        'Volume',
         validators=[Optional(), Length(max=100)]
     )
     milk_type = SelectField(
@@ -182,9 +226,28 @@ class FoodMilkSampleRegisterForm(SampleRegisterForm):
 
 
 class FoodAlcoholSampleRegisterForm(SampleRegisterForm):
-    """Registration form for Food (Alcohol) samples."""
+    """Registration form for Food (Alcohol) samples.
+    No parish, alcohol type dropdown, Claim/Butt # field.
+    """
+    # Remove parish
+    parish = None
+
     quantity = StringField(
         'No./Quantity of Sample',
+        validators=[Optional(), Length(max=100)]
+    )
+    alcohol_type = SelectField(
+        'Alcohol Type',
+        choices=[
+            ('', '-- Select Type --'),
+            ('Alcohol Determination', 'Alcohol Determination'),
+            ('Denatured Alcohol (bitrex)', 'Denatured Alcohol (bitrex)'),
+            ('Alcohol Determination and Denatured', 'Alcohol Determination and Denatured'),
+        ],
+        validators=[Optional()]
+    )
+    claim_butt_number = StringField(
+        'Claim/Butt #',
         validators=[Optional(), Length(max=100)]
     )
 
@@ -212,6 +275,7 @@ def get_sample_register_form(sample_type):
     form_map = {
         Branch.TOXICOLOGY: ToxicologySampleRegisterForm,
         Branch.PHARMACEUTICAL: PharmaceuticalSampleRegisterForm,
+        Branch.PHARMACEUTICAL_NR: PharmaceuticalSampleRegisterForm,
         Branch.FOOD_MILK: FoodMilkSampleRegisterForm,
         Branch.FOOD_ALCOHOL: FoodAlcoholSampleRegisterForm,
     }
@@ -221,17 +285,44 @@ def get_sample_register_form(sample_type):
 
 class SampleEditForm(FlaskForm):
     sample_name = StringField('Sample Name', validators=[DataRequired(), Length(max=255)])
+    sample_type = SelectField(
+        'Sample Type',
+        choices=[(b.name, b.value) for b in Branch],
+        validators=[DataRequired()],
+    )
     description = TextAreaField('Description', validators=[Optional()])
     quantity = StringField('Quantity / Volume', validators=[Optional(), Length(max=100)])
+    volume = StringField('Volume', validators=[Optional(), Length(max=100)])
     parish = StringField('Parish', validators=[Optional(), Length(max=100)])
     patient_name = StringField('Patient Name (Toxicology)', validators=[Optional(), Length(max=255)])
     source = StringField('Source', validators=[Optional(), Length(max=255)])
+    formulation_type = StringField('Formulation Type', validators=[Optional(), Length(max=100)])
+    alcohol_type = SelectField(
+        'Alcohol Type',
+        choices=[
+            ('', '-- Select Type --'),
+            ('Alcohol Determination', 'Alcohol Determination'),
+            ('Denatured Alcohol (bitrex)', 'Denatured Alcohol (bitrex)'),
+            ('Alcohol Determination and Denatured', 'Alcohol Determination and Denatured'),
+        ],
+        validators=[Optional()]
+    )
+    claim_butt_number = StringField('Claim/Butt #', validators=[Optional(), Length(max=100)])
+    milk_type = SelectField(
+        'Milk Type',
+        choices=[
+            ('', '-- Select Type --'),
+            ('R', 'Raw Milk'),
+            ('P', 'Processed Milk'),
+        ],
+        validators=[Optional()]
+    )
     expected_report_date = DateField('Expected Report Date', validators=[Optional()])
     scanned_file = FileField(
         'Replace Scanned Document',
         validators=[FileAllowed(
-            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-            'Only PDF and image files allowed.'
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+            'Only PDF, image, and Word document files allowed.'
         )],
     )
     submit = SubmitField('Update Sample')
@@ -268,6 +359,11 @@ class SampleAssignForm(FlaskForm):
     expected_completion = DateField('Expected Completion Date', validators=[Optional()])
     submit = SubmitField('Assign Sample')
 
+    def validate_expected_completion(self, field):
+        if field.data:
+            if field.data < date_today.today():
+                raise ValidationError('Expected completion date cannot be in the past.')
+
 
 # ---------------------------------------------------------------------------
 # Report forms
@@ -277,10 +373,13 @@ class ReportSubmitForm(FlaskForm):
     report_text = TextAreaField('Report / Findings', validators=[DataRequired()])
     report_file = FileField(
         'Attach Report File',
-        validators=[FileAllowed(
-            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-            'Only PDF and image files allowed.'
-        )],
+        validators=[
+            DataRequired(message='A report file is required before submitting.'),
+            FileAllowed(
+                ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+                'Only PDF, image, and Word document files allowed.'
+            ),
+        ],
     )
     submit = SubmitField('Submit Report')
 
@@ -325,8 +424,8 @@ class SubmitToDeputyForm(FlaskForm):
     summary_report_file = FileField(
         'Attach Summary Report File',
         validators=[FileAllowed(
-            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-            'Only PDF and image files allowed.'
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+            'Only PDF, image, and Word document files allowed.'
         )],
     )
     submit = SubmitField('Submit to Deputy Government Chemist')
@@ -355,8 +454,8 @@ class CertificateForm(FlaskForm):
     certificate_file = FileField(
         'Attach Certificate File',
         validators=[FileAllowed(
-            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-            'Only PDF and image files allowed.'
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+            'Only PDF, image, and Word document files allowed.'
         )],
     )
     submit = SubmitField('Submit Certificate for HOD Review')
