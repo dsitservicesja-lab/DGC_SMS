@@ -54,6 +54,11 @@ def create_app(config_name=None):
     app.jinja_env.globals['Branch'] = Branch
 
     @app.before_request
+    def make_session_permanent():
+        from flask import session
+        session.permanent = True
+
+    @app.before_request
     def check_password_change():
         from flask import request, redirect, url_for
         from flask_login import current_user

@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 
 class Config:
@@ -24,6 +25,9 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get(
         'MAIL_DEFAULT_SENDER', 'noreply@dgc.gov.jm'
     )
+
+    # Session timeout (server-side)
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
 
 
 class DevelopmentConfig(Config):

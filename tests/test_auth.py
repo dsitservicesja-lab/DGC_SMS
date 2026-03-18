@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from app.models import User, Role
 from tests.conftest import _create_user, _login
 
@@ -110,3 +112,35 @@ def test_must_change_password_blocks_other_pages(app, client):
     resp = client.get('/dashboard', follow_redirects=True)
     assert resp.status_code == 200
     assert b'Change Password' in resp.data
+
+
+def test_session_timeout_configured(app):
+    """PERMANENT_SESSION_LIFETIME must be set so sessions expire."""
+    assert 'PERMANENT_SESSION_LIFETIME' in app.config
+    lifetime = app.config['PERMANENT_SESSION_LIFETIME']
+    assert isinstance(lifetime, timedelta)
+    assert lifetime <= timedelta(hours=1), "Session timeout should be at most 1 hour"
+
+
+def test_session_is_marked_permanent(app, client):
+    """Every request should mark the session as permanent so that
+    PERMANENT_SESSION_LIFETIME is enforced."""
+    with app.app_context():
+        _create_user()
+    _login(client)
+    with client.session_transaction() as sess:
+        assert sess.permanent is True
+
+
+def test_session_expires_after_lifetime(app, client):
+    """The session cookie should carry an expiry so that the browser
+    discards it after PERMANENT_SESSION_LIFETIME of inactivity."""
+    with app.app_context():
+        _create_user()
+    resp = _login(client)
+
+    # The Set-Cookie header for the session should include an Expires
+    # or Max-Age directive because session.permanent = True
+    set_cookie = resp.headers.get('Set-Cookie', '')
+    assert 'Expires=' in set_cookie or 'Max-Age=' in set_cookie, \
+        "Session cookie must have an expiry for timeout to work"

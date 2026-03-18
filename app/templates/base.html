@@ -596,6 +596,80 @@
 
     <script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
     {% if current_user.is_authenticated %}
+    <!-- Session timeout warning modal -->
+    <div class="modal fade" id="sessionTimeoutModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="sessionTimeoutLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="sessionTimeoutLabel"><i class="bi bi-clock-history me-2"></i>Session Expiring</h5>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <p class="mb-1">Your session will expire due to inactivity.</p>
+                    <p class="fw-bold fs-4 mb-0" id="timeout-countdown"></p>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-primary" id="session-keep-alive"><i class="bi bi-arrow-repeat me-1"></i>Stay Logged In</button>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>Logout Now</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        /* ── Session inactivity timeout ───────────────────── */
+        (function() {
+            var SESSION_LIFETIME = {{ config['PERMANENT_SESSION_LIFETIME'].total_seconds()|int }};
+            var WARNING_BEFORE = 120;
+            var idleSeconds = 0;
+            var warningShown = false;
+            var countdownInterval = null;
+            var modalEl = document.getElementById('sessionTimeoutModal');
+            var modal = new bootstrap.Modal(modalEl);
+
+            function resetIdle() {
+                idleSeconds = 0;
+                if (warningShown) {
+                    warningShown = false;
+                    modal.hide();
+                    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+                }
+            }
+
+            ['mousemove','mousedown','keypress','scroll','touchstart','click'].forEach(function(evt) {
+                document.addEventListener(evt, resetIdle, {passive: true});
+            });
+
+            document.getElementById('session-keep-alive').addEventListener('click', function() {
+                fetch('{{ url_for("main.keep_alive") }}', {credentials: 'same-origin'})
+                    .finally(function() { resetIdle(); });
+            });
+
+            var tickInterval = setInterval(function() {
+                idleSeconds++;
+                var remaining = SESSION_LIFETIME - idleSeconds;
+
+                if (remaining <= 0) {
+                    clearInterval(tickInterval);
+                    window.location.href = '{{ url_for("auth.logout") }}';
+                    return;
+                }
+
+                if (remaining <= WARNING_BEFORE && !warningShown) {
+                    warningShown = true;
+                    modal.show();
+                    function updateCountdown() {
+                        var secsLeft = SESSION_LIFETIME - idleSeconds;
+                        if (secsLeft <= 0) return;
+                        var m = Math.floor(secsLeft / 60);
+                        var s = secsLeft % 60;
+                        document.getElementById('timeout-countdown').textContent =
+                            m + ':' + (s < 10 ? '0' : '') + s;
+                    }
+                    updateCountdown();
+                    countdownInterval = setInterval(updateCountdown, 1000);
+                }
+            }, 1000);
+        })();
+    </script>
     <!-- Toast container for live notifications -->
     <div id="notif-toast-container" aria-live="polite" aria-atomic="true"
          style="position:fixed;top:70px;right:1rem;z-index:9999;min-width:320px;max-width:400px;display:flex;flex-direction:column;gap:.5rem;"></div>
