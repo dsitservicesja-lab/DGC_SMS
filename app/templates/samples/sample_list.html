@@ -95,45 +95,56 @@
                     <th>Type</th>
                     <th>Date Received</th>
                     <th>Status</th>
-                    <th></th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for sample in samples %}
-                <tr>
-                    <td><span class="fw-semibold">{{ sample.lab_number }}</span></td>
+                <tr class="align-middle">
+                    <td>
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                           class="fw-semibold text-primary text-decoration-none"
+                           style="font-family:'Inter',monospace;">{{ sample.lab_number }}</a>
+                    </td>
                     <td>{{ sample.sample_name }}</td>
-                    <td><span class="badge bg-info text-dark">{{ sample.sample_type.value }}</span></td>
-                    <td>{{ sample.date_received.strftime('%d %b %Y') }}</td>
+                    <td>
+                        <span class="badge rounded-pill bg-info text-dark">{{ sample.sample_type.value }}</span>
+                    </td>
+                    <td class="text-muted" style="font-size:.85rem;">{{ sample.date_received.strftime('%d %b %Y') }}</td>
                     <td>
                         <span class="badge bg-{{ status_colors.get(sample.status.value, 'secondary') }}">
                             {{ sample.status.value }}
                         </span>
                     </td>
-                    <td class="d-flex gap-1">
-                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
-                           class="btn btn-sm btn-outline-primary" title="View">
-                            <i class="bi bi-eye"></i>
-                        </a>
-                        {% if sample.scanned_file %}
-                        {% set ext = sample.scanned_file_original_name.rsplit('.', 1)[-1].lower() if sample.scanned_file_original_name and '.' in sample.scanned_file_original_name else '' %}
-                        {% if ext == 'pdf' %}
-                        <button type="button" class="btn btn-sm btn-outline-secondary"
-                                title="Preview PDF"
-                                data-bs-toggle="modal" data-bs-target="#pdfPreviewModal"
-                                data-pdf-url="{{ url_for('samples.view_file', filename=sample.scanned_file) }}"
-                                data-pdf-name="{{ sample.scanned_file_original_name }}">
-                            <i class="bi bi-file-earmark-pdf"></i>
-                        </button>
-                        {% endif %}
-                        {% endif %}
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end">
+                            <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="View details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if sample.scanned_file %}
+                            {% set ext = sample.scanned_file_original_name.rsplit('.', 1)[-1].lower() if sample.scanned_file_original_name and '.' in sample.scanned_file_original_name else '' %}
+                            {% if ext == 'pdf' %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    title="Preview PDF"
+                                    data-bs-toggle="modal" data-bs-target="#pdfPreviewModal"
+                                    data-pdf-url="{{ url_for('samples.view_file', filename=sample.scanned_file) }}"
+                                    data-pdf-name="{{ sample.scanned_file_original_name }}">
+                                <i class="bi bi-file-earmark-pdf"></i>
+                            </button>
+                            {% endif %}
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-5">
-                        <i class="bi bi-inbox d-block mb-2" style="font-size:2rem;"></i>
-                        No samples found.
+                    <td colspan="6" class="text-center py-5">
+                        <i class="bi bi-inbox d-block mb-3 text-muted" style="font-size:2.5rem;opacity:.4;"></i>
+                        <span class="text-muted fw-semibold">No samples found</span>
+                        {% if is_filtered %}
+                        <p class="text-muted small mb-0 mt-1">Try adjusting or clearing the filters above.</p>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

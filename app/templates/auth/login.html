@@ -1,64 +1,277 @@
 {% extends "base.html" %}
 {% block title %}Sign In - DGC SMS{% endblock %}
 
-{% block content %}
-<div class="d-flex align-items-center justify-content-center" style="min-height: calc(100vh - var(--topbar-h) - 40px);">
-    <div style="width: 100%; max-width: 400px;">
-        <div class="text-center mb-4">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="DGC Logo"
-                 style="height: 80px; width: auto;" class="mb-3">
-            <h2 class="fw-bold mb-1" style="color: var(--dgc-primary);">DGC SMS</h2>
-            <p class="text-muted mb-0" style="font-size:.875rem;">Sample Management System</p>
-        </div>
+{% block extra_css %}
+<style>
+    /* ── Login page overrides ─────────────────────────────── */
+    body { background: #0f2342; }
+    .topbar { display: none !important; }
+    footer   { display: none !important; }
+    .app-shell { min-height: 100vh; }
+    .page-content {
+        padding: 0 !important;
+        display: flex; align-items: center; justify-content: center;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #0c1e38 0%, #1a3a5c 45%, #1e5f8c 100%);
+    }
+    /* ── Split card ───────────────────────────────────────── */
+    .login-wrap {
+        width: 100%; max-width: 880px;
+        margin: 1rem;
+        display: grid; grid-template-columns: 1fr 1fr;
+        border-radius: 1.25rem; overflow: hidden;
+        box-shadow: 0 28px 72px rgba(0,0,0,.45);
+        animation: fadeInUp .4s ease both;
+    }
+    @media (max-width: 640px) {
+        .login-wrap { grid-template-columns: 1fr; }
+        .login-panel-left { display: none !important; }
+    }
+    /* ── Left branding panel ──────────────────────────────── */
+    .login-panel-left {
+        background: linear-gradient(155deg, #154360 0%, #2471a3 60%, #1abc9c 160%);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        padding: 3rem 2.25rem;
+        color: #fff; position: relative; overflow: hidden;
+    }
+    .login-panel-left::before {
+        content: '';
+        position: absolute; inset: 0;
+        background-image:
+            radial-gradient(circle at 20% 80%, rgba(255,255,255,.06) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(255,255,255,.05) 0%, transparent 50%);
+    }
+    .login-panel-left::after {
+        content: '';
+        position: absolute; bottom: -60px; right: -60px;
+        width: 220px; height: 220px;
+        border-radius: 50%;
+        background: rgba(255,255,255,.05);
+    }
+    .login-logo-ring {
+        width: 88px; height: 88px;
+        background: rgba(255,255,255,.15);
+        border: 2px solid rgba(255,255,255,.3);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 1.5rem;
+        backdrop-filter: blur(8px);
+        position: relative; z-index: 1;
+    }
+    .login-logo-ring img { height: 56px; filter: brightness(0) invert(1); }
+    .login-panel-left h2 {
+        font-size: 1.85rem; font-weight: 800; letter-spacing: .02em;
+        text-align: center; margin-bottom: .5rem; position: relative; z-index: 1;
+    }
+    .login-panel-left p {
+        font-size: .875rem; opacity: .8; text-align: center; line-height: 1.55;
+        margin-bottom: 2rem; position: relative; z-index: 1;
+    }
+    .login-feature {
+        display: flex; align-items: center; gap: .75rem;
+        background: rgba(255,255,255,.1);
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: .65rem;
+        padding: .62rem .9rem;
+        margin-bottom: .6rem;
+        font-size: .82rem;
+        backdrop-filter: blur(6px);
+        position: relative; z-index: 1;
+        width: 100%;
+        transition: background .2s;
+    }
+    .login-feature:hover { background: rgba(255,255,255,.16); }
+    .login-feature i { font-size: 1.05rem; flex-shrink: 0; opacity: .9; }
+    /* ── Right form panel ─────────────────────────────────── */
+    .login-panel-right {
+        background: #fff;
+        display: flex; align-items: center; justify-content: center;
+        padding: 2.75rem 2.5rem;
+    }
+    .login-panel-right-inner { width: 100%; max-width: 320px; }
+    .login-panel-right h3 {
+        font-size: 1.5rem; font-weight: 700; color: #1e293b; margin-bottom: .3rem;
+    }
+    .login-panel-right .login-sub {
+        font-size: .875rem; color: #64748b; margin-bottom: 2rem;
+    }
+    /* ── Form field groups ────────────────────────────────── */
+    .login-field { margin-bottom: 1.25rem; }
+    .login-field label {
+        display: block; font-size: .8rem; font-weight: 600;
+        color: #374151; margin-bottom: .4rem; letter-spacing: .01em;
+    }
+    .login-field-wrap { position: relative; }
+    .login-input, .login-field input {
+        width: 100%;
+        padding: .78rem 1rem .78rem 2.65rem;
+        border: 1.5px solid #e2e8f0;
+        border-radius: .65rem;
+        font-size: .9rem; font-family: 'Inter', system-ui, sans-serif;
+        background: #f8fafc; color: #1e293b;
+        transition: border-color .15s, box-shadow .15s, background .15s;
+        outline: none;
+    }
+    .login-input:focus, .login-field input:focus {
+        border-color: #2e86c1;
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(46,134,193,.14);
+    }
+    .login-field-icon {
+        position: absolute; left: .85rem; top: 50%; transform: translateY(-50%);
+        color: #94a3b8; font-size: 1rem; pointer-events: none;
+        transition: color .15s;
+    }
+    .login-field-wrap:focus-within .login-field-icon { color: #2e86c1; }
+    .login-field-toggle {
+        position: absolute; right: .7rem; top: 50%; transform: translateY(-50%);
+        background: none; border: none; color: #94a3b8; cursor: pointer;
+        display: flex; align-items: center; padding: .2rem .3rem;
+        border-radius: .3rem; transition: color .15s;
+    }
+    .login-field-toggle:hover { color: #2e86c1; }
+    .login-field .field-error {
+        font-size: .78rem; color: #e74c3c; margin-top: .3rem;
+    }
+    /* ── Row: remember + forgot ───────────────────────────── */
+    .login-row {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    .login-row .form-check-label { font-size: .85rem; }
+    .login-row .forgot-link {
+        font-size: .85rem; color: #2e86c1; font-weight: 500; text-decoration: none;
+    }
+    .login-row .forgot-link:hover { color: #1a5276; text-decoration: underline; }
+    /* ── Submit button ────────────────────────────────────── */
+    .btn-login {
+        display: block; width: 100%;
+        padding: .82rem 1rem;
+        background: linear-gradient(135deg, #1a5276 0%, #2e86c1 100%);
+        color: #fff; border: none; border-radius: .65rem;
+        font-size: .95rem; font-weight: 600; letter-spacing: .02em;
+        font-family: 'Inter', system-ui, sans-serif;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(46,134,193,.32);
+        transition: all .2s ease;
+    }
+    .btn-login:hover {
+        background: linear-gradient(135deg, #154360 0%, #2471a3 100%);
+        box-shadow: 0 7px 20px rgba(46,134,193,.42);
+        transform: translateY(-1px);
+    }
+    .btn-login:active { transform: translateY(0); }
+    /* ── Footer text ──────────────────────────────────────── */
+    .login-copyright {
+        font-size: .75rem; color: #94a3b8; text-align: center; margin-top: 1.75rem;
+    }
+</style>
+{% endblock %}
 
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                <h5 class="fw-semibold mb-4">Sign in to your account</h5>
-                <form method="POST">
-                    {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        {{ form.username.label(class="form-label fw-semibold") }}
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-person"></i></span>
-                            {{ form.username(class="form-control", placeholder="Username") }}
-                        </div>
-                        {% for error in form.username.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        {{ form.password.label(class="form-label fw-semibold") }}
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                            {{ form.password(class="form-control", placeholder="Password", id="loginPassword") }}
-                            <button class="btn btn-outline-secondary" type="button" id="togglePwd"
-                                    tabindex="-1" aria-label="Show password">
-                                <i class="bi bi-eye" id="togglePwdIcon"></i>
-                            </button>
-                        </div>
-                        {% for error in form.password.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div class="form-check mb-0">
-                            {{ form.remember_me(class="form-check-input") }}
-                            {{ form.remember_me.label(class="form-check-label") }}
-                        </div>
-                        <a href="{{ url_for('auth.forgot_password') }}" style="font-size:.875rem;">
-                            Forgot password?
-                        </a>
-                    </div>
-                    {{ form.submit(class="btn btn-primary w-100") }}
-                </form>
+{% block content %}
+<div class="login-wrap">
+
+    <!-- ── Left branding panel ───────────────────────────── -->
+    <div class="login-panel-left">
+        <div class="login-logo-ring">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="DGC Logo">
+        </div>
+        <h2>DGC SMS</h2>
+        <p>Department of Government Chemist<br>Sample Management System</p>
+        <div style="width:100%;">
+            <div class="login-feature">
+                <i class="bi bi-shield-check"></i>
+                <span>Secure end-to-end sample tracking</span>
+            </div>
+            <div class="login-feature">
+                <i class="bi bi-people"></i>
+                <span>Multi-role workflow management</span>
+            </div>
+            <div class="login-feature">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span>Real-time KPI dashboards</span>
+            </div>
+            <div class="login-feature">
+                <i class="bi bi-file-earmark-medical"></i>
+                <span>Digital certificate generation</span>
             </div>
         </div>
     </div>
+
+    <!-- ── Right form panel ──────────────────────────────── -->
+    <div class="login-panel-right">
+        <div class="login-panel-right-inner">
+            <h3>Welcome back</h3>
+            <p class="login-sub">Sign in to your account to continue</p>
+
+            <form method="POST" novalidate>
+                {{ form.hidden_tag() }}
+
+                <!-- Username -->
+                <div class="login-field">
+                    <label for="{{ form.username.id }}">Username</label>
+                    <div class="login-field-wrap">
+                        {{ form.username(
+                            class="login-input" + (" is-invalid" if form.username.errors else ""),
+                            placeholder="Enter your username",
+                            autocomplete="username"
+                        ) }}
+                        <i class="bi bi-person login-field-icon"></i>
+                    </div>
+                    {% for error in form.username.errors %}
+                    <div class="field-error"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <!-- Password -->
+                <div class="login-field">
+                    <label for="{{ form.password.id }}">Password</label>
+                    <div class="login-field-wrap">
+                        {{ form.password(
+                            class="login-input" + (" is-invalid" if form.password.errors else ""),
+                            placeholder="Enter your password",
+                            id="loginPassword",
+                            autocomplete="current-password",
+                            style="padding-right:2.5rem;"
+                        ) }}
+                        <i class="bi bi-lock login-field-icon"></i>
+                        <button class="login-field-toggle" type="button" id="togglePwd"
+                                tabindex="-1" aria-label="Show password">
+                            <i class="bi bi-eye" id="togglePwdIcon"></i>
+                        </button>
+                    </div>
+                    {% for error in form.password.errors %}
+                    <div class="field-error"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <!-- Remember + Forgot -->
+                <div class="login-row">
+                    <div class="form-check mb-0">
+                        {{ form.remember_me(class="form-check-input") }}
+                        {{ form.remember_me.label(class="form-check-label") }}
+                    </div>
+                    <a href="{{ url_for('auth.forgot_password') }}" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn-login">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                </button>
+            </form>
+
+            <div class="login-copyright">
+                &copy; {{ 2026 }} Department of Government Chemist
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    /* Password visibility toggle */
     document.getElementById('togglePwd').addEventListener('click', function () {
         const input = document.getElementById('loginPassword');
         const icon  = document.getElementById('togglePwdIcon');
