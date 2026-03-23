@@ -527,3 +527,65 @@ class Setting(db.Model):
 
     def __repr__(self):
         return f'<Setting {self.key}={self.value}>'
+
+
+# ---------------------------------------------------------------------------
+# KPI Targets
+# ---------------------------------------------------------------------------
+
+# Canonical list of KPI metric keys and their human-readable labels.
+KPI_METRICS = [
+    ('pct_improvement_planned_targets',
+     '% improvement in the achievement of planned targets'),
+    ('pct_compliance_sop',
+     '% compliance with standard operating procedures, quality control, '
+     'environmental and accreditation standards'),
+    ('complaints_resolved',
+     '# of complaints resolved per quarter'),
+    ('analysts_qualified',
+     '# of analyst with required technical skills and competencies'),
+    ('equipment_inspections',
+     '# of equipment maintenance inspections conducted per quarter'),
+    ('pharma_coas',
+     '# Pharmaceutical COA\'s generated'),
+    ('milk_coas',
+     '# of milk COA\'s generated'),
+    ('toxicology_roas',
+     '# of toxicology ROA\'s generated'),
+    ('alcohol_coas',
+     '# Alcohol COA\'s generated'),
+    ('avg_days_pharma_coa',
+     'Average days taken to generate pharmaceutical COA\'s'),
+    ('avg_days_milk_coa',
+     'Average days taken to generate milk COA\'s'),
+    ('avg_days_toxicology_roa',
+     'Average days taken to generate toxicology ROA\'s'),
+]
+
+# Keys whose "Actual" value is auto-computed from Sample data.
+AUTO_ACTUAL_KEYS = {
+    'pharma_coas', 'milk_coas', 'toxicology_roas', 'alcohol_coas',
+    'avg_days_pharma_coa', 'avg_days_milk_coa', 'avg_days_toxicology_roa',
+}
+
+
+class KpiTarget(db.Model):
+    """Stores per-year / per-quarter KPI targets and optional manual actuals."""
+    __tablename__ = 'kpi_targets'
+
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer, nullable=False, index=True)
+    quarter = db.Column(db.Integer, nullable=False)          # 1-4
+    kpi_key = db.Column(db.String(100), nullable=False)
+    target_value = db.Column(db.Float, nullable=True)
+    actual_override = db.Column(db.Float, nullable=True)     # for manual KPIs
+
+    __table_args__ = (
+        db.UniqueConstraint('year', 'quarter', 'kpi_key',
+                            name='uq_kpi_target'),
+    )
+
+    def __repr__(self):
+        return (f'<KpiTarget {self.kpi_key} '
+                f'Y{self.year} Q{self.quarter} '
+                f'T={self.target_value} A={self.actual_override}>')

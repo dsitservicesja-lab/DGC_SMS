@@ -2,8 +2,18 @@
 {% block title %}KPI Dashboard - DGC SMS{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h2><i class="bi bi-bar-chart-line"></i> Quarterly KPI Dashboard</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('main.kpi_report', year=year) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-clipboard-data me-1"></i>KPI Report
+        </a>
+        <a href="{{ url_for('main.pharma_report', year=year) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-capsule me-1"></i>Pharm Report
+        </a>
+    </div>
 </div>
 
 <!-- Year Selector + Sort Controls -->
