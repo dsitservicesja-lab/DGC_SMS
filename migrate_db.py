@@ -46,6 +46,9 @@ MIGRATIONS = [
     ('samples', 'certified_by', 'INTEGER REFERENCES users(id)'),
     # users – force password change on first login
     ('users', 'must_change_password', 'BOOLEAN DEFAULT 0'),
+    # users – active flag and creation timestamp
+    ('users', 'is_active_user', 'BOOLEAN DEFAULT 1'),
+    ('users', 'created_at', 'DATETIME'),
     # sample_assignments – preliminary review
     ('sample_assignments', 'preliminary_review_comments', 'TEXT'),
     ('sample_assignments', 'preliminary_reviewed_by', 'INTEGER REFERENCES users(id)'),
@@ -58,6 +61,8 @@ MIGRATIONS = [
     ('samples', 'formulation_type', 'VARCHAR(100)'),
     ('samples', 'alcohol_type', 'VARCHAR(100)'),
     ('samples', 'claim_butt_number', 'VARCHAR(100)'),
+    # samples – expected report date
+    ('samples', 'expected_report_date', 'DATE'),
 ]
 
 NEW_TABLES = [
@@ -95,6 +100,18 @@ NEW_TABLES = [
         '  is_read BOOLEAN DEFAULT 0,'
         '  email_sent BOOLEAN DEFAULT 0,'
         '  created_at DATETIME'
+        ')',
+    ),
+    (
+        'kpi_targets',
+        'CREATE TABLE IF NOT EXISTS kpi_targets ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  year INTEGER NOT NULL,'
+        '  quarter INTEGER NOT NULL,'
+        '  kpi_key VARCHAR(100) NOT NULL,'
+        '  target_value FLOAT,'
+        '  actual_override FLOAT,'
+        '  UNIQUE (year, quarter, kpi_key)'
         ')',
     ),
 ]
