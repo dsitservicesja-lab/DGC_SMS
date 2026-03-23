@@ -1,12 +1,18 @@
-from flask import render_template, redirect, url_for, flash, jsonify, request, current_app
+from flask import (
+    render_template, redirect, url_for, flash, jsonify, request,
+    current_app, Response,
+)
 from flask_login import login_required, current_user
 from datetime import datetime, timezone, date
+import csv
+import io
 
 from app import db
 from app.main import main_bp
 from app.models import (
     Sample, SampleAssignment, SampleHistory, Notification, User,
     Role, SampleStatus, AssignmentStatus, Setting, Branch,
+    KpiTarget, KPI_METRICS, AUTO_ACTUAL_KEYS,
 )
 
 
@@ -324,6 +330,402 @@ def kpi():
         sort_by=sort_by,
         sort_dir=sort_dir,
         Branch=Branch,
+    )
+
+
+# ---------------------------------------------------------------------------
+# KPI Report  (Target / Actual / Variance)
+# ---------------------------------------------------------------------------
+
+def _auto_actuals(year, quarter):
+    """Return a dict of auto-computed KPI actual values for *year* / *quarter*."""
+    from sqlalchemy import extract
+
+    month_start = (quarter - 1) * 3 + 1
+    month_end = quarter * 3
+
+    def _base(branch_filter):
+        q = Sample.query.filter(
+            extract('year', Sample.date_registered) == year,
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+        if isinstance(branch_filter, (list, tuple)):
+            q = q.filter(Sample.sample_type.in_(branch_filter))
+        else:
+            q = q.filter(Sample.sample_type == branch_filter)
+        return q
+
+    def _count(branch_filter):
+        return _base(branch_filter).filter(
+            Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED])
+        ).count()
+
+    def _avg_tat(branch_filter):
+        samples = _base(branch_filter).filter(
+            Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED]),
+            Sample.certified_at.isnot(None),
+        ).all()
+        days = [
+            (s.certified_at.date() - s.date_received).days
+            for s in samples
+            if s.certified_at and s.date_received
+        ]
+        return round(sum(days) / len(days), 1) if days else None
+
+    pharma_branches = [Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]
+    return {
+        'pharma_coas':           _count(pharma_branches),
+        'milk_coas':             _count(Branch.FOOD_MILK),
+        'toxicology_roas':       _count(Branch.TOXICOLOGY),
+        'alcohol_coas':          _count(Branch.FOOD_ALCOHOL),
+        'avg_days_pharma_coa':   _avg_tat(pharma_branches),
+        'avg_days_milk_coa':     _avg_tat(Branch.FOOD_MILK),
+        'avg_days_toxicology_roa': _avg_tat(Branch.TOXICOLOGY),
+    }
+
+
+@main_bp.route('/kpi/report')
+@login_required
+def kpi_report():
+    """KPI Target vs Actual report (quarterly)."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=1)
+    if quarter not in (1, 2, 3, 4):
+        quarter = 1
+
+    # Available years (from sample data + any year that has KPI targets)
+    from sqlalchemy import extract
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', Sample.date_registered).label('yr')
+        ).distinct().all() if r.yr
+    }
+    target_years = {
+        r.year for r in db.session.query(KpiTarget.year).distinct().all()
+    }
+    available_years = sorted(sample_years | target_years | {year})
+
+    # Load saved targets for this year/quarter
+    targets = {
+        t.kpi_key: t
+        for t in KpiTarget.query.filter_by(year=year, quarter=quarter).all()
+    }
+
+    # Auto-computed actual values
+    auto = _auto_actuals(year, quarter)
+
+    # Build report rows
+    rows = []
+    for key, label in KPI_METRICS:
+        t_obj = targets.get(key)
+        target_val = t_obj.target_value if t_obj else None
+        if key in AUTO_ACTUAL_KEYS:
+            actual_val = auto.get(key)
+        else:
+            actual_val = t_obj.actual_override if t_obj else None
+
+        if target_val is not None and actual_val is not None:
+            variance = round(actual_val - target_val, 2)
+        else:
+            variance = None
+
+        rows.append({
+            'key': key,
+            'label': label,
+            'target': target_val,
+            'actual': actual_val,
+            'variance': variance,
+        })
+
+    return render_template(
+        'kpi_report.html',
+        rows=rows,
+        year=year,
+        quarter=quarter,
+        available_years=available_years,
+    )
+
+
+@main_bp.route('/kpi/report/download')
+@login_required
+def kpi_report_download():
+    """Download the KPI report as CSV."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=1)
+    if quarter not in (1, 2, 3, 4):
+        quarter = 1
+
+    targets = {
+        t.kpi_key: t
+        for t in KpiTarget.query.filter_by(year=year, quarter=quarter).all()
+    }
+    auto = _auto_actuals(year, quarter)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(['KPI', 'Target', 'Actual', 'Variance'])
+    for key, label in KPI_METRICS:
+        t_obj = targets.get(key)
+        target_val = t_obj.target_value if t_obj else ''
+        if key in AUTO_ACTUAL_KEYS:
+            actual_val = auto.get(key)
+            actual_val = actual_val if actual_val is not None else ''
+        else:
+            actual_val = t_obj.actual_override if t_obj and t_obj.actual_override is not None else ''
+
+        if target_val != '' and actual_val != '':
+            variance = round(float(actual_val) - float(target_val), 2)
+        else:
+            variance = ''
+        writer.writerow([label, target_val, actual_val, variance])
+
+    filename = f'KPI_Report_{year}_Q{quarter}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# KPI Targets Management  (Admin / HOD)
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/kpi/targets', methods=['GET', 'POST'])
+@login_required
+def kpi_targets():
+    """Set KPI targets and manual actuals for a given year/quarter."""
+    if not current_user.has_any_role(Role.HOD, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=1)
+    if quarter not in (1, 2, 3, 4):
+        quarter = 1
+
+    if request.method == 'POST':
+        year = int(request.form.get('year', year))
+        quarter = int(request.form.get('quarter', quarter))
+        for key, _label in KPI_METRICS:
+            target_raw = request.form.get(f'target_{key}', '').strip()
+            actual_raw = request.form.get(f'actual_{key}', '').strip()
+
+            target_val = float(target_raw) if target_raw else None
+            actual_val = float(actual_raw) if actual_raw else None
+
+            existing = KpiTarget.query.filter_by(
+                year=year, quarter=quarter, kpi_key=key
+            ).first()
+            if existing:
+                existing.target_value = target_val
+                existing.actual_override = actual_val
+            else:
+                db.session.add(KpiTarget(
+                    year=year, quarter=quarter, kpi_key=key,
+                    target_value=target_val, actual_override=actual_val,
+                ))
+        db.session.commit()
+        flash('KPI targets saved.', 'success')
+        return redirect(url_for('main.kpi_targets', year=year, quarter=quarter))
+
+    targets = {
+        t.kpi_key: t
+        for t in KpiTarget.query.filter_by(year=year, quarter=quarter).all()
+    }
+
+    # Available years
+    from sqlalchemy import extract
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', Sample.date_registered).label('yr')
+        ).distinct().all() if r.yr
+    }
+    target_years = {
+        r.year for r in db.session.query(KpiTarget.year).distinct().all()
+    }
+    current_year = datetime.now(timezone.utc).year
+    available_years = sorted(
+        sample_years | target_years | {current_year, current_year + 1}
+    )
+
+    return render_template(
+        'kpi_targets.html',
+        kpi_metrics=KPI_METRICS,
+        auto_keys=AUTO_ACTUAL_KEYS,
+        targets=targets,
+        year=year,
+        quarter=quarter,
+        available_years=available_years,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pharmaceutical Reports
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/reports/pharma')
+@login_required
+def pharma_report():
+    """Pharmaceutical sample report with filtering and download."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
+    status_filter = request.args.get('status', '')
+
+    q = Sample.query.filter(
+        Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
+        extract('year', Sample.date_registered) == year,
+    )
+
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+
+    if status_filter:
+        try:
+            st = SampleStatus(status_filter)
+            q = q.filter(Sample.status == st)
+        except ValueError:
+            pass
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    # Summary stats
+    total = len(samples)
+    certified = sum(
+        1 for s in samples
+        if s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    )
+    in_progress = sum(
+        1 for s in samples
+        if s.status not in (
+            SampleStatus.CERTIFIED, SampleStatus.COMPLETED,
+            SampleStatus.REJECTED,
+        )
+    )
+    rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
+
+    tat_days = [
+        (s.certified_at.date() - s.date_received).days
+        for s in samples
+        if s.certified_at and s.date_received
+        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    ]
+    avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
+
+    # Available years
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', Sample.date_registered).label('yr')
+        ).distinct().all() if r.yr
+    }
+    available_years = sorted(sample_years | {year})
+
+    return render_template(
+        'pharma_report.html',
+        samples=samples,
+        year=year,
+        quarter=quarter,
+        status_filter=status_filter,
+        available_years=available_years,
+        total=total,
+        certified=certified,
+        in_progress=in_progress,
+        rejected=rejected,
+        avg_tat=avg_tat,
+        SampleStatus=SampleStatus,
+    )
+
+
+@main_bp.route('/reports/pharma/download')
+@login_required
+def pharma_report_download():
+    """Download pharmaceutical report as CSV."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=0)
+
+    q = Sample.query.filter(
+        Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
+        extract('year', Sample.date_registered) == year,
+    )
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        'Lab Number', 'Sample Name', 'Type', 'Formulation',
+        'Status', 'Date Received', 'Date Registered',
+        'Expected Report Date', 'Certified Date', 'Turnaround (days)',
+    ])
+    for s in samples:
+        tat = ''
+        if (s.certified_at and s.date_received
+                and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
+            tat = (s.certified_at.date() - s.date_received).days
+        writer.writerow([
+            s.lab_number,
+            s.sample_name,
+            s.sample_type.value if s.sample_type else '',
+            s.formulation_type or '',
+            s.status.value if s.status else '',
+            s.date_received.isoformat() if s.date_received else '',
+            s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
+            s.expected_report_date.isoformat() if s.expected_report_date else '',
+            s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
+            tat,
+        ])
+
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    filename = f'Pharmaceutical_Report_{year}{q_label}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
 
 

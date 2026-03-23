@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}KPI Targets - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-bullseye"></i> KPI Targets — {{ year }} Q{{ quarter }}</h2>
+</div>
+
+<!-- Year / Quarter Selector -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Year</label>
+                <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Quarter</label>
+                <select name="quarter" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for q in [1,2,3,4] %}
+                    <option value="{{ q }}" {% if q == quarter %}selected{% endif %}>Q{{ q }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Targets Form -->
+<div class="card">
+    <div class="card-header">Set Targets &amp; Manual Actuals</div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="quarter" value="{{ quarter }}">
+
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="min-width:300px;">KPI</th>
+                            <th style="width:140px;">Target</th>
+                            <th style="width:140px;">Actual</th>
+                            <th style="width:60px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, label in kpi_metrics %}
+                        {% set t = targets.get(key) %}
+                        <tr>
+                            <td>{{ label }}</td>
+                            <td>
+                                <input type="number" step="any"
+                                       name="target_{{ key }}"
+                                       class="form-control form-control-sm"
+                                       value="{{ t.target_value if t and t.target_value is not none else '' }}"
+                                       placeholder="—">
+                            </td>
+                            <td>
+                                {% if key in auto_keys %}
+                                <span class="text-muted small" title="Auto-computed from sample data">Auto</span>
+                                {% else %}
+                                <input type="number" step="any"
+                                       name="actual_{{ key }}"
+                                       class="form-control form-control-sm"
+                                       value="{{ t.actual_override if t and t.actual_override is not none else '' }}"
+                                       placeholder="—">
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if key in auto_keys %}
+                                <i class="bi bi-robot text-info" title="Auto-computed"></i>
+                                {% else %}
+                                <i class="bi bi-pencil text-secondary" title="Manual entry"></i>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i>Save Targets
+                </button>
+                <a href="{{ url_for('main.kpi_report', year=year, quarter=quarter) }}"
+                   class="btn btn-outline-secondary ms-2">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Report
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
