@@ -196,6 +196,55 @@
     </div>
 </div>
 
+<!-- ── Upcoming Report Deadlines ──────────────────────────── -->
+{% if upcoming_deadlines %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-alarm me-2 text-warning"></i>Upcoming Report Deadlines</span>
+        <a href="{{ url_for('samples.sample_list') }}" class="btn btn-sm btn-outline-warning">View Samples</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Lab #</th>
+                    <th>Sample Name</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Urgency</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in upcoming_deadlines %}
+                <tr class="align-middle">
+                    <td>
+                        <a href="{{ url_for('samples.detail', sample_id=item.sample.id) }}"
+                           class="fw-semibold text-primary text-decoration-none">{{ item.sample.lab_number }}</a>
+                    </td>
+                    <td>{{ item.sample.sample_name }}</td>
+                    <td class="fw-semibold">{{ item.sample.expected_report_date.strftime('%d %b %Y') }}</td>
+                    <td>
+                        <span class="badge bg-{{ item.status_color }}">{{ item.sample.status.value }}</span>
+                    </td>
+                    <td>
+                        {% if item.days_remaining <= 0 %}
+                        <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i>Due Today</span>
+                        {% elif item.days_remaining == 1 %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Tomorrow</span>
+                        {% elif item.days_remaining <= 3 %}
+                        <span class="badge bg-info"><i class="bi bi-calendar-event me-1"></i>{{ item.days_remaining }} days</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ item.days_remaining }} days</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- ── Recent Notifications ───────────────────────────────── -->
 {% if notifications %}
 <div class="card">
@@ -205,31 +254,41 @@
     </div>
     <div class="list-group list-group-flush">
         {% for notif in notifications[:5] %}
-        <div class="list-group-item border-0 py-3 {% if not notif.is_read %}notif-unread{% endif %}">
+        <a href="{{ url_for('main.mark_notification_read', notif_id=notif.id) }}"
+           class="list-group-item list-group-item-action border-0 py-3 {% if not notif.is_read %}notif-unread{% endif %}"
+           onclick="event.preventDefault(); this.closest('.list-group').querySelector('#notif-form-{{ notif.id }}').submit();">
+            <form id="notif-form-{{ notif.id }}" method="POST" action="{{ url_for('main.mark_notification_read', notif_id=notif.id) }}" class="d-none">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            </form>
             <div class="d-flex justify-content-between align-items-start gap-3">
                 <div class="d-flex gap-3 align-items-start">
-                    <div class="notif-dot-wrap mt-1">
-                        {% if not notif.is_read %}
-                        <span class="notif-dot notif-dot-new"></span>
-                        {% else %}
-                        <span class="notif-dot notif-dot-read"></span>
-                        {% endif %}
-                    </div>
+                    {# Type-aware icon #}
+                    {% if 'Report Due' in notif.title %}
+                    <div class="notif-type-sm reminder"><i class="bi bi-alarm"></i></div>
+                    {% elif 'Submitted' in notif.title %}
+                    <div class="notif-type-sm report"><i class="bi bi-file-earmark-text"></i></div>
+                    {% elif 'Review' in notif.title or 'Accepted' in notif.title %}
+                    <div class="notif-type-sm review"><i class="bi bi-clipboard-check"></i></div>
+                    {% elif 'Returned' in notif.title or 'Rejected' in notif.title %}
+                    <div class="notif-type-sm alert-icon"><i class="bi bi-exclamation-triangle"></i></div>
+                    {% else %}
+                    <div class="notif-type-sm default"><i class="bi bi-bell"></i></div>
+                    {% endif %}
                     <div>
-                        <div class="fw-semibold mb-1" style="font-size:.875rem;">
+                        <div class="fw-semibold mb-1" style="font-size:.855rem;">
                             {{ notif.title }}
                             {% if not notif.is_read %}
-                            <span class="badge bg-primary ms-1" style="font-size:.63rem;">New</span>
+                            <span class="badge bg-primary ms-1" style="font-size:.6rem;">New</span>
                             {% endif %}
                         </div>
-                        <div class="text-muted" style="font-size:.8rem;">{{ notif.message | truncate(130) }}</div>
+                        <div class="text-muted" style="font-size:.78rem;">{{ notif.message | truncate(130) }}</div>
                     </div>
                 </div>
-                <small class="text-muted text-nowrap" style="font-size:.75rem;">
+                <small class="text-muted text-nowrap" style="font-size:.72rem;">
                     {{ notif.created_at.strftime('%d %b %Y') }}
                 </small>
             </div>
-        </div>
+        </a>
         {% endfor %}
     </div>
 </div>
@@ -246,6 +305,23 @@
 .notif-dot-new  { background: var(--dgc-secondary); box-shadow: 0 0 0 2px rgba(46,134,193,.3); }
 .notif-dot-read { background: #cbd5e1; }
 [data-bs-theme="dark"] .notif-unread { background: #1a2e47; border-left-color: var(--dgc-secondary) !important; }
+
+/* Dashboard notification type icons */
+.notif-type-sm {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: .82rem;
+}
+.notif-type-sm.reminder { background: #fef3c7; color: #d97706; }
+.notif-type-sm.report   { background: #dbeafe; color: #2563eb; }
+.notif-type-sm.review   { background: #d1fae5; color: #059669; }
+.notif-type-sm.alert-icon { background: #fee2e2; color: #dc2626; }
+.notif-type-sm.default  { background: #f1f5f9; color: #64748b; }
+[data-bs-theme="dark"] .notif-type-sm.reminder { background: #422006; color: #fbbf24; }
+[data-bs-theme="dark"] .notif-type-sm.report { background: #172554; color: #60a5fa; }
+[data-bs-theme="dark"] .notif-type-sm.review { background: #052e16; color: #34d399; }
+[data-bs-theme="dark"] .notif-type-sm.alert-icon { background: #450a0a; color: #f87171; }
+[data-bs-theme="dark"] .notif-type-sm.default { background: #1e293b; color: #94a3b8; }
 </style>
 {% endblock %}
 

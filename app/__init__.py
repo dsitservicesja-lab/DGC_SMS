@@ -70,4 +70,12 @@ def create_app(config_name=None):
         ):
             return redirect(url_for('auth.change_password'))
 
+    # CLI command: flask send-reminders
+    @app.cli.command('send-reminders')
+    def send_reminders_cmd():
+        """Send expected-report-date reminder notifications."""
+        from app.notifications import send_report_date_reminders
+        count = send_report_date_reminders()
+        print(f'Sent {count} reminder notification(s).')
+
     return app

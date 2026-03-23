@@ -10,6 +10,23 @@ from app.models import (
 )
 
 
+def _maybe_send_report_reminders():
+    """Run report-date reminders at most once per calendar day.
+
+    Uses the 'last_reminder_date' setting to avoid duplicate runs.
+    """
+    today_str = date.today().isoformat()
+    if Setting.get('last_reminder_date') == today_str:
+        return
+    try:
+        from app.notifications import send_report_date_reminders
+        send_report_date_reminders()
+        Setting.set('last_reminder_date', today_str)
+        db.session.commit()
+    except Exception:
+        current_app.logger.exception('Failed to send report date reminders')
+
+
 @main_bp.route('/')
 def index():
     if current_user.is_authenticated:
@@ -21,6 +38,9 @@ def index():
 @login_required
 def dashboard():
     stats = {}
+
+    # Trigger reminder check (at most once per day, stored in settings)
+    _maybe_send_report_reminders()
 
     if current_user.has_role(Role.CHEMIST) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
         my_assignments = SampleAssignment.query.filter_by(
@@ -120,8 +140,39 @@ def dashboard():
         user_id=current_user.id
     ).order_by(Notification.created_at.desc()).limit(10).all()
 
+    # Upcoming report deadlines (within 7 days)
+    from datetime import timedelta
+    today = date.today()
+    terminal_statuses = [
+        SampleStatus.CERTIFIED, SampleStatus.COMPLETED, SampleStatus.REJECTED,
+    ]
+    deadline_samples = Sample.query.filter(
+        Sample.expected_report_date.isnot(None),
+        Sample.expected_report_date >= today,
+        Sample.expected_report_date <= today + timedelta(days=7),
+        Sample.status.notin_(terminal_statuses),
+    ).order_by(Sample.expected_report_date.asc()).limit(10).all()
+
+    status_colors = {
+        'Registered': 'secondary', 'Assigned': 'primary', 'In Progress': 'info',
+        'Report Submitted': 'warning', 'Preliminary Review': 'warning',
+        'Technical Review': 'warning', 'Returned for Correction': 'danger',
+        'Accepted': 'success', 'Deputy Review': 'info',
+        'Returned by Deputy': 'danger', 'Certificate Preparation': 'info',
+        'HOD Review': 'info', 'Returned by HOD': 'danger',
+    }
+    upcoming_deadlines = []
+    for s in deadline_samples:
+        days_remaining = (s.expected_report_date - today).days
+        upcoming_deadlines.append({
+            'sample': s,
+            'days_remaining': days_remaining,
+            'status_color': status_colors.get(s.status.value, 'secondary'),
+        })
+
     return render_template(
-        'dashboard.html', stats=stats, notifications=notifications
+        'dashboard.html', stats=stats, notifications=notifications,
+        upcoming_deadlines=upcoming_deadlines,
     )
 
 
