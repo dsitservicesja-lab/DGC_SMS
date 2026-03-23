@@ -118,6 +118,7 @@ def sample_list():
         search=search,
         result_count=result_count,
         is_filtered=bool(status_filter or type_filter or search),
+        today_date=date.today(),
     )
 
 
@@ -249,6 +250,7 @@ def detail(sample_id):
         sample=sample,
         assignments=assignments,
         history=history,
+        today_date=date.today(),
     )
 
 

@@ -159,7 +159,20 @@
                             <dd class="mb-3">{{ sample.date_registered.strftime('%d %b %Y %H:%M') }}</dd>
                             {% if sample.expected_report_date %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Expected Report Date</dt>
-                            <dd class="mb-3">{{ sample.expected_report_date.strftime('%d %b %Y') }}</dd>
+                            <dd class="mb-3">
+                                {{ sample.expected_report_date.strftime('%d %b %Y') }}
+                                {% set today = import_date_today() if import_date_today is defined else none %}
+                                {% if sv not in ['Certified', 'Completed', 'Rejected'] %}
+                                    {% set days_left = (sample.expected_report_date - today_date).days if today_date else none %}
+                                    {% if days_left is not none and days_left <= 0 %}
+                                    <span class="badge bg-danger ms-1" style="font-size:.68rem;"><i class="bi bi-exclamation-circle me-1"></i>Due Today / Overdue</span>
+                                    {% elif days_left is not none and days_left == 1 %}
+                                    <span class="badge bg-warning text-dark ms-1" style="font-size:.68rem;"><i class="bi bi-clock me-1"></i>Due Tomorrow</span>
+                                    {% elif days_left is not none and days_left <= 3 %}
+                                    <span class="badge bg-info ms-1" style="font-size:.68rem;"><i class="bi bi-calendar-event me-1"></i>{{ days_left }} days left</span>
+                                    {% endif %}
+                                {% endif %}
+                            </dd>
                             {% endif %}
                             {% if sample.parish %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Parish</dt>

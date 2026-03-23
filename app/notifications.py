@@ -1,5 +1,6 @@
 """Email and in-app notification helpers."""
 
+from datetime import date, timedelta
 from threading import Thread
 
 from flask import current_app, render_template_string
@@ -314,3 +315,136 @@ def notify_certificate_signed(sample, action):
 
     notify_branch_heads(sample.sample_type, title, message, link)
     create_notification(sample.uploaded_by, title, message, link)
+
+
+# ---------------------------------------------------------------------------
+# Expected Report Date Reminders
+# ---------------------------------------------------------------------------
+
+def send_report_date_reminders():
+    """Check samples with approaching expected report dates and notify
+    the assigned chemist(s), the uploading officer, and branch heads.
+
+    Sends reminders at 3 days before, 1 day before, and on the due date.
+    Skips samples that are already certified/completed/rejected.
+    Avoids duplicate notifications by checking existing reminders for the
+    same sample and reminder tier on the same day.
+    """
+    from app.models import Sample, SampleStatus, SampleAssignment
+
+    today = date.today()
+    thresholds = [
+        (3, 'in 3 days'),
+        (1, 'tomorrow'),
+        (0, 'today'),
+    ]
+
+    terminal_statuses = {
+        SampleStatus.CERTIFIED,
+        SampleStatus.COMPLETED,
+        SampleStatus.REJECTED,
+    }
+
+    # Find samples with expected_report_date within the reminder window
+    window_start = today
+    window_end = today + timedelta(days=3)
+    samples = Sample.query.filter(
+        Sample.expected_report_date.isnot(None),
+        Sample.expected_report_date >= window_start,
+        Sample.expected_report_date <= window_end,
+        Sample.status.notin_(terminal_statuses),
+    ).all()
+
+    count = 0
+    for sample in samples:
+        days_remaining = (sample.expected_report_date - today).days
+        # Match the closest threshold
+        matched = None
+        for days, label in thresholds:
+            if days_remaining == days:
+                matched = (days, label)
+                break
+        if matched is None:
+            continue
+
+        days_val, label = matched
+        reminder_tag = f'reminder:{sample.id}:d{days_val}:{today.isoformat()}'
+
+        # Skip if a reminder was already sent today for this tier
+        existing = Notification.query.filter(
+            Notification.title.contains(f'Report Due {label.title()}'),
+            Notification.message.contains(sample.lab_number),
+            Notification.created_at >= db.func.date(db.func.current_timestamp()),
+        ).first()
+        if existing:
+            continue
+
+        if days_val == 0:
+            urgency = '🔴'
+            title = f'{urgency} Report Due Today: {sample.lab_number}'
+            message = (
+                f'The expected report date for sample "{sample.sample_name}" '
+                f'(Lab# {sample.lab_number}) is TODAY. '
+                f'Please ensure the report is submitted promptly.'
+            )
+        elif days_val == 1:
+            urgency = '🟠'
+            title = f'{urgency} Report Due Tomorrow: {sample.lab_number}'
+            message = (
+                f'The expected report date for sample "{sample.sample_name}" '
+                f'(Lab# {sample.lab_number}) is tomorrow '
+                f'({sample.expected_report_date.strftime("%d %b %Y")}). '
+                f'Please ensure the report is on track.'
+            )
+        else:
+            urgency = '🟡'
+            title = f'{urgency} Report Due In 3 Days: {sample.lab_number}'
+            message = (
+                f'The expected report date for sample "{sample.sample_name}" '
+                f'(Lab# {sample.lab_number}) is in 3 days '
+                f'({sample.expected_report_date.strftime("%d %b %Y")}). '
+                f'Please review progress.'
+            )
+
+        link = f'/samples/{sample.id}'
+        notified_users = set()
+
+        # Notify assigned chemists
+        for assignment in sample.assignments.all():
+            if assignment.chemist_id not in notified_users:
+                create_notification(assignment.chemist_id, title, message, link)
+                notified_users.add(assignment.chemist_id)
+                count += 1
+
+        # Notify the officer who registered the sample
+        if sample.uploaded_by not in notified_users:
+            create_notification(sample.uploaded_by, title, message, link)
+            notified_users.add(sample.uploaded_by)
+            count += 1
+
+        # Notify branch heads
+        head_roles = [Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD]
+        heads = User.query.join(user_roles).filter(
+            user_roles.c.role.in_(head_roles),
+            User.is_active_user.is_(True),
+        ).distinct().all()
+
+        effective_branch = sample.sample_type
+        if effective_branch == Branch.PHARMACEUTICAL_NR:
+            effective_branch = Branch.PHARMACEUTICAL
+
+        for head in heads:
+            if head.id in notified_users:
+                continue
+            if head.branches and effective_branch not in head.branches and sample.sample_type not in head.branches:
+                continue
+            create_notification(head.id, title, message, link)
+            notified_users.add(head.id)
+            count += 1
+
+    if count:
+        db.session.commit()
+        current_app.logger.info(
+            f'Report date reminders: sent {count} notification(s).'
+        )
+    return count

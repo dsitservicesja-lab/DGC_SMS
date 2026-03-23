@@ -40,13 +40,13 @@ SECRET_KEY=$SECRET
 FLASK_CONFIG=production
 DATABASE_URL=sqlite:///$APP_DIR/instance/dgc_sms.db
 
-# Email - configure these for your mail server
+# Email - Gmail SMTP settings for DGC
 MAIL_SERVER=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USE_TLS=true
-MAIL_USERNAME=your-email@example.com
+MAIL_USERNAME=dgcjamaica@gmail.com
 MAIL_PASSWORD=your-app-password
-MAIL_DEFAULT_SENDER=your-email@example.com
+MAIL_DEFAULT_SENDER=dgcjamaica@gmail.com
 EOF
     echo "  >> Edit $APP_DIR/.env with your actual mail settings"
 else
