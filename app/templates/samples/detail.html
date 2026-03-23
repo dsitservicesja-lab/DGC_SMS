@@ -161,7 +161,6 @@
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Expected Report Date</dt>
                             <dd class="mb-3">
                                 {{ sample.expected_report_date.strftime('%d %b %Y') }}
-                                {% set today = import_date_today() if import_date_today is defined else none %}
                                 {% if sv not in ['Certified', 'Completed', 'Rejected'] %}
                                     {% set days_left = (sample.expected_report_date - today_date).days if today_date else none %}
                                     {% if days_left is not none and days_left <= 0 %}
