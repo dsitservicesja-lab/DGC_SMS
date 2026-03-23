@@ -4,6 +4,8 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from datetime import datetime, timezone, date
+import csv
+import io
 
 from app import db
 from app.main import main_bp
@@ -461,7 +463,6 @@ def kpi_report_download():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    import csv, io
     year = request.args.get('year', type=int,
                             default=datetime.now(timezone.utc).year)
     quarter = request.args.get('quarter', type=int, default=1)
@@ -674,7 +675,6 @@ def pharma_report_download():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    import csv, io
     from sqlalchemy import extract
 
     year = request.args.get('year', type=int,
