@@ -53,6 +53,31 @@ def create_app(config_name=None):
     app.jinja_env.globals['Role'] = Role
     app.jinja_env.globals['Branch'] = Branch
 
+    # Custom Jinja2 filter to parse JSON strings in templates
+    import json
+
+    def tojson_load(value):
+        """Parse a JSON string, returning an empty dict on failure."""
+        if not value:
+            return {}
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    app.jinja_env.filters['tojson_load'] = tojson_load
+
+    # Make preliminary review checklist categories available in all templates
+    from app.forms import PreliminaryReviewForm
+    _checklist_for_display = []
+    for cat, field_names in PreliminaryReviewForm.CHECKLIST_CATEGORIES:
+        items = []
+        for fn in field_names:
+            field = getattr(PreliminaryReviewForm, fn, None)
+            items.append((fn, field.args[0] if field and field.args else fn))
+        _checklist_for_display.append((cat, items))
+    app.jinja_env.globals['checklist_categories'] = _checklist_for_display
+
     @app.before_request
     def make_session_permanent():
         from flask import session

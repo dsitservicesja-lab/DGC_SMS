@@ -386,6 +386,26 @@ class ReportSubmitForm(FlaskForm):
 
 class PreliminaryReviewForm(FlaskForm):
     """Preliminary administrative / completeness review by Officer."""
+
+    # -- Corrections --
+    chk_original_entry_visible = BooleanField('Original entry remains visible')
+    chk_no_correction_fluid = BooleanField('No correction fluid used')
+
+    # -- Signatures and Review --
+    chk_entries_signed = BooleanField('Entries signed/initialed by analyst')
+    chk_date_recorded = BooleanField('Date of entry recorded')
+    chk_supervisor_review = BooleanField('Supervisor review present')
+
+    # -- Attachments --
+    chk_printouts_attached = BooleanField('Printouts/graphs attached securely')
+    chk_attachments_labeled = BooleanField('Attachments labeled and dated')
+    chk_analyst_initials = BooleanField('Analyst initials across attachment')
+
+    # -- General Documentation --
+    chk_entries_contemporaneous = BooleanField('Entries made contemporaneously')
+    chk_writing_legible = BooleanField('Writing clear and legible')
+    chk_standard_abbreviations = BooleanField('Standard abbreviations used')
+
     action = SelectField(
         'Decision',
         choices=[
@@ -397,6 +417,29 @@ class PreliminaryReviewForm(FlaskForm):
     )
     review_comments = TextAreaField('Comments', validators=[Optional()])
     submit = SubmitField('Submit Review')
+
+    # Ordered checklist items grouped by category for template rendering
+    CHECKLIST_CATEGORIES = [
+        ('Corrections', [
+            'chk_original_entry_visible',
+            'chk_no_correction_fluid',
+        ]),
+        ('Signatures and Review', [
+            'chk_entries_signed',
+            'chk_date_recorded',
+            'chk_supervisor_review',
+        ]),
+        ('Attachments', [
+            'chk_printouts_attached',
+            'chk_attachments_labeled',
+            'chk_analyst_initials',
+        ]),
+        ('General Documentation', [
+            'chk_entries_contemporaneous',
+            'chk_writing_legible',
+            'chk_standard_abbreviations',
+        ]),
+    ]
 
 
 class ReportReviewForm(FlaskForm):

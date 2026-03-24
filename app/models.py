@@ -416,6 +416,7 @@ class SampleAssignment(db.Model):
         db.Integer, db.ForeignKey('users.id'), nullable=True
     )
     preliminary_reviewed_at = db.Column(db.DateTime, nullable=True)
+    preliminary_review_checklist = db.Column(db.Text, nullable=True)  # JSON
 
     # Technical review (by Senior Chemist)
     review_comments = db.Column(db.Text, nullable=True)

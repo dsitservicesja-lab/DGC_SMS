@@ -54,6 +54,7 @@ MIGRATIONS = [
     ('sample_assignments', 'preliminary_reviewed_by', 'INTEGER REFERENCES users(id)'),
     ('sample_assignments', 'preliminary_reviewed_at', 'DATETIME'),
     ('sample_assignments', 'return_stage', 'VARCHAR(20)'),
+    ('sample_assignments', 'preliminary_review_checklist', 'TEXT'),
     # samples – milk type (Food Milk)
     ('samples', 'milk_type', 'VARCHAR(10)'),
     # samples – new type-specific fields
