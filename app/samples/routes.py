@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from datetime import datetime, timezone, date
@@ -470,6 +471,13 @@ def preliminary_review(assignment_id):
         assignment.preliminary_review_comments = form.review_comments.data
         assignment.preliminary_reviewed_by = current_user.id
         assignment.preliminary_reviewed_at = datetime.now(timezone.utc)
+
+        # Save checklist answers
+        checklist = {}
+        for _, fields in form.CHECKLIST_CATEGORIES:
+            for field_name in fields:
+                checklist[field_name] = getattr(form, field_name).data
+        assignment.preliminary_review_checklist = json.dumps(checklist)
 
         if action == 'approved':
             assignment.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW

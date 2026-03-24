@@ -48,6 +48,31 @@
             <div class="card-body">
                 <p class="mb-1"><strong>Reviewed by:</strong> {{ assignment.preliminary_reviewer.full_name }}</p>
                 <p class="mb-0"><strong>Date:</strong> {{ assignment.preliminary_reviewed_at.strftime('%d %b %Y %H:%M') }}</p>
+                {% if assignment.preliminary_review_checklist %}
+                {% set checklist = assignment.preliminary_review_checklist | tojson_load %}
+                {% if checklist %}
+                <h6 class="fw-semibold mt-3 mb-2"><i class="bi bi-list-check me-1"></i>Review Checklist</h6>
+                <div class="row">
+                    {% for category, fields in checklist_categories %}
+                    <div class="col-md-6 mb-2">
+                        <div class="fw-semibold text-muted small text-uppercase">{{ category }}</div>
+                        <ul class="list-unstyled mb-0 ms-1">
+                            {% for field_name, label in fields %}
+                            <li>
+                                {% if checklist.get(field_name) %}
+                                <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle-fill text-danger me-1"></i>
+                                {% endif %}
+                                <small>{{ label }}</small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endif %}
                 {% if assignment.preliminary_review_comments %}
                 <p class="mt-2 mb-0"><strong>Comments:</strong> {{ assignment.preliminary_review_comments }}</p>
                 {% endif %}

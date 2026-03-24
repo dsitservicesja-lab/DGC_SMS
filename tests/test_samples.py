@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import date
 from app import db
 from app.models import (
@@ -226,6 +227,112 @@ def test_preliminary_review_return(app, client):
     with app.app_context():
         assignment = SampleAssignment.query.first()
         assert assignment.status == AssignmentStatus.REPORT_SUBMITTED
+
+
+def test_preliminary_review_checklist(app, client):
+    """Test that preliminary review checklist items are saved."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Test results.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    # Officer does preliminary review with checklist items
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'All checks passed.',
+        'chk_original_entry_visible': 'y',
+        'chk_no_correction_fluid': 'y',
+        'chk_entries_signed': 'y',
+        'chk_date_recorded': 'y',
+        'chk_supervisor_review': 'y',
+        'chk_printouts_attached': 'y',
+        'chk_attachments_labeled': 'y',
+        'chk_analyst_initials': 'y',
+        'chk_entries_contemporaneous': 'y',
+        'chk_writing_legible': 'y',
+        'chk_standard_abbreviations': 'y',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'approved and forwarded' in resp.data
+
+    # Verify checklist was saved
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        assert assignment.preliminary_review_checklist is not None
+        checklist = json.loads(assignment.preliminary_review_checklist)
+        assert checklist['chk_original_entry_visible'] is True
+        assert checklist['chk_no_correction_fluid'] is True
+        assert checklist['chk_entries_signed'] is True
+        assert checklist['chk_standard_abbreviations'] is True
+
+
+def test_preliminary_review_checklist_partial(app, client):
+    """Test that unchecked checklist items are saved as False."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Test results.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    # Officer does preliminary review with only some checklist items checked
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'returned',
+        'review_comments': 'Missing signatures.',
+        'chk_original_entry_visible': 'y',
+        # chk_no_correction_fluid not checked
+        'chk_entries_signed': 'y',
+        # others not checked
+    }, follow_redirects=True)
+    assert b'returned for correction' in resp.data
+
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        checklist = json.loads(assignment.preliminary_review_checklist)
+        assert checklist['chk_original_entry_visible'] is True
+        assert checklist['chk_no_correction_fluid'] is False
+        assert checklist['chk_entries_signed'] is True
+        assert checklist['chk_date_recorded'] is False
 
 
 def test_technical_review(app, client):

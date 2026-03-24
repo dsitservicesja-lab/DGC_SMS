@@ -52,6 +52,22 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
 
+                    <!-- Review Checklist -->
+                    <h6 class="fw-semibold mb-3"><i class="bi bi-list-check me-1"></i>Review Checklist</h6>
+                    {% for category, fields in form.CHECKLIST_CATEGORIES %}
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted small text-uppercase mb-2">{{ category }}</div>
+                        {% for field_name in fields %}
+                        {% set field = form[field_name] %}
+                        <div class="form-check mb-2">
+                            {{ field(class="form-check-input") }}
+                            {{ field.label(class="form-check-label") }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    <hr class="my-4">
+
                     <div class="row g-3">
                         <div class="col-12">
                             {{ form.action.label(class="form-label fw-semibold") }}
