@@ -474,7 +474,7 @@ def preliminary_review(assignment_id):
 
         # Save checklist answers
         checklist = {}
-        for _cat, fields in form.CHECKLIST_CATEGORIES:
+        for _, fields in form.CHECKLIST_CATEGORIES:
             for field_name in fields:
                 checklist[field_name] = getattr(form, field_name).data
         assignment.preliminary_review_checklist = json.dumps(checklist)

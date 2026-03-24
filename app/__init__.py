@@ -73,8 +73,10 @@ def create_app(config_name=None):
     for cat, field_names in PreliminaryReviewForm.CHECKLIST_CATEGORIES:
         items = []
         for fn in field_names:
+            # UnboundField stores the label as the first positional arg
             field = getattr(PreliminaryReviewForm, fn, None)
-            items.append((fn, field.args[0] if field and field.args else fn))
+            label = field.args[0] if (field and field.args) else fn
+            items.append((fn, label))
         _checklist_for_display.append((cat, items))
     app.jinja_env.globals['checklist_categories'] = _checklist_for_display
 
