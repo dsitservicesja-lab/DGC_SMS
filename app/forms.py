@@ -560,16 +560,22 @@ class PreliminaryReviewForm(FlaskForm):
     chk_entries_signed = BooleanField('Entries signed/initialed by analyst')
     chk_date_recorded = BooleanField('Date of entry recorded')
     chk_supervisor_review = BooleanField('Supervisor review present')
+    chk_conclusions_signed_dated = BooleanField('Conclusions signed and dated')
+    chk_report_signed_dated = BooleanField('Report signed and dated')
 
     # -- Attachments --
     chk_printouts_attached = BooleanField('Printouts/graphs attached securely')
     chk_attachments_labeled = BooleanField('Attachments labeled and dated')
     chk_analyst_initials = BooleanField('Analyst initials across attachment')
+    chk_templates_completed = BooleanField('Templates completed')
 
     # -- General Documentation --
     chk_entries_contemporaneous = BooleanField('Entries made contemporaneously')
     chk_writing_legible = BooleanField('Writing clear and legible')
     chk_standard_abbreviations = BooleanField('Standard abbreviations used')
+    chk_logbooks_updated = BooleanField('Logbooks updated')
+    chk_toc_updated = BooleanField('Table of contents updated')
+    chk_pages_numbered = BooleanField('Pages numbered')
 
     action = SelectField(
         'Decision',
@@ -593,16 +599,22 @@ class PreliminaryReviewForm(FlaskForm):
             'chk_entries_signed',
             'chk_date_recorded',
             'chk_supervisor_review',
+            'chk_conclusions_signed_dated',
+            'chk_report_signed_dated',
         ]),
         ('Attachments', [
             'chk_printouts_attached',
             'chk_attachments_labeled',
             'chk_analyst_initials',
+            'chk_templates_completed',
         ]),
         ('General Documentation', [
             'chk_entries_contemporaneous',
             'chk_writing_legible',
             'chk_standard_abbreviations',
+            'chk_logbooks_updated',
+            'chk_toc_updated',
+            'chk_pages_numbered',
         ]),
     ]
 
