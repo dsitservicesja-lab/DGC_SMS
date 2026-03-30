@@ -33,6 +33,54 @@ def send_email(subject, recipients, body_text, body_html=None):
     thread.start()
 
 
+def _build_html_email(title, message, link=None):
+    """Build a styled HTML email body with optional action link."""
+    base_url = ''
+    try:
+        from flask import request
+        base_url = request.host_url.rstrip('/')
+    except RuntimeError:
+        pass
+
+    link_html = ''
+    if link:
+        full_url = f'{base_url}{link}' if base_url else link
+        link_html = (
+            f'<tr><td style="padding:20px 30px 0 30px;">'
+            f'<a href="{full_url}" style="display:inline-block;padding:10px 24px;'
+            f'background-color:#0d6efd;color:#ffffff;text-decoration:none;'
+            f'border-radius:5px;font-weight:600;">View Details</a></td></tr>'
+        )
+
+    return (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'
+        '<body style="margin:0;padding:0;background-color:#f4f6f9;'
+        'font-family:Arial,Helvetica,sans-serif;">'
+        '<table width="100%" cellpadding="0" cellspacing="0" '
+        'style="background-color:#f4f6f9;padding:30px 0;">'
+        '<tr><td align="center">'
+        '<table width="600" cellpadding="0" cellspacing="0" '
+        'style="background-color:#ffffff;border-radius:8px;'
+        'box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">'
+        '<tr><td style="background-color:#0d6efd;padding:20px 30px;">'
+        '<h1 style="margin:0;color:#ffffff;font-size:20px;">DGC SMS</h1>'
+        '</td></tr>'
+        f'<tr><td style="padding:24px 30px 8px 30px;">'
+        f'<h2 style="margin:0 0 12px 0;color:#212529;font-size:18px;">'
+        f'{title}</h2>'
+        f'<p style="margin:0;color:#495057;font-size:14px;line-height:1.6;'
+        f'white-space:pre-wrap;">{message}</p></td></tr>'
+        f'{link_html}'
+        '<tr><td style="padding:24px 30px;border-top:1px solid #e9ecef;'
+        'margin-top:20px;">'
+        '<p style="margin:0;color:#6c757d;font-size:12px;">'
+        'This is an automated notification from the Department of Government '
+        'Chemist&rsquo;s Sample Management System.<br>'
+        'Please do not reply to this email.</p>'
+        '</td></tr></table></td></tr></table></body></html>'
+    )
+
+
 def create_notification(user_id, title, message, link=None, send_mail=True):
     """Create an in-app notification and optionally send email."""
     notif = Notification(
@@ -46,10 +94,12 @@ def create_notification(user_id, title, message, link=None, send_mail=True):
     if send_mail:
         user = db.session.get(User, user_id)
         if user and user.email:
+            html_body = _build_html_email(title, message, link)
             send_email(
                 subject=f'[DGC SMS] {title}',
                 recipients=[user.email],
                 body_text=message,
+                body_html=html_body,
             )
             notif.email_sent = True
 
@@ -132,15 +182,15 @@ def notify_report_submitted(assignment):
             exclude_user_id=sample.uploaded_by,
         )
 
-    # If returning directly to technical review, also notify branch heads
+    # If returning directly to Senior Chemist review, also notify branch heads
     if assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW:
         notify_branch_heads(
             sample.sample_type,
-            f'Report Ready for Technical Review: {sample.lab_number}',
+            f'Report Ready for Senior Chemist Review: {sample.lab_number}',
             f'Analyst {assignment.chemist.full_name} has resubmitted '
             f'report for test "{assignment.test_name}" on sample '
             f'"{sample.sample_name}" (Lab# {sample.lab_number}). '
-            f'Technical review required.',
+            f'Senior Chemist review required.',
             link,
         )
 
@@ -162,21 +212,21 @@ def notify_preliminary_review_completed(assignment, action):
     link = f'/samples/assignment/{assignment.id}'
     create_notification(assignment.chemist_id, title, message, link)
 
-    # If approved, notify Senior Chemist for technical review
+    # If approved, notify Senior Chemist for Senior Chemist review
     if action == 'approved':
         notify_branch_heads(
             sample.sample_type,
-            f'Report Ready for Technical Review: {sample.lab_number}',
+            f'Report Ready for Senior Chemist Review: {sample.lab_number}',
             f'Report for test "{assignment.test_name}" on sample '
             f'"{sample.sample_name}" (Lab# {sample.lab_number}) '
             f'has passed preliminary review and is ready for '
-            f'technical review.',
+            f'Senior Chemist review.',
             link,
         )
 
 
 def notify_report_reviewed(assignment, action):
-    """Called when a Senior Chemist completes technical review."""
+    """Called when a Senior Chemist completes Senior Chemist review."""
     sample = assignment.sample
     action_text = {
         'accepted': 'accepted',
@@ -184,11 +234,11 @@ def notify_report_reviewed(assignment, action):
         'returned': 'returned for correction',
     }.get(action, action)
 
-    title = f'Technical Review – {action_text.title()}: {sample.lab_number}'
+    title = f'Senior Chemist Review – {action_text.title()}: {sample.lab_number}'
     message = (
         f'Your report for test "{assignment.test_name}" on sample '
         f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
-        f'{action_text} during technical review.'
+        f'{action_text} during Senior Chemist review.'
     )
     if assignment.review_comments:
         message += f'\n\nComments: {assignment.review_comments}'
@@ -202,7 +252,7 @@ def notify_report_reviewed(assignment, action):
         title,
         f'Report for sample "{sample.sample_name}" '
         f'(Lab# {sample.lab_number}) has been {action_text} '
-        f'during technical review.',
+        f'during Senior Chemist review.',
         link,
     )
 
