@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Technical Review - DGC SMS{% endblock %}
+{% block title %}Senior Chemist Review - DGC SMS{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h2><i class="bi bi-clipboard-check"></i> Technical Review</h2>
+    <h2><i class="bi bi-clipboard-check"></i> Senior Chemist Review</h2>
     <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back
     </a>
@@ -83,7 +83,7 @@
         <!-- Review Form -->
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Technical Review Decision</h5>
+                <h5 class="mb-0">Senior Chemist Review Decision</h5>
             </div>
             <div class="card-body p-4">
                 <form method="POST">
