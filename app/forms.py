@@ -554,12 +554,10 @@ class PreliminaryReviewForm(FlaskForm):
 
     # -- Corrections --
     chk_original_entry_visible = BooleanField('Original entry remains visible')
-    chk_no_correction_fluid = BooleanField('No correction fluid used')
 
     # -- Signatures and Review --
     chk_entries_signed = BooleanField('Entries signed/initialed by analyst')
     chk_date_recorded = BooleanField('Date of entry recorded')
-    chk_supervisor_review = BooleanField('Supervisor review present')
     chk_conclusions_signed_dated = BooleanField('Conclusions signed and dated')
     chk_report_signed_dated = BooleanField('Report signed and dated')
 
@@ -570,9 +568,7 @@ class PreliminaryReviewForm(FlaskForm):
     chk_templates_completed = BooleanField('Templates completed')
 
     # -- General Documentation --
-    chk_entries_contemporaneous = BooleanField('Entries made contemporaneously')
     chk_writing_legible = BooleanField('Writing clear and legible')
-    chk_standard_abbreviations = BooleanField('Standard abbreviations used')
     chk_logbooks_updated = BooleanField('Logbooks updated')
     chk_toc_updated = BooleanField('Table of contents updated')
     chk_pages_numbered = BooleanField('Pages numbered')
@@ -593,12 +589,10 @@ class PreliminaryReviewForm(FlaskForm):
     CHECKLIST_CATEGORIES = [
         ('Corrections', [
             'chk_original_entry_visible',
-            'chk_no_correction_fluid',
         ]),
         ('Signatures and Review', [
             'chk_entries_signed',
             'chk_date_recorded',
-            'chk_supervisor_review',
             'chk_conclusions_signed_dated',
             'chk_report_signed_dated',
         ]),
@@ -609,9 +603,7 @@ class PreliminaryReviewForm(FlaskForm):
             'chk_templates_completed',
         ]),
         ('General Documentation', [
-            'chk_entries_contemporaneous',
             'chk_writing_legible',
-            'chk_standard_abbreviations',
             'chk_logbooks_updated',
             'chk_toc_updated',
             'chk_pages_numbered',
