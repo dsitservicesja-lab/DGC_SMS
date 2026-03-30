@@ -15,6 +15,19 @@ from wtforms.validators import (
 
 from app.models import Role, Branch, User
 
+FORMULATION_TYPE_CHOICES = [
+    ('', '-- Select Formulation --'),
+    ('Capsule', 'Capsule'),
+    ('Tablet', 'Tablet'),
+    ('Cream', 'Cream'),
+    ('Ointment', 'Ointment'),
+    ('Oral Solution', 'Oral Solution'),
+    ('Suspension', 'Suspension'),
+    ('Solution', 'Solution'),
+    ('Injection', 'Injection'),
+    ('Powder', 'Powder'),
+]
+
 
 # ---------------------------------------------------------------------------
 # Auth forms
@@ -129,7 +142,7 @@ class SampleRegisterForm(FlaskForm):
     patient_name = StringField('Patient Name (Toxicology)', validators=[Optional(), Length(max=255)])
     source = StringField('Source', validators=[Optional(), Length(max=255)])
     date_received = DateField('Date Received', validators=[DataRequired()])
-    expected_report_date = DateField('Expected Report Date', validators=[Optional()])
+    expected_report_date = None
     scanned_file = FileField(
         'Scanned Document',
         validators=[FileAllowed(
@@ -177,8 +190,7 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
     # Remove parish
     parish = None
 
-    # date_received is auto-set for pharma (not user-entered)
-    date_received = DateField('Date Received', validators=[Optional()])
+    date_received = DateField('Date Received', validators=[DataRequired()])
 
     # lab_number is auto-generated (not required on form)
     lab_number = StringField('Lab Number', validators=[Optional(), Length(max=50)])
@@ -187,9 +199,10 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
         'No./Quantity of Sample',
         validators=[Optional(), Length(max=100)]
     )
-    formulation_type = StringField(
+    formulation_type = SelectField(
         'Formulation Type',
-        validators=[Optional(), Length(max=100)]
+        choices=FORMULATION_TYPE_CHOICES,
+        validators=[Optional()],
     )
 
     def validate_lab_number(self, field):
@@ -205,9 +218,11 @@ class FoodMilkSampleRegisterForm(SampleRegisterForm):
     """Registration form for Food (Milk) samples.
     Uses volume, no parish, no source.
     """
-    # Remove parish and source
+    # Remove parish
     parish = None
-    source = None
+
+    # Rename sample_name to display as "Source" for Milk samples
+    sample_name = StringField('Source', validators=[DataRequired(), Length(max=255)])
 
     # Use volume instead of quantity
     quantity = None
@@ -296,7 +311,11 @@ class SampleEditForm(FlaskForm):
     parish = StringField('Parish', validators=[Optional(), Length(max=100)])
     patient_name = StringField('Patient Name (Toxicology)', validators=[Optional(), Length(max=255)])
     source = StringField('Source', validators=[Optional(), Length(max=255)])
-    formulation_type = StringField('Formulation Type', validators=[Optional(), Length(max=100)])
+    formulation_type = SelectField(
+        'Formulation Type',
+        choices=FORMULATION_TYPE_CHOICES,
+        validators=[Optional()],
+    )
     alcohol_type = SelectField(
         'Alcohol Type',
         choices=[
@@ -357,6 +376,8 @@ class SampleAssignForm(FlaskForm):
     test_name = StringField('Test Name', validators=[DataRequired(), Length(max=255)])
     test_reference = StringField('Test Reference', validators=[Optional(), Length(max=255)])
     expected_completion = DateField('Expected Completion Date', validators=[Optional()])
+    comments = TextAreaField('Comments', validators=[Optional()])
+    quantity_volume = StringField('Quantity / Volume', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Assign Sample')
 
     def validate_expected_completion(self, field):
@@ -381,6 +402,16 @@ class ReportSubmitForm(FlaskForm):
             ),
         ],
     )
+    all_samples_returned = SelectField(
+        'All Samples Returned?',
+        choices=[
+            ('', '-- Select --'),
+            ('Yes', 'Yes'),
+            ('No', 'No'),
+        ],
+        validators=[Optional()],
+    )
+    return_quantity = StringField('Quantity Returned', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Submit Report')
 
 
@@ -443,7 +474,7 @@ class PreliminaryReviewForm(FlaskForm):
 
 
 class ReportReviewForm(FlaskForm):
-    """Technical review by Senior Chemist."""
+    """Senior Chemist Review."""
     action = SelectField(
         'Decision',
         choices=[
