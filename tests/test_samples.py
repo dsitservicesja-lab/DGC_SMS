@@ -262,19 +262,15 @@ def test_preliminary_review_checklist(app, client):
         'action': 'approved',
         'review_comments': 'All checks passed.',
         'chk_original_entry_visible': 'y',
-        'chk_no_correction_fluid': 'y',
         'chk_entries_signed': 'y',
         'chk_date_recorded': 'y',
-        'chk_supervisor_review': 'y',
         'chk_conclusions_signed_dated': 'y',
         'chk_report_signed_dated': 'y',
         'chk_printouts_attached': 'y',
         'chk_attachments_labeled': 'y',
         'chk_analyst_initials': 'y',
         'chk_templates_completed': 'y',
-        'chk_entries_contemporaneous': 'y',
         'chk_writing_legible': 'y',
-        'chk_standard_abbreviations': 'y',
         'chk_logbooks_updated': 'y',
         'chk_toc_updated': 'y',
         'chk_pages_numbered': 'y',
@@ -288,9 +284,7 @@ def test_preliminary_review_checklist(app, client):
         assert assignment.preliminary_review_checklist is not None
         checklist = json.loads(assignment.preliminary_review_checklist)
         assert checklist['chk_original_entry_visible'] is True
-        assert checklist['chk_no_correction_fluid'] is True
         assert checklist['chk_entries_signed'] is True
-        assert checklist['chk_standard_abbreviations'] is True
 
 
 def test_preliminary_review_checklist_partial(app, client):
@@ -326,7 +320,6 @@ def test_preliminary_review_checklist_partial(app, client):
         'action': 'returned',
         'review_comments': 'Missing signatures.',
         'chk_original_entry_visible': 'y',
-        # chk_no_correction_fluid not checked
         'chk_entries_signed': 'y',
         # others not checked
     }, follow_redirects=True)
@@ -336,7 +329,6 @@ def test_preliminary_review_checklist_partial(app, client):
         assignment = SampleAssignment.query.first()
         checklist = json.loads(assignment.preliminary_review_checklist)
         assert checklist['chk_original_entry_visible'] is True
-        assert checklist['chk_no_correction_fluid'] is False
         assert checklist['chk_entries_signed'] is True
         assert checklist['chk_date_recorded'] is False
 
