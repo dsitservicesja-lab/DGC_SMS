@@ -266,12 +266,18 @@ def test_preliminary_review_checklist(app, client):
         'chk_entries_signed': 'y',
         'chk_date_recorded': 'y',
         'chk_supervisor_review': 'y',
+        'chk_conclusions_signed_dated': 'y',
+        'chk_report_signed_dated': 'y',
         'chk_printouts_attached': 'y',
         'chk_attachments_labeled': 'y',
         'chk_analyst_initials': 'y',
+        'chk_templates_completed': 'y',
         'chk_entries_contemporaneous': 'y',
         'chk_writing_legible': 'y',
         'chk_standard_abbreviations': 'y',
+        'chk_logbooks_updated': 'y',
+        'chk_toc_updated': 'y',
+        'chk_pages_numbered': 'y',
     }, follow_redirects=True)
     assert resp.status_code == 200
     assert b'approved and forwarded' in resp.data
