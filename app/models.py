@@ -70,7 +70,7 @@ class SampleStatus(enum.Enum):
     IN_PROGRESS = 'In Progress'
     REPORT_SUBMITTED = 'Report Submitted'
     UNDER_PRELIMINARY_REVIEW = 'Preliminary Review'
-    UNDER_TECHNICAL_REVIEW = 'Technical Review'
+    UNDER_TECHNICAL_REVIEW = 'Senior Chemist Review'
     RETURNED = 'Returned for Correction'
     ACCEPTED = 'Accepted'
     DEPUTY_REVIEW = 'Deputy Review'
@@ -88,7 +88,7 @@ class AssignmentStatus(enum.Enum):
     IN_PROGRESS = 'In Progress'
     REPORT_SUBMITTED = 'Report Submitted'
     UNDER_PRELIMINARY_REVIEW = 'Preliminary Review'
-    UNDER_TECHNICAL_REVIEW = 'Technical Review'
+    UNDER_TECHNICAL_REVIEW = 'Senior Chemist Review'
     RETURNED = 'Returned for Correction'
     ACCEPTED = 'Accepted'
     REJECTED = 'Rejected'
@@ -409,6 +409,8 @@ class SampleAssignment(db.Model):
     report_file = db.Column(db.String(500), nullable=True)
     report_file_original_name = db.Column(db.String(255), nullable=True)
     report_submitted_at = db.Column(db.DateTime, nullable=True)
+    all_samples_returned = db.Column(db.String(10), nullable=True)
+    return_quantity = db.Column(db.String(100), nullable=True)
 
     # Preliminary review (by Officer / Senior Chemist Technologist)
     preliminary_review_comments = db.Column(db.Text, nullable=True)
@@ -427,6 +429,8 @@ class SampleAssignment(db.Model):
 
     # Track which review stage returned from ('preliminary' or 'technical')
     return_stage = db.Column(db.String(20), nullable=True)
+    comments = db.Column(db.Text, nullable=True)
+    quantity_volume = db.Column(db.String(100), nullable=True)
 
     # Relationships
     assigner = db.relationship(

@@ -8,7 +8,7 @@
     'In Progress': 'info',
     'Report Submitted': 'warning',
     'Preliminary Review': 'warning',
-    'Technical Review': 'warning',
+    'Senior Chemist Review': 'warning',
     'Returned for Correction': 'danger',
     'Accepted': 'success',
     'Rejected': 'danger',
@@ -32,14 +32,14 @@
             <i class="bi bi-upload me-1"></i>Submit Report
         </a>
         {% endif %}
-        {% if current_user.has_any_role(Role.OFFICER, Role.HOD, Role.ADMIN) and assignment.status.value == 'Report Submitted' %}
+        {% if current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) and assignment.status.value == 'Report Submitted' %}
         <a href="{{ url_for('samples.preliminary_review', assignment_id=assignment.id) }}" class="btn btn-info btn-sm">
             <i class="bi bi-clipboard-check me-1"></i>Preliminary Review
         </a>
         {% endif %}
-        {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and assignment.status.value == 'Technical Review' %}
+        {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and assignment.status.value == 'Senior Chemist Review' %}
         <a href="{{ url_for('samples.review_report', assignment_id=assignment.id) }}" class="btn btn-warning btn-sm">
-            <i class="bi bi-clipboard-check me-1"></i>Technical Review
+            <i class="bi bi-clipboard-check me-1"></i>Senior Chemist Review
         </a>
         {% endif %}
     </div>
@@ -66,6 +66,14 @@
                     {% if assignment.expected_completion %}
                     <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Expected Completion</dt>
                     <dd class="mb-3">{{ assignment.expected_completion.strftime('%d %b %Y') }}</dd>
+                    {% endif %}
+                    {% if assignment.comments %}
+                    <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Comments</dt>
+                    <dd class="mb-3">{{ assignment.comments }}</dd>
+                    {% endif %}
+                    {% if assignment.quantity_volume %}
+                    <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Quantity / Volume</dt>
+                    <dd class="mb-3">{{ assignment.quantity_volume }}</dd>
                     {% endif %}
                     {% if assignment.date_completed %}
                     <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Date Completed</dt>
@@ -125,6 +133,14 @@
         {% if assignment.report_submitted_at %}
         <small class="text-muted">Submitted: {{ assignment.report_submitted_at.strftime('%d %b %Y %H:%M') }}</small>
         {% endif %}
+        {% if assignment.all_samples_returned %}
+        <div class="mt-2">
+            <strong>All Samples Returned:</strong> {{ assignment.all_samples_returned }}
+            {% if assignment.return_quantity %}
+            &mdash; <strong>Quantity:</strong> {{ assignment.return_quantity }}
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -175,7 +191,7 @@
 <!-- Technical Review Section -->
 {% if assignment.review_comments or assignment.reviewed_at %}
 <div class="card mb-4">
-    <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>Technical Review</h5></div>
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>Senior Chemist Review</h5></div>
     <div class="card-body">
         {% if assignment.reviewer %}
         <p class="mb-1"><strong>Reviewed by:</strong> {{ assignment.reviewer.full_name }}</p>

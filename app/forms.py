@@ -15,6 +15,139 @@ from wtforms.validators import (
 
 from app.models import Role, Branch, User
 
+FORMULATION_TYPE_CHOICES = [
+    ('', '-- Select Formulation --'),
+    ('Capsule', 'Capsule'),
+    ('Tablet', 'Tablet'),
+    ('Cream', 'Cream'),
+    ('Ointment', 'Ointment'),
+    ('Oral Solution', 'Oral Solution'),
+    ('Suspension', 'Suspension'),
+    ('Solution', 'Solution'),
+    ('Injection', 'Injection'),
+    ('Powder', 'Powder'),
+]
+
+# Predefined test names per sample type (Branch)
+TOXICOLOGY_TEST_NAMES = [
+    ('Salicylate Test- Direct', 'Salicylate Test- Direct'),
+    ('Salicylate Test- Confirmatory', 'Salicylate Test- Confirmatory'),
+    ('Test for Phenothiazine', 'Test for Phenothiazine'),
+    ('Toxicology Screen for Urine', 'Toxicology Screen for Urine'),
+    ('Toxicology Screen for Blood', 'Toxicology Screen for Blood'),
+    ('Toxicology Screen for Serum', 'Toxicology Screen for Serum'),
+    ('Toxicology Screen for Stomach Content', 'Toxicology Screen for Stomach Content'),
+    ('Drugs of Abuse', 'Drugs of Abuse'),
+    ('Volatile Reducing Substances', 'Volatile Reducing Substances'),
+    ('Formaldehyde in Fish', 'Formaldehyde in Fish'),
+    ('Detection of Isovaleric Acid in Blood', 'Detection of Isovaleric Acid in Blood'),
+    ('Investigation for Paraquat/ Diquat', 'Investigation for Paraquat/ Diquat'),
+    ('Analysis of Unknown/ Food Samples', 'Analysis of Unknown/ Food Samples'),
+    ('Test for Arsenic, Antimony, Bismuth and Mercury', 'Test for Arsenic, Antimony, Bismuth and Mercury'),
+]
+
+TOXICOLOGY_TEST_REFERENCES = [
+    ("Clarke's Isolation and Identification of Drugs, 2nd Edition",
+     "Clarke's Isolation and Identification of Drugs, 2nd Edition"),
+    ('DGC SOP', 'DGC SOP'),
+]
+
+FOOD_MILK_TEST_NAMES = [
+    ('% Fats', '% Fats'),
+    ('% SNF', '% SNF'),
+    ('% Total Solids', '% Total Solids'),
+    ('Other', 'Other'),
+]
+
+FOOD_MILK_TEST_REFERENCES = [
+    ('Chemical Analysis of Foods, Eighth Edition, Pearson',
+     'Chemical Analysis of Foods, Eighth Edition, Pearson'),
+    ('DGC Standard Operating Procedure, FAP-002 Revision 01',
+     'DGC Standard Operating Procedure, FAP-002 Revision 01'),
+]
+
+FOOD_ALCOHOL_TEST_NAMES = [
+    ('Assay for Denatonium Benzoate', 'Assay for Denatonium Benzoate'),
+    ('Alcohol Content/ Determination', 'Alcohol Content/ Determination'),
+]
+
+FOOD_ALCOHOL_TEST_REFERENCES = [
+    ('DGC SOP', 'DGC SOP'),
+    ('U.S.P.', 'U.S.P.'),
+    ('Other', 'Other'),
+]
+
+PHARMACEUTICAL_TEST_NAMES = [
+    ('Acidity', 'Acidity'),
+    ('Alcohol Content/ Determination', 'Alcohol Content/ Determination'),
+    ('Assay by HPLC', 'Assay by HPLC'),
+    ('Assay by polarimetry', 'Assay by polarimetry'),
+    ('Assay by Titration', 'Assay by Titration'),
+    ('Assay by UV', 'Assay by UV'),
+    ('Assay Potentiometric Titration', 'Assay Potentiometric Titration'),
+    ('Average Weight', 'Average Weight'),
+    ('Conductivity', 'Conductivity'),
+    ('Deliverable Volume Stage 1', 'Deliverable Volume Stage 1'),
+    ('Deliverable Volume Stage 2', 'Deliverable Volume Stage 2'),
+    ('Density', 'Density'),
+    ('Disintegration (Tablets and Capsule)', 'Disintegration (Tablets and Capsule)'),
+    ('Dissolution by HPLC Analysis', 'Dissolution by HPLC Analysis'),
+    ('Dissolution UV Analysis', 'Dissolution UV Analysis'),
+    ('Dose and Uniformity of Dose of Oral Drops', 'Dose and Uniformity of Dose of Oral Drops'),
+    ('Identification by Chemical Reaction', 'Identification by Chemical Reaction'),
+    ('Identification by HPLC', 'Identification by HPLC'),
+    ('Identification by IR', 'Identification by IR'),
+    ('Identification by Thin Layer Chromatography (TLC)', 'Identification by Thin Layer Chromatography (TLC)'),
+    ('Identification by UV', 'Identification by UV'),
+    ('Impurities by TLC', 'Impurities by TLC'),
+    ('Impurities by UV', 'Impurities by UV'),
+    ('Impurities by HPLC', 'Impurities by HPLC'),
+    ('Loss on Drying', 'Loss on Drying'),
+    ('Minimum Fill', 'Minimum Fill'),
+    ('Neutralizing Capacity by Titration', 'Neutralizing Capacity by Titration'),
+    ('Non Volatile matter', 'Non Volatile matter'),
+    ('Organic Stabilizer', 'Organic Stabilizer'),
+    ('pH', 'pH'),
+    ('Related Substances by Thin Layer Chromatography', 'Related Substances by Thin Layer Chromatography'),
+    ('Residue on Ignition', 'Residue on Ignition'),
+    ('Specific Gravity', 'Specific Gravity'),
+    ('TLC', 'TLC'),
+    ('Uniformity of Content by HPLC', 'Uniformity of Content by HPLC'),
+    ('Uniformity of Content by UV', 'Uniformity of Content by UV'),
+    ('Uniformity and Accuracy of Delivered Doses from Multidose Containers',
+     'Uniformity and Accuracy of Delivered Doses from Multidose Containers'),
+    ('Uniformity of Weight (Capsules and Tablets)', 'Uniformity of Weight (Capsules and Tablets)'),
+    ('Weight Variation', 'Weight Variation'),
+    ('Weight per mL', 'Weight per mL'),
+    ('Other', 'Other'),
+]
+
+PHARMACEUTICAL_TEST_REFERENCES = [
+    ('U.S.P.', 'U.S.P.'),
+    ('B.P.', 'B.P.'),
+    ('Manufacturers method', 'Manufacturers method'),
+    ('J.P.', 'J.P.'),
+    ('I.P.', 'I.P.'),
+    ('DGC SOP', 'DGC SOP'),
+]
+
+# Map Branch enum names to their predefined test names/references
+BRANCH_TEST_NAMES = {
+    'TOXICOLOGY': TOXICOLOGY_TEST_NAMES,
+    'FOOD_MILK': FOOD_MILK_TEST_NAMES,
+    'FOOD_ALCOHOL': FOOD_ALCOHOL_TEST_NAMES,
+    'PHARMACEUTICAL': PHARMACEUTICAL_TEST_NAMES,
+    'PHARMACEUTICAL_NR': PHARMACEUTICAL_TEST_NAMES,
+}
+
+BRANCH_TEST_REFERENCES = {
+    'TOXICOLOGY': TOXICOLOGY_TEST_REFERENCES,
+    'FOOD_MILK': FOOD_MILK_TEST_REFERENCES,
+    'FOOD_ALCOHOL': FOOD_ALCOHOL_TEST_REFERENCES,
+    'PHARMACEUTICAL': PHARMACEUTICAL_TEST_REFERENCES,
+    'PHARMACEUTICAL_NR': PHARMACEUTICAL_TEST_REFERENCES,
+}
+
 
 # ---------------------------------------------------------------------------
 # Auth forms
@@ -129,7 +262,7 @@ class SampleRegisterForm(FlaskForm):
     patient_name = StringField('Patient Name (Toxicology)', validators=[Optional(), Length(max=255)])
     source = StringField('Source', validators=[Optional(), Length(max=255)])
     date_received = DateField('Date Received', validators=[DataRequired()])
-    expected_report_date = DateField('Expected Report Date', validators=[Optional()])
+    expected_report_date = None
     scanned_file = FileField(
         'Scanned Document',
         validators=[FileAllowed(
@@ -177,8 +310,7 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
     # Remove parish
     parish = None
 
-    # date_received is auto-set for pharma (not user-entered)
-    date_received = DateField('Date Received', validators=[Optional()])
+    date_received = DateField('Date Received', validators=[DataRequired()])
 
     # lab_number is auto-generated (not required on form)
     lab_number = StringField('Lab Number', validators=[Optional(), Length(max=50)])
@@ -187,9 +319,10 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
         'No./Quantity of Sample',
         validators=[Optional(), Length(max=100)]
     )
-    formulation_type = StringField(
+    formulation_type = SelectField(
         'Formulation Type',
-        validators=[Optional(), Length(max=100)]
+        choices=FORMULATION_TYPE_CHOICES,
+        validators=[Optional()],
     )
 
     def validate_lab_number(self, field):
@@ -205,9 +338,11 @@ class FoodMilkSampleRegisterForm(SampleRegisterForm):
     """Registration form for Food (Milk) samples.
     Uses volume, no parish, no source.
     """
-    # Remove parish and source
+    # Remove parish
     parish = None
-    source = None
+
+    # Rename sample_name to display as "Source" for Milk samples
+    sample_name = StringField('Source', validators=[DataRequired(), Length(max=255)])
 
     # Use volume instead of quantity
     quantity = None
@@ -296,7 +431,11 @@ class SampleEditForm(FlaskForm):
     parish = StringField('Parish', validators=[Optional(), Length(max=100)])
     patient_name = StringField('Patient Name (Toxicology)', validators=[Optional(), Length(max=255)])
     source = StringField('Source', validators=[Optional(), Length(max=255)])
-    formulation_type = StringField('Formulation Type', validators=[Optional(), Length(max=100)])
+    formulation_type = SelectField(
+        'Formulation Type',
+        choices=FORMULATION_TYPE_CHOICES,
+        validators=[Optional()],
+    )
     alcohol_type = SelectField(
         'Alcohol Type',
         choices=[
@@ -354,9 +493,25 @@ class SampleAssignForm(FlaskForm):
         widget=CheckboxSelectMultiple(),
         validators=[DataRequired(message='Select at least one chemist.')],
     )
-    test_name = StringField('Test Name', validators=[DataRequired(), Length(max=255)])
+    # For sample types with predefined test names, use multi-select dropdown
+    test_names = SelectMultipleField(
+        'Test Name(s)',
+        choices=[],
+        validators=[Optional()],
+    )
+    # Fallback free-text field for sample types without predefined tests
+    test_name = StringField('Test Name', validators=[Optional(), Length(max=255)])
+    # For sample types with predefined references, use a dropdown
+    test_reference_select = SelectField(
+        'Test Reference',
+        choices=[],
+        validators=[Optional()],
+    )
+    # Fallback free-text reference
     test_reference = StringField('Test Reference', validators=[Optional(), Length(max=255)])
     expected_completion = DateField('Expected Completion Date', validators=[Optional()])
+    comments = TextAreaField('Comments', validators=[Optional()])
+    quantity_volume = StringField('Quantity / Volume', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Assign Sample')
 
     def validate_expected_completion(self, field):
@@ -381,6 +536,16 @@ class ReportSubmitForm(FlaskForm):
             ),
         ],
     )
+    all_samples_returned = SelectField(
+        'All Samples Returned?',
+        choices=[
+            ('', '-- Select --'),
+            ('Yes', 'Yes'),
+            ('No', 'No'),
+        ],
+        validators=[Optional()],
+    )
+    return_quantity = StringField('Quantity Returned', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Submit Report')
 
 
@@ -443,7 +608,7 @@ class PreliminaryReviewForm(FlaskForm):
 
 
 class ReportReviewForm(FlaskForm):
-    """Technical review by Senior Chemist."""
+    """Senior Chemist Review."""
     action = SelectField(
         'Decision',
         choices=[

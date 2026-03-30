@@ -64,6 +64,12 @@ MIGRATIONS = [
     ('samples', 'claim_butt_number', 'VARCHAR(100)'),
     # samples – expected report date
     ('samples', 'expected_report_date', 'DATE'),
+    # sample_assignments – report return fields
+    ('sample_assignments', 'all_samples_returned', 'VARCHAR(10)'),
+    ('sample_assignments', 'return_quantity', 'VARCHAR(100)'),
+    # sample_assignments – assignment comments and quantity/volume
+    ('sample_assignments', 'comments', 'TEXT'),
+    ('sample_assignments', 'quantity_volume', 'VARCHAR(100)'),
 ]
 
 NEW_TABLES = [

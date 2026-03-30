@@ -558,6 +558,12 @@
                         <i class="bi bi-capsule"></i> Pharm Report
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.milk_report' %}active{% endif %}"
+                       href="{{ url_for('main.milk_report') }}">
+                        <i class="bi bi-cup-straw"></i> Milk Report
+                    </a>
+                </li>
                 {% endif %}
 
                 {% if current_user.has_any_role(Role.ADMIN, Role.HOD) %}

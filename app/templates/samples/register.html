@@ -106,7 +106,7 @@
                         {% if form.formulation_type %}
                         <div class="col-md-4" id="formulation_type_field">
                             {{ form.formulation_type.label(class="form-label fw-semibold") }}
-                            {{ form.formulation_type(class="form-control") }}
+                            {{ form.formulation_type(class="form-select") }}
                         </div>
                         {% endif %}
 
@@ -126,14 +126,8 @@
                         </div>
                         {% endif %}
 
-                        {# Date Received (not for pharma – auto-set) #}
-                        {% if is_pharma %}
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold">Date Received</label>
-                            <input type="text" class="form-control" value="Today (auto-set on registration)" readonly>
-                            <div class="form-text text-info">Automatically set to today's date.</div>
-                        </div>
-                        {% elif form.date_received %}
+                        {# Date Received (always manual entry) #}
+                        {% if form.date_received %}
                         <div class="col-md-4">
                             {{ form.date_received.label(class="form-label fw-semibold") }}
                             {{ form.date_received(class="form-control", type="date") }}
@@ -143,13 +137,6 @@
                         </div>
                         {% endif %}
 
-                        {# Expected Report Date (not for Toxicology) #}
-                        {% if form.expected_report_date %}
-                        <div class="col-md-4">
-                            {{ form.expected_report_date.label(class="form-label fw-semibold") }}
-                            {{ form.expected_report_date(class="form-control", type="date") }}
-                        </div>
-                        {% endif %}
 
                         <div class="col-12">
                             {{ form.scanned_file.label(class="form-label fw-semibold") }}

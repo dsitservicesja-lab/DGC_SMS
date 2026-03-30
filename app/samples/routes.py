@@ -21,7 +21,7 @@ from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
     ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
     SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
-    get_sample_register_form,
+    get_sample_register_form, BRANCH_TEST_NAMES, BRANCH_TEST_REFERENCES,
 )
 from app.notifications import (
     notify_sample_uploaded, notify_sample_assigned,
@@ -101,8 +101,24 @@ def sample_list():
         ).scalar_subquery()
         query = query.filter(Sample.id.in_(assigned_ids))
     elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
-        # Officers see samples they uploaded
-        query = query.filter(Sample.uploaded_by == current_user.id)
+        # Officers see samples they uploaded AND all samples with reports submitted
+        submitted_statuses = [
+            SampleStatus.REPORT_SUBMITTED,
+            SampleStatus.UNDER_PRELIMINARY_REVIEW,
+            SampleStatus.UNDER_TECHNICAL_REVIEW,
+            SampleStatus.ACCEPTED,
+            SampleStatus.DEPUTY_REVIEW,
+            SampleStatus.CERTIFICATE_PREPARATION,
+            SampleStatus.HOD_REVIEW,
+            SampleStatus.CERTIFIED,
+            SampleStatus.COMPLETED,
+        ]
+        query = query.filter(
+            db.or_(
+                Sample.uploaded_by == current_user.id,
+                Sample.status.in_(submitted_statuses),
+            )
+        )
     elif current_user.has_role(Role.SENIOR_CHEMIST) and current_user.branches and not current_user.has_any_role(Role.HOD, Role.ADMIN):
         # Senior Chemists see samples in their branch(es)
         query = query.filter(Sample.sample_type.in_(current_user.branches))
@@ -179,11 +195,8 @@ def register():
             flash('Lab number is required.', 'danger')
             return render_template('samples/register.html', form=form, is_pharma=is_pharma)
 
-        # For pharmaceutical, date_received = date_registered (today)
-        if is_pharma_type:
-            date_received = date.today()
-        else:
-            date_received = form.date_received.data
+        # Date received is always manually entered
+        date_received = form.date_received.data
 
         sample = Sample(
             lab_number=lab_number,
@@ -311,6 +324,18 @@ def assign(sample_id):
 
     form = SampleAssignForm()
 
+    # Determine if this sample type has predefined test names/references
+    branch_key = sample.sample_type.name
+    predefined_tests = BRANCH_TEST_NAMES.get(branch_key)
+    predefined_refs = BRANCH_TEST_REFERENCES.get(branch_key)
+    has_predefined_tests = bool(predefined_tests)
+    has_predefined_refs = bool(predefined_refs)
+
+    if has_predefined_tests:
+        form.test_names.choices = predefined_tests
+    if has_predefined_refs:
+        form.test_reference_select.choices = [('', '-- Select Reference --')] + predefined_refs
+
     # Populate chemist choices – chemists in the matching branch
     chemists = User.query.filter(
         User.is_active_user.is_(True),
@@ -325,23 +350,49 @@ def assign(sample_id):
     form.chemist_ids.choices = [(c.id, c.full_name) for c in chemists]
 
     if form.validate_on_submit():
-        for chemist_id in form.chemist_ids.data:
-            assignment = SampleAssignment(
-                sample_id=sample.id,
-                chemist_id=chemist_id,
-                assigned_by=current_user.id,
-                test_name=form.test_name.data,
-                test_reference=form.test_reference.data,
-                expected_completion=form.expected_completion.data,
+        # Determine test names: from multi-select dropdown or free-text
+        if has_predefined_tests and form.test_names.data:
+            selected_test_names = form.test_names.data
+        elif form.test_name.data:
+            selected_test_names = [form.test_name.data]
+        else:
+            flash('At least one test name is required.', 'danger')
+            return render_template(
+                'samples/assign.html', form=form, sample=sample,
+                today=datetime.now(timezone.utc).date().isoformat(),
+                has_predefined_tests=has_predefined_tests,
+                has_predefined_refs=has_predefined_refs,
             )
-            db.session.add(assignment)
-            db.session.flush()
-            notify_sample_assigned(assignment)
+
+        # Determine test reference
+        if has_predefined_refs and form.test_reference_select.data:
+            test_ref = form.test_reference_select.data
+        else:
+            test_ref = form.test_reference.data
+
+        assignment_count = 0
+        for chemist_id in form.chemist_ids.data:
+            for test_name in selected_test_names:
+                assignment = SampleAssignment(
+                    sample_id=sample.id,
+                    chemist_id=chemist_id,
+                    assigned_by=current_user.id,
+                    test_name=test_name,
+                    test_reference=test_ref,
+                    expected_completion=form.expected_completion.data,
+                    comments=form.comments.data or None,
+                    quantity_volume=form.quantity_volume.data or None,
+                )
+                db.session.add(assignment)
+                db.session.flush()
+                notify_sample_assigned(assignment)
+                assignment_count += 1
 
         sample.status = SampleStatus.ASSIGNED
         _add_history(
             sample, 'Sample Assigned',
-            f'Assigned to {len(form.chemist_ids.data)} chemist(s) '
+            f'Assigned {assignment_count} test(s) to '
+            f'{len(form.chemist_ids.data)} chemist(s) '
             f'by {current_user.full_name}',
         )
         db.session.commit()
@@ -349,7 +400,9 @@ def assign(sample_id):
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     return render_template('samples/assign.html', form=form, sample=sample,
-                           today=datetime.now(timezone.utc).date().isoformat())
+                           today=datetime.now(timezone.utc).date().isoformat(),
+                           has_predefined_tests=has_predefined_tests,
+                           has_predefined_refs=has_predefined_refs)
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +433,49 @@ def _can_view_assignment(assignment):
 
 
 # ---------------------------------------------------------------------------
+# Remove assignment (Admin, HOD, or the user who assigned)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/assignment/<int:assignment_id>/remove', methods=['POST'])
+@login_required
+def remove_assignment(assignment_id):
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
+    sample = assignment.sample
+
+    # Only Admin, HOD, or the user who made the assignment can remove it
+    can_remove = (
+        current_user.has_any_role(Role.ADMIN, Role.HOD)
+        or current_user.id == assignment.assigned_by
+    )
+    if not can_remove:
+        flash('You do not have permission to remove this assignment.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    chemist_name = assignment.chemist.full_name
+    test_name = assignment.test_name
+    _add_history(
+        sample, 'Assignment Removed',
+        f'{current_user.full_name} removed assignment of test '
+        f'"{test_name}" from {chemist_name}.',
+    )
+
+    db.session.delete(assignment)
+
+    # Update sample status based on remaining assignments
+    remaining = sample.assignments.filter(
+        SampleAssignment.id != assignment_id
+    ).all()
+    if not remaining:
+        sample.status = SampleStatus.REGISTERED
+    else:
+        _update_sample_status(sample)
+
+    db.session.commit()
+    flash(f'Assignment of "{test_name}" to {chemist_name} has been removed.', 'success')
+    return redirect(url_for('samples.detail', sample_id=sample.id))
+
+
+# ---------------------------------------------------------------------------
 # Submit report (chemist)
 # ---------------------------------------------------------------------------
 
@@ -403,6 +499,8 @@ def submit_report(assignment_id):
     if form.validate_on_submit():
         assignment.report_text = form.report_text.data
         assignment.report_submitted_at = datetime.now(timezone.utc)
+        assignment.all_samples_returned = form.all_samples_returned.data or None
+        assignment.return_quantity = form.return_quantity.data or None
 
         if form.report_file.data:
             stored, original = _save_file(form.report_file.data)
@@ -455,10 +553,10 @@ def submit_report(assignment_id):
 def preliminary_review(assignment_id):
     assignment = db.get_or_404(SampleAssignment, assignment_id)
 
-    # Officers, HOD, or Admin can do preliminary review
+    # Officers, Senior Chemists, Deputy, HOD, or Admin can do preliminary review
     sample = assignment.sample
-    if not current_user.has_any_role(Role.OFFICER, Role.HOD, Role.ADMIN):
-        flash('Only Officers can perform preliminary reviews.', 'danger')
+    if not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
+        flash('Only Officers, Senior Chemists, Deputy Government Chemist, or HOD can perform preliminary reviews.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     if assignment.status != AssignmentStatus.REPORT_SUBMITTED:
@@ -514,7 +612,7 @@ def preliminary_review(assignment_id):
 
 
 # ---------------------------------------------------------------------------
-# Technical review (Senior Chemist)
+# Senior Chemist Review (formerly Technical Review)
 # ---------------------------------------------------------------------------
 
 @samples_bp.route('/assignment/<int:assignment_id>/review', methods=['GET', 'POST'])

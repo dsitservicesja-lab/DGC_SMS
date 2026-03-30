@@ -8,7 +8,7 @@
     'In Progress': 'info',
     'Report Submitted': 'warning',
     'Preliminary Review': 'warning',
-    'Technical Review': 'warning',
+    'Senior Chemist Review': 'warning',
     'Returned for Correction': 'danger',
     'Accepted': 'success',
     'Deputy Review': 'info',
@@ -287,7 +287,7 @@
         'In Progress': 'info',
         'Report Submitted': 'warning',
         'Preliminary Review': 'warning',
-        'Technical Review': 'warning',
+        'Senior Chemist Review': 'warning',
         'Returned for Correction': 'danger',
         'Accepted': 'success',
         'Rejected': 'danger',
@@ -332,17 +332,25 @@
                                 <i class="bi bi-upload"></i>
                             </a>
                             {% endif %}
-                            {% if (current_user.has_any_role(Role.OFFICER, Role.HOD, Role.ADMIN) or current_user.id == sample.uploaded_by) and a.status.value == 'Report Submitted' %}
+                            {% if (current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) or current_user.id == sample.uploaded_by) and a.status.value == 'Report Submitted' %}
                             <a href="{{ url_for('samples.preliminary_review', assignment_id=a.id) }}"
                                class="btn btn-sm btn-outline-info" title="Preliminary Review">
                                 <i class="bi bi-clipboard-check"></i>
                             </a>
                             {% endif %}
-                            {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and a.status.value == 'Technical Review' %}
+                            {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and a.status.value == 'Senior Chemist Review' %}
                             <a href="{{ url_for('samples.review_report', assignment_id=a.id) }}"
-                               class="btn btn-sm btn-outline-warning" title="Technical Review">
+                               class="btn btn-sm btn-outline-warning" title="Senior Chemist Review">
                                 <i class="bi bi-clipboard-check"></i>
                             </a>
+                            {% endif %}
+                            {% if (current_user.has_any_role(Role.ADMIN, Role.HOD) or current_user.id == a.assigned_by) and a.status.value in ['Assigned', 'In Progress'] %}
+                            <form method="POST" action="{{ url_for('samples.remove_assignment', assignment_id=a.id) }}" class="d-inline" onsubmit="return confirm('Remove this assignment?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove Assignment">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
                             {% endif %}
                         </div>
                     </td>

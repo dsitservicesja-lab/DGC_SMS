@@ -808,3 +808,213 @@ def test_officer_cannot_assign(app, client):
         sample = Sample.query.first()
     resp = client.get(f'/samples/{sample.id}/assign', follow_redirects=True)
     assert b'Senior Chemists' in resp.data
+
+
+def test_remove_assignment_by_admin(app, client):
+    """Test that Admin can remove an assignment."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test to Remove',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    # Admin removes the assignment
+    with app.app_context():
+        admin = _create_user(Role.ADMIN, username='admin')
+    _login(client, 'admin')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        assignment_id = assignment.id
+    resp = client.post(f'/samples/assignment/{assignment_id}/remove',
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'has been removed' in resp.data
+
+    # Sample should revert to REGISTERED since no assignments left
+    with app.app_context():
+        sample = Sample.query.first()
+        assert sample.status == SampleStatus.REGISTERED
+        assert SampleAssignment.query.count() == 0
+
+
+def test_remove_assignment_by_assigner(app, client):
+    """Test that the user who assigned can remove an assignment."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test to Remove',
+    }, follow_redirects=True)
+
+    # Same senior chemist removes the assignment
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/remove',
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'has been removed' in resp.data
+
+
+def test_remove_assignment_denied_for_chemist(app, client):
+    """Test that a regular chemist cannot remove assignments."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/remove',
+                       follow_redirects=True)
+    assert b'do not have permission' in resp.data
+
+
+def test_remove_assignment_audited(app, client):
+    """Test that assignment removal is recorded in history."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Audit Test',
+    }, follow_redirects=True)
+
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/remove',
+                follow_redirects=True)
+
+    with app.app_context():
+        from app.models import SampleHistory
+        history = SampleHistory.query.filter_by(action='Assignment Removed').first()
+        assert history is not None
+        assert 'Audit Test' in history.details
+
+
+def test_senior_chemist_can_do_preliminary_review(app, client):
+    """Test that Senior Chemist can perform preliminary review."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'SC Prelim Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Test results for SC review.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    # Senior Chemist does preliminary review (not just Officer)
+    _login(client, 'senior')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'Senior Chemist preliminary approval.',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'approved and forwarded' in resp.data
+
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        assert assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+
+
+def test_submit_report_with_return_fields(app, client):
+    """Test that report submission saves all_samples_returned and return_quantity."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Return Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Test report with return info.',
+        'report_file': _report_file(),
+        'all_samples_returned': 'Yes',
+        'return_quantity': '45ml',
+    }, content_type='multipart/form-data', follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'submitted successfully' in resp.data
+
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        assert assignment.all_samples_returned == 'Yes'
+        assert assignment.return_quantity == '45ml'
+
+
+def test_assign_with_comments_and_quantity(app, client):
+    """Test that assignment saves comments and quantity_volume."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    resp = client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis',
+        'comments': 'Handle with care, priority sample.',
+        'quantity_volume': '100ml',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'assigned successfully' in resp.data
+
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        assert assignment.comments == 'Handle with care, priority sample.'
+        assert assignment.quantity_volume == '100ml'

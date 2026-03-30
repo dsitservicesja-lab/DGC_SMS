@@ -730,6 +730,163 @@ def pharma_report_download():
 
 
 # ---------------------------------------------------------------------------
+# Milk Report
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/reports/milk')
+@login_required
+def milk_report():
+    """Milk sample report with filtering and download."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
+    status_filter = request.args.get('status', '')
+
+    q = Sample.query.filter(
+        Sample.sample_type == Branch.FOOD_MILK,
+        extract('year', Sample.date_registered) == year,
+    )
+
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+
+    if status_filter:
+        try:
+            st = SampleStatus(status_filter)
+            q = q.filter(Sample.status == st)
+        except ValueError:
+            pass
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    # Summary stats
+    total = len(samples)
+    certified = sum(
+        1 for s in samples
+        if s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    )
+    in_progress = sum(
+        1 for s in samples
+        if s.status not in (
+            SampleStatus.CERTIFIED, SampleStatus.COMPLETED,
+            SampleStatus.REJECTED,
+        )
+    )
+    rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
+
+    tat_days = [
+        (s.certified_at.date() - s.date_received).days
+        for s in samples
+        if s.certified_at and s.date_received
+        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    ]
+    avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
+
+    # Available years
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', Sample.date_registered).label('yr')
+        ).distinct().all() if r.yr
+    }
+    available_years = sorted(sample_years | {year})
+
+    return render_template(
+        'milk_report.html',
+        samples=samples,
+        year=year,
+        quarter=quarter,
+        status_filter=status_filter,
+        available_years=available_years,
+        total=total,
+        certified=certified,
+        in_progress=in_progress,
+        rejected=rejected,
+        avg_tat=avg_tat,
+        SampleStatus=SampleStatus,
+    )
+
+
+@main_bp.route('/reports/milk/download')
+@login_required
+def milk_report_download():
+    """Download milk report as CSV."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=datetime.now(timezone.utc).year)
+    quarter = request.args.get('quarter', type=int, default=0)
+
+    q = Sample.query.filter(
+        Sample.sample_type == Branch.FOOD_MILK,
+        extract('year', Sample.date_registered) == year,
+    )
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        'Lab Number', 'Source', 'Milk Type', 'Volume',
+        'Status', 'Date Received', 'Date Registered',
+        'Certified Date', 'Turnaround (days)',
+    ])
+    for s in samples:
+        tat = ''
+        if (s.certified_at and s.date_received
+                and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
+            tat = (s.certified_at.date() - s.date_received).days
+        milk_type_label = ''
+        if s.milk_type == 'R':
+            milk_type_label = 'Raw Milk'
+        elif s.milk_type == 'P':
+            milk_type_label = 'Processed Milk'
+        writer.writerow([
+            s.lab_number,
+            s.sample_name,
+            milk_type_label,
+            s.volume or '',
+            s.status.value if s.status else '',
+            s.date_received.isoformat() if s.date_received else '',
+            s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
+            s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
+            tat,
+        ])
+
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    filename = f'Milk_Report_{year}{q_label}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Admin Settings
 # ---------------------------------------------------------------------------
 

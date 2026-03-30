@@ -226,3 +226,94 @@ def test_kpi_dashboard_has_report_links(app, client):
     resp = client.get('/kpi')
     assert b'KPI Report' in resp.data
     assert b'Pharm Report' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Milk Report
+# ---------------------------------------------------------------------------
+
+def _register_milk_sample(app, lab, name='Test Milk', certified=False):
+    """Register a milk sample directly in the DB."""
+    with app.app_context():
+        officer = User.query.filter_by(username='admin').first()
+        if not officer:
+            officer = _create_user(Role.ADMIN, username='admin')
+        s = Sample(
+            lab_number=lab,
+            sample_name=name,
+            sample_type=Branch.FOOD_MILK,
+            date_received=date(2026, 1, 15),
+            uploaded_by=officer.id,
+            status=SampleStatus.CERTIFIED if certified else SampleStatus.REGISTERED,
+            milk_type='R',
+            volume='500ml',
+        )
+        if certified:
+            s.certified_at = datetime(2026, 2, 15, tzinfo=timezone.utc)
+        db.session.add(s)
+        db.session.commit()
+        return s.id
+
+
+def test_milk_report_requires_login(app, client):
+    resp = client.get('/reports/milk')
+    assert resp.status_code == 302
+
+
+def test_milk_report_access_denied_for_chemist(app, client):
+    with app.app_context():
+        _create_user(Role.CHEMIST, username='chem')
+    _login(client, 'chem')
+    resp = client.get('/reports/milk', follow_redirects=True)
+    assert b'Access denied' in resp.data
+
+
+def test_milk_report_renders(app, client):
+    _setup_admin(app)
+    _register_milk_sample(app, 'MILK-R01', 'Farm Milk A', certified=True)
+    _login(client, 'admin')
+    resp = client.get('/reports/milk?year=2026')
+    assert resp.status_code == 200
+    assert b'Milk Sample Report' in resp.data
+    assert b'MILK-R01' in resp.data
+    assert b'Farm Milk A' in resp.data
+
+
+def test_milk_report_quarter_filter(app, client):
+    _setup_admin(app)
+    _register_milk_sample(app, 'MILK-Q01')
+    _login(client, 'admin')
+    # Q1 should include January samples
+    resp = client.get('/reports/milk?year=2026&quarter=1')
+    assert b'MILK-Q01' in resp.data
+    # Q3 should not include January samples
+    resp = client.get('/reports/milk?year=2026&quarter=3')
+    assert b'MILK-Q01' not in resp.data
+
+
+def test_milk_report_download_csv(app, client):
+    _setup_admin(app)
+    _register_milk_sample(app, 'MILK-DL01')
+    _login(client, 'admin')
+    resp = client.get('/reports/milk/download?year=2026')
+    assert resp.status_code == 200
+    assert 'text/csv' in resp.content_type
+    assert b'MILK-DL01' in resp.data
+    assert b'Lab Number' in resp.data
+
+
+def test_milk_report_shows_turnaround(app, client):
+    _setup_admin(app)
+    _register_milk_sample(app, 'MILK-TAT01', certified=True)
+    _login(client, 'admin')
+    resp = client.get('/reports/milk?year=2026')
+    assert resp.status_code == 200
+    # Certified sample should show TAT (31 days: Jan 15 → Feb 15)
+    assert b'31' in resp.data
+
+
+def test_sidebar_shows_milk_report_link(app, client):
+    _setup_admin(app)
+    _login(client, 'admin')
+    resp = client.get('/dashboard')
+    assert b'Milk Report' in resp.data

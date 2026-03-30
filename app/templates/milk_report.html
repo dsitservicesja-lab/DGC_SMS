@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Pharmaceutical Report - DGC SMS{% endblock %}
+{% block title %}Milk Report - DGC SMS{% endblock %}
 
 {% block content %}
 <div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <h2><i class="bi bi-capsule"></i> Pharmaceutical Report</h2>
-    <a href="{{ url_for('main.pharma_report_download', year=year, quarter=quarter) }}"
+    <h2><i class="bi bi-cup-straw"></i> Milk Sample Report</h2>
+    <a href="{{ url_for('main.milk_report_download', year=year, quarter=quarter) }}"
        class="btn btn-outline-primary btn-sm">
         <i class="bi bi-download me-1"></i>Download CSV
     </a>
@@ -85,19 +85,19 @@
 <!-- Sample Table -->
 <div class="card">
     <div class="card-header">
-        Pharmaceutical Samples — {{ year }}{% if quarter %} Q{{ quarter }}{% endif %}
+        Milk Samples — {{ year }}{% if quarter %} Q{{ quarter }}{% endif %}
     </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
                     <th>Lab Number</th>
-                    <th>Sample Name</th>
-                    <th>Formulation</th>
+                    <th>Source</th>
+                    <th>Milk Type</th>
+                    <th>Volume</th>
                     <th>Status</th>
                     <th>Date Received</th>
                     <th>Registered</th>
-                    <th>Expected Report</th>
                     <th>Certified</th>
                     <th>TAT (days)</th>
                 </tr>
@@ -110,7 +110,12 @@
                            class="fw-semibold text-decoration-none">{{ s.lab_number }}</a>
                     </td>
                     <td>{{ s.sample_name }}</td>
-                    <td>{{ s.formulation_type or '—' }}</td>
+                    <td>
+                        {% if s.milk_type == 'R' %}Raw Milk
+                        {% elif s.milk_type == 'P' %}Processed Milk
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>{{ s.volume or '—' }}</td>
                     <td>
                         {% set status_colors = {
                             'Registered': 'secondary', 'Assigned': 'primary',
@@ -128,7 +133,6 @@
                     </td>
                     <td>{{ s.date_received.strftime('%d %b %Y') if s.date_received else '—' }}</td>
                     <td>{{ s.date_registered.strftime('%d %b %Y') if s.date_registered else '—' }}</td>
-                    <td>{{ s.expected_report_date.strftime('%d %b %Y') if s.expected_report_date else '—' }}</td>
                     <td>{{ s.certified_at.strftime('%d %b %Y') if s.certified_at else '—' }}</td>
                     <td>
                         {% if s.certified_at and s.date_received and s.status.value in ('Certified', 'Completed') %}
@@ -140,7 +144,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">No pharmaceutical samples found.</td>
+                    <td colspan="9" class="text-center text-muted py-4">No milk samples found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

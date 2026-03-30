@@ -26,6 +26,20 @@
                     {{ form.hidden_tag() }}
 
                     <div class="row g-3">
+                        {% if has_predefined_tests %}
+                        <div class="col-12">
+                            {{ form.test_names.label(class="form-label fw-semibold") }}
+                            <select name="test_names" id="test_names" class="form-select" multiple size="6">
+                                {% for val, label in form.test_names.choices %}
+                                <option value="{{ val }}" {% if val in (form.test_names.data or []) %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple tests</div>
+                            {% for error in form.test_names.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
                         <div class="col-12">
                             {{ form.test_name.label(class="form-label fw-semibold") }}
                             {{ form.test_name(class="form-control") }}
@@ -33,11 +47,20 @@
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
+                        {% endif %}
 
+                        {% if has_predefined_refs %}
+                        <div class="col-md-6">
+                            {{ form.test_reference_select.label(class="form-label fw-semibold") }}
+                            {{ form.test_reference_select(class="form-select") }}
+                        </div>
+                        {% else %}
                         <div class="col-md-6">
                             {{ form.test_reference.label(class="form-label fw-semibold") }}
                             {{ form.test_reference(class="form-control") }}
                         </div>
+                        {% endif %}
+
                         <div class="col-md-6">
                             {{ form.expected_completion.label(class="form-label fw-semibold") }}
                             {{ form.expected_completion(class="form-control", type="date", id="expected_completion",
@@ -45,6 +68,16 @@
                             {% for error in form.expected_completion.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
+                        </div>
+
+                        <div class="col-md-6">
+                            {{ form.quantity_volume.label(class="form-label fw-semibold") }}
+                            {{ form.quantity_volume(class="form-control") }}
+                        </div>
+
+                        <div class="col-12">
+                            {{ form.comments.label(class="form-label fw-semibold") }}
+                            {{ form.comments(class="form-control", rows=3) }}
                         </div>
 
                         <div class="col-12">

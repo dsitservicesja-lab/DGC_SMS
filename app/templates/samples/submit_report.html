@@ -68,6 +68,16 @@
                             {% endif %}
                         </div>
 
+                        <div class="col-md-6">
+                            {{ form.all_samples_returned.label(class="form-label fw-semibold") }}
+                            {{ form.all_samples_returned(class="form-select") }}
+                        </div>
+
+                        <div class="col-md-6">
+                            {{ form.return_quantity.label(class="form-label fw-semibold") }}
+                            {{ form.return_quantity(class="form-control") }}
+                        </div>
+
                         <div class="col-12 d-flex gap-2 pt-2">
                             {{ form.submit(class="btn btn-success") }}
                             <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}"
