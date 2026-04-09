@@ -564,6 +564,18 @@
                         <i class="bi bi-cup-straw"></i> Milk Report
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.toxicology_report' %}active{% endif %}"
+                       href="{{ url_for('main.toxicology_report') }}">
+                        <i class="bi bi-droplet"></i> Toxicology Report
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.kpi_toxicology' %}active{% endif %}"
+                       href="{{ url_for('main.kpi_toxicology') }}">
+                        <i class="bi bi-bar-chart-line"></i> Toxicology KPI
+                    </a>
+                </li>
                 {% endif %}
 
                 {% if current_user.has_any_role(Role.ADMIN, Role.HOD) %}
@@ -572,6 +584,12 @@
                     <a class="nav-link {% if request.endpoint and 'auth.user' in request.endpoint %}active{% endif %}"
                        href="{{ url_for('auth.user_list') }}">
                         <i class="bi bi-people"></i> Users
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.calendar_management' %}active{% endif %}"
+                       href="{{ url_for('main.calendar_management') }}">
+                        <i class="bi bi-calendar3"></i> Calendar
                     </a>
                 </li>
                 <li class="nav-item">

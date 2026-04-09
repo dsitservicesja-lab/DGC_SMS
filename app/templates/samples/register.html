@@ -17,7 +17,7 @@
                     {{ form.hidden_tag() }}
 
                     <div class="row g-3">
-                        {# Sample Type (always first, drives reload) #}
+                        {# Laboratory (formerly Sample Type, always first, drives reload) #}
                         <div class="col-md-4">
                             {{ form.sample_type.label(class="form-label fw-semibold") }}
                             {{ form.sample_type(class="form-select", id="sample_type_select") }}
@@ -48,6 +48,17 @@
                             {% endfor %}
                         </div>
 
+                        {# Toxicology Sample Type dropdown #}
+                        {% if form.toxicology_sample_type_name %}
+                        <div class="col-md-4" id="tox_sample_type_field">
+                            {{ form.toxicology_sample_type_name.label(class="form-label fw-semibold") }}
+                            {{ form.toxicology_sample_type_name(class="form-select") }}
+                            {% for error in form.toxicology_sample_type_name.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
                         <div class="col-12">
                             {{ form.description.label(class="form-label fw-semibold") }}
                             {{ form.description(class="form-control", rows=3) }}
@@ -77,7 +88,7 @@
                         </div>
                         {% endif %}
 
-                        {# Source (only for base/non-specialized, not Milk) #}
+                        {# Source #}
                         {% if form.source %}
                         <div class="col-md-4" id="source_field">
                             {{ form.source.label(class="form-label fw-semibold") }}
@@ -110,6 +121,22 @@
                         </div>
                         {% endif %}
 
+                        {# Lot Number (Pharmaceutical & Milk) #}
+                        {% if form.lot_number %}
+                        <div class="col-md-4" id="lot_number_field">
+                            {{ form.lot_number.label(class="form-label fw-semibold") }}
+                            {{ form.lot_number(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Expiration Date (Pharmaceutical & Milk) #}
+                        {% if form.expiration_date %}
+                        <div class="col-md-4" id="expiration_date_field">
+                            {{ form.expiration_date.label(class="form-label fw-semibold") }}
+                            {{ form.expiration_date(class="form-control", type="date") }}
+                        </div>
+                        {% endif %}
+
                         {# Alcohol Type (Food Alcohol) #}
                         {% if form.alcohol_type %}
                         <div class="col-md-4" id="alcohol_type_field">
@@ -123,6 +150,14 @@
                         <div class="col-md-4" id="claim_butt_field">
                             {{ form.claim_butt_number.label(class="form-label fw-semibold") }}
                             {{ form.claim_butt_number(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Batch / Lot Number (Food Alcohol) #}
+                        {% if form.batch_lot_number %}
+                        <div class="col-md-4" id="batch_lot_field">
+                            {{ form.batch_lot_number.label(class="form-label fw-semibold") }}
+                            {{ form.batch_lot_number(class="form-control") }}
                         </div>
                         {% endif %}
 
@@ -141,7 +176,7 @@
                         <div class="col-12">
                             {{ form.scanned_file.label(class="form-label fw-semibold") }}
                             {{ form.scanned_file(class="form-control") }}
-                            <div class="form-text">Upload scanned sample information (PDF, PNG, JPG, TIFF, DOC, DOCX)</div>
+                            <div class="form-text">Upload submission form (PDF, PNG, JPG, TIFF, DOC, DOCX)</div>
                             {% for error in form.scanned_file.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}

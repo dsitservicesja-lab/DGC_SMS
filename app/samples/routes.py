@@ -13,22 +13,23 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.samples import samples_bp
 from app.models import (
-    Sample, SampleAssignment, SampleHistory, User,
+    Sample, SampleAssignment, SampleHistory, User, SupportingDocument,
     Role, Branch, SampleStatus, AssignmentStatus,
-    user_roles, user_branches,
+    user_roles, user_branches, jamaica_now,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
     ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
     SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
-    get_sample_register_form, BRANCH_TEST_NAMES, BRANCH_TEST_REFERENCES,
+    get_sample_register_form, SupportingDocumentForm,
+    BRANCH_TEST_NAMES, BRANCH_TEST_REFERENCES,
 )
 from app.notifications import (
     notify_sample_uploaded, notify_sample_assigned,
     notify_report_submitted, notify_preliminary_review_completed,
     notify_report_reviewed, notify_submitted_to_deputy,
     notify_deputy_review_completed, notify_certificate_prepared,
-    notify_certificate_signed,
+    notify_certificate_signed, notify_assignment_removed,
 )
 
 
@@ -228,6 +229,19 @@ def register():
         cb = _get_field(form, 'claim_butt_number')
         if cb:
             sample.claim_butt_number = cb
+        # New fields
+        tst = _get_field(form, 'toxicology_sample_type_name')
+        if tst:
+            sample.toxicology_sample_type_name = tst
+        ln = _get_field(form, 'lot_number')
+        if ln:
+            sample.lot_number = ln
+        ed = _get_field(form, 'expiration_date')
+        if ed:
+            sample.expiration_date = ed
+        bln = _get_field(form, 'batch_lot_number')
+        if bln:
+            sample.batch_lot_number = bln
 
         if form.scanned_file.data:
             stored, original = _save_file(form.scanned_file.data)
@@ -259,11 +273,17 @@ def detail(sample_id):
     sample = db.get_or_404(Sample, sample_id)
     assignments = sample.assignments.all()
     history = sample.history.all()
+    supporting_docs = sample.supporting_documents.order_by(
+        SupportingDocument.uploaded_at.desc()
+    ).all()
+    supporting_doc_form = SupportingDocumentForm()
     return render_template(
         'samples/detail.html',
         sample=sample,
         assignments=assignments,
         history=history,
+        supporting_docs=supporting_docs,
+        supporting_doc_form=supporting_doc_form,
         today_date=date.today(),
     )
 
@@ -294,7 +314,11 @@ def edit(sample_id):
         sample.formulation_type = form.formulation_type.data
         sample.alcohol_type = form.alcohol_type.data if form.alcohol_type.data else None
         sample.claim_butt_number = form.claim_butt_number.data
+        sample.batch_lot_number = form.batch_lot_number.data or None
         sample.milk_type = form.milk_type.data if form.milk_type.data else None
+        sample.lot_number = form.lot_number.data or None
+        sample.expiration_date = form.expiration_date.data
+        sample.toxicology_sample_type_name = form.toxicology_sample_type_name.data or None
         sample.expected_report_date = form.expected_report_date.data
 
         if form.scanned_file.data:
@@ -335,8 +359,6 @@ def assign(sample_id):
         form.test_names.choices = predefined_tests
     if has_predefined_refs:
         form.test_reference_select.choices = [('', '-- Select Reference --')] + predefined_refs
-
-    # Populate chemist choices – chemists in the matching branch
     chemists = User.query.filter(
         User.is_active_user.is_(True),
     ).join(user_roles).filter(
@@ -359,14 +381,17 @@ def assign(sample_id):
             flash('At least one test name is required.', 'danger')
             return render_template(
                 'samples/assign.html', form=form, sample=sample,
-                today=datetime.now(timezone.utc).date().isoformat(),
+                today=jamaica_now().date().isoformat(),
                 has_predefined_tests=has_predefined_tests,
                 has_predefined_refs=has_predefined_refs,
             )
 
-        # Determine test reference
+        # Determine test reference(s) – multi-select supported
         if has_predefined_refs and form.test_reference_select.data:
-            test_ref = form.test_reference_select.data
+            # Filter out empty values from multi-select
+            selected_refs = [r for r in form.test_reference_select.data if r]
+            # Use semicolon delimiter for robust parsing when multiple refs selected
+            test_ref = '; '.join(selected_refs) if selected_refs else form.test_reference.data
         else:
             test_ref = form.test_reference.data
 
@@ -400,7 +425,7 @@ def assign(sample_id):
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     return render_template('samples/assign.html', form=form, sample=sample,
-                           today=datetime.now(timezone.utc).date().isoformat(),
+                           today=jamaica_now().date().isoformat(),
                            has_predefined_tests=has_predefined_tests,
                            has_predefined_refs=has_predefined_refs)
 
@@ -442,9 +467,9 @@ def remove_assignment(assignment_id):
     assignment = db.get_or_404(SampleAssignment, assignment_id)
     sample = assignment.sample
 
-    # Only Admin, HOD, or the user who made the assignment can remove it
+    # Only Admin, HOD, Senior Chemist, or the user who made the assignment can remove it
     can_remove = (
-        current_user.has_any_role(Role.ADMIN, Role.HOD)
+        current_user.has_any_role(Role.ADMIN, Role.HOD, Role.SENIOR_CHEMIST)
         or current_user.id == assignment.assigned_by
     )
     if not can_remove:
@@ -453,6 +478,8 @@ def remove_assignment(assignment_id):
 
     chemist_name = assignment.chemist.full_name
     test_name = assignment.test_name
+    chemist_id = assignment.chemist_id
+    sample_ref = sample.lab_number
     _add_history(
         sample, 'Assignment Removed',
         f'{current_user.full_name} removed assignment of test '
@@ -471,8 +498,124 @@ def remove_assignment(assignment_id):
         _update_sample_status(sample)
 
     db.session.commit()
+
+    # Notify the removed assignee
+    notify_assignment_removed(
+        chemist_id, sample_ref, test_name, current_user.full_name, sample.id
+    )
+    db.session.commit()
+
     flash(f'Assignment of "{test_name}" to {chemist_name} has been removed.', 'success')
     return redirect(url_for('samples.detail', sample_id=sample.id))
+
+
+# ---------------------------------------------------------------------------
+# Edit assignment (Senior Chemist, HOD, Admin)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/assignment/<int:assignment_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_assignment(assignment_id):
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
+    sample = assignment.sample
+
+    # Senior Chemist, HOD, and Admin can edit assignments
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.ADMIN):
+        flash('Only Senior Chemists, HOD, or Admins can edit assignments.', 'danger')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    branch_key = sample.sample_type.name
+    predefined_tests = BRANCH_TEST_NAMES.get(branch_key)
+    predefined_refs = BRANCH_TEST_REFERENCES.get(branch_key)
+
+    # Populate chemist choices
+    chemists = User.query.filter(
+        User.is_active_user.is_(True),
+    ).join(user_roles).filter(
+        user_roles.c.role == Role.CHEMIST,
+    )
+    if current_user.branches:
+        chemists = chemists.join(user_branches).filter(
+            user_branches.c.branch.in_(current_user.branches)
+        )
+    chemists = chemists.order_by(User.last_name).all()
+
+    if request.method == 'POST':
+        new_chemist_id = request.form.get('chemist_id', type=int)
+        new_test_name = request.form.get('test_name', '').strip()
+        new_test_reference = request.form.get('test_reference', '').strip()
+        new_expected = request.form.get('expected_completion', '').strip()
+        new_comments = request.form.get('comments', '').strip()
+
+        changes = []
+        if new_chemist_id and new_chemist_id != assignment.chemist_id:
+            old_chemist = assignment.chemist.full_name
+            assignment.chemist_id = new_chemist_id
+            new_chemist = db.session.get(User, new_chemist_id)
+            changes.append(f'Assignee: {old_chemist} → {new_chemist.full_name}')
+        if new_test_name and new_test_name != assignment.test_name:
+            changes.append(f'Test: {assignment.test_name} → {new_test_name}')
+            assignment.test_name = new_test_name
+        if new_test_reference != (assignment.test_reference or ''):
+            assignment.test_reference = new_test_reference or None
+            changes.append(f'Reference updated')
+        if new_expected:
+            from datetime import datetime as dt
+            assignment.expected_completion = dt.strptime(new_expected, '%Y-%m-%d').date()
+        if new_comments:
+            assignment.comments = new_comments
+
+        if changes:
+            _add_history(
+                sample, 'Assignment Edited',
+                f'{current_user.full_name} edited assignment: {"; ".join(changes)}',
+            )
+            db.session.commit()
+            flash('Assignment updated.', 'success')
+        else:
+            flash('No changes made.', 'info')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    return render_template(
+        'samples/edit_assignment.html',
+        assignment=assignment,
+        sample=sample,
+        chemists=chemists,
+        predefined_tests=predefined_tests or [],
+        predefined_refs=predefined_refs or [],
+        today=jamaica_now().date().isoformat(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Supporting documents upload
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/upload-supporting-doc', methods=['GET', 'POST'])
+@login_required
+def upload_supporting_document(sample_id):
+    sample = db.get_or_404(Sample, sample_id)
+    form = SupportingDocumentForm()
+
+    if form.validate_on_submit():
+        stored, original = _save_file(form.file.data)
+        doc = SupportingDocument(
+            sample_id=sample.id,
+            file_path=stored,
+            original_name=original,
+            description=form.description.data or None,
+            uploaded_by=current_user.id,
+        )
+        db.session.add(doc)
+        _add_history(sample, 'Supporting Document Uploaded',
+                     f'{current_user.full_name} uploaded "{original}"')
+        db.session.commit()
+        flash('Supporting document uploaded.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    return render_template(
+        'samples/upload_supporting_doc.html', form=form, sample=sample
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +641,7 @@ def submit_report(assignment_id):
     form = ReportSubmitForm()
     if form.validate_on_submit():
         assignment.report_text = form.report_text.data
-        assignment.report_submitted_at = datetime.now(timezone.utc)
+        assignment.report_submitted_at = jamaica_now()
         assignment.all_samples_returned = form.all_samples_returned.data or None
         assignment.return_quantity = form.return_quantity.data or None
 
@@ -566,9 +709,18 @@ def preliminary_review(assignment_id):
     form = PreliminaryReviewForm()
     if form.validate_on_submit():
         action = form.action.data
+
+        # Validation: If any checklist item is "No", only allow return
+        if form.has_any_no() and action == 'approved':
+            flash('Cannot approve: one or more checklist items are marked "No". '
+                  'Please return for correction.', 'danger')
+            return render_template(
+                'samples/preliminary_review.html', form=form, assignment=assignment
+            )
+
         assignment.preliminary_review_comments = form.review_comments.data
         assignment.preliminary_reviewed_by = current_user.id
-        assignment.preliminary_reviewed_at = datetime.now(timezone.utc)
+        assignment.preliminary_reviewed_at = jamaica_now()
 
         # Save checklist answers
         checklist = {}
@@ -633,18 +785,18 @@ def review_report(assignment_id):
         action = form.action.data
         assignment.review_comments = form.review_comments.data
         assignment.reviewed_by = current_user.id
-        assignment.reviewed_at = datetime.now(timezone.utc)
+        assignment.reviewed_at = jamaica_now()
 
         if action == 'accepted':
             assignment.status = AssignmentStatus.ACCEPTED
-            assignment.date_completed = datetime.now(timezone.utc)
+            assignment.date_completed = jamaica_now()
         elif action == 'returned':
             assignment.status = AssignmentStatus.RETURNED
             assignment.return_stage = 'technical'
             assignment.date_completed = None
         elif action == 'rejected':
             assignment.status = AssignmentStatus.REJECTED
-            assignment.date_completed = datetime.now(timezone.utc)
+            assignment.date_completed = jamaica_now()
 
         _add_history(
             assignment.sample,
@@ -700,7 +852,7 @@ def submit_to_deputy(sample_id):
         if form.summary_report.data:
             sample.summary_report = form.summary_report.data
             sample.summary_report_by = current_user.id
-            sample.summary_report_at = datetime.now(timezone.utc)
+            sample.summary_report_at = jamaica_now()
 
         if form.summary_report_file.data:
             stored, original = _save_file(form.summary_report_file.data)
@@ -750,7 +902,7 @@ def deputy_review(sample_id):
         action = form.action.data
         sample.deputy_review_comments = form.review_comments.data
         sample.deputy_reviewed_by = current_user.id
-        sample.deputy_reviewed_at = datetime.now(timezone.utc)
+        sample.deputy_reviewed_at = jamaica_now()
 
         if action == 'approved':
             sample.status = SampleStatus.CERTIFICATE_PREPARATION
@@ -836,7 +988,7 @@ def prepare_certificate(sample_id):
     if form.validate_on_submit():
         sample.certificate_text = form.certificate_text.data
         sample.certificate_prepared_by = current_user.id
-        sample.certificate_prepared_at = datetime.now(timezone.utc)
+        sample.certificate_prepared_at = jamaica_now()
 
         if form.certificate_file.data:
             stored, original = _save_file(form.certificate_file.data)
@@ -889,10 +1041,10 @@ def hod_review(sample_id):
         action = form.action.data
         sample.hod_review_comments = form.review_comments.data
         sample.hod_reviewed_by = current_user.id
-        sample.hod_reviewed_at = datetime.now(timezone.utc)
+        sample.hod_reviewed_at = jamaica_now()
 
         if action == 'sign':
-            sample.certified_at = datetime.now(timezone.utc)
+            sample.certified_at = jamaica_now()
             sample.certified_by = current_user.id
             sample.status = SampleStatus.CERTIFIED
             _add_history(

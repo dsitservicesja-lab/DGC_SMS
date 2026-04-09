@@ -101,12 +101,21 @@
                     <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Date Received</dt>
                     <dd class="mb-3">{{ sample.date_received.strftime('%d %b %Y') }}</dd>
                     {% if sample.scanned_file %}
-                    <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Scanned Document</dt>
+                    <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Submission Form</dt>
                     <dd class="mb-0">
-                        <a href="{{ url_for('samples.download_file', filename=sample.scanned_file) }}"
-                           class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-download me-1"></i>{{ sample.scanned_file_original_name }}
-                        </a>
+                        <div class="d-flex gap-1 align-items-center">
+                            {% set sf_ext = sample.scanned_file_original_name.rsplit('.', 1)[-1].lower() if sample.scanned_file_original_name else '' %}
+                            {% if sf_ext == 'pdf' %}
+                            <a href="{{ url_for('samples.view_file', filename=sample.scanned_file) }}"
+                               target="_blank" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye me-1"></i>Preview
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('samples.download_file', filename=sample.scanned_file) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download me-1"></i>{{ sample.scanned_file_original_name }}
+                            </a>
+                        </div>
                     </dd>
                     {% endif %}
                 </dl>
@@ -167,12 +176,19 @@
                 <ul class="list-unstyled mb-0 ms-1">
                     {% for field_name, label in fields %}
                     <li>
-                        {% if checklist.get(field_name) %}
+                        {% set val = checklist.get(field_name, 'na') %}
+                        {% if val == 'yes' or val == true %}
                         <i class="bi bi-check-circle-fill text-success me-1"></i>
-                        {% else %}
+                        {% elif val == 'no' or val == false %}
                         <i class="bi bi-x-circle-fill text-danger me-1"></i>
+                        {% else %}
+                        <i class="bi bi-dash-circle-fill text-warning me-1"></i>
                         {% endif %}
-                        <small>{{ label }}</small>
+                        <small>{{ label }}
+                            {% if val == 'yes' or val == true %}<span class="text-success">(Yes)</span>
+                            {% elif val == 'no' or val == false %}<span class="text-danger">(No)</span>
+                            {% else %}<span class="text-warning">(N/A)</span>{% endif %}
+                        </small>
                     </li>
                     {% endfor %}
                 </ul>

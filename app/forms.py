@@ -7,7 +7,7 @@ from flask_wtf.file import FileField, FileAllowed
 from wtforms import (
     StringField, PasswordField, SelectField, TextAreaField,
     DateField, SubmitField, BooleanField, SelectMultipleField,
-    widgets,
+    RadioField, widgets,
 )
 from wtforms.validators import (
     DataRequired, Email, EqualTo, Length, Optional, ValidationError,
@@ -26,6 +26,24 @@ FORMULATION_TYPE_CHOICES = [
     ('Solution', 'Solution'),
     ('Injection', 'Injection'),
     ('Powder', 'Powder'),
+]
+
+# Toxicology sample type choices (replaces Sample Name for Toxicology)
+TOXICOLOGY_SAMPLE_TYPE_CHOICES = [
+    ('', '-- Select Sample Type --'),
+    ('Blood', 'Blood'),
+    ('Urine', 'Urine'),
+    ('Serum', 'Serum'),
+    ('Stomach Content', 'Stomach Content'),
+    ('Bile', 'Bile'),
+    ('Liver', 'Liver'),
+    ('Kidney', 'Kidney'),
+    ('Fish', 'Fish'),
+    ('Food', 'Food'),
+    ('Ackee', 'Ackee'),
+    ('24 Hour Urine', '24 Hour Urine'),
+    ('Gastric Content', 'Gastric Content'),
+    ('Vitreous Humor', 'Vitreous Humor'),
 ]
 
 # Predefined test names per sample type (Branch)
@@ -252,7 +270,7 @@ class SampleRegisterForm(FlaskForm):
     lab_number = StringField('Lab Number', validators=[DataRequired(), Length(max=50)])
     sample_name = StringField('Sample Name', validators=[DataRequired(), Length(max=255)])
     sample_type = SelectField(
-        'Sample Type',
+        'Laboratory',
         choices=[(b.name, b.value) for b in Branch],
         validators=[DataRequired()],
     )
@@ -264,7 +282,7 @@ class SampleRegisterForm(FlaskForm):
     date_received = DateField('Date Received', validators=[DataRequired()])
     expected_report_date = None
     scanned_file = FileField(
-        'Scanned Document',
+        'Submission Form',
         validators=[FileAllowed(
             ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
             'Only PDF, image, and Word document files allowed.'
@@ -285,12 +303,20 @@ class SampleRegisterForm(FlaskForm):
 
 class ToxicologySampleRegisterForm(SampleRegisterForm):
     """Registration form for Toxicology samples.
-    Uses volume (not quantity), no parish, no expected report date.
+    Uses Sample Type dropdown (Blood, Urine, etc.), volume, no parish, no expected report date.
     """
     # Override quantity field to remove it (use volume instead)
     quantity = None
     parish = None
     expected_report_date = None
+
+    # Replace free-text sample_name with Sample Type dropdown
+    sample_name = StringField('Sample Name', validators=[DataRequired(), Length(max=255)])
+    toxicology_sample_type_name = SelectField(
+        'Sample Type',
+        choices=TOXICOLOGY_SAMPLE_TYPE_CHOICES,
+        validators=[Optional()],
+    )
 
     patient_name = StringField(
         'Patient Name',
@@ -324,6 +350,14 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
+    lot_number = StringField(
+        'Lot Number',
+        validators=[Optional(), Length(max=100)]
+    )
+    expiration_date = DateField(
+        'Expiration Date',
+        validators=[Optional()]
+    )
 
     def validate_lab_number(self, field):
         """Override: allow empty lab_number (will be auto-generated)."""
@@ -336,13 +370,16 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
 
 class FoodMilkSampleRegisterForm(SampleRegisterForm):
     """Registration form for Food (Milk) samples.
-    Uses volume, no parish, no source.
+    Uses volume, no parish. Source stored in source field only (fix duplicate).
     """
     # Remove parish
     parish = None
 
-    # Rename sample_name to display as "Source" for Milk samples
-    sample_name = StringField('Source', validators=[DataRequired(), Length(max=255)])
+    # Fix: The base SampleRegisterForm has an optional source field.
+    # For Milk samples, Source is required and is the primary identifying field.
+    # We override it here with DataRequired to enforce this.
+    # The base class sample_name remains for the milk sample name.
+    source = StringField('Source', validators=[DataRequired(), Length(max=255)])
 
     # Use volume instead of quantity
     quantity = None
@@ -358,14 +395,24 @@ class FoodMilkSampleRegisterForm(SampleRegisterForm):
         ],
         validators=[Optional()]
     )
+    lot_number = StringField(
+        'Lot Number',
+        validators=[Optional(), Length(max=100)]
+    )
+    expiration_date = DateField(
+        'Expiration Date',
+        validators=[Optional()]
+    )
 
 
 class FoodAlcoholSampleRegisterForm(SampleRegisterForm):
     """Registration form for Food (Alcohol) samples.
-    No parish, alcohol type dropdown, Claim/Butt # field.
+    No parish, no patient name, alcohol type dropdown, Claim/Butt # field,
+    Batch/Lot Number field.
     """
-    # Remove parish
+    # Remove parish and patient_name
     parish = None
+    patient_name = None
 
     quantity = StringField(
         'No./Quantity of Sample',
@@ -383,6 +430,10 @@ class FoodAlcoholSampleRegisterForm(SampleRegisterForm):
     )
     claim_butt_number = StringField(
         'Claim/Butt #',
+        validators=[Optional(), Length(max=100)]
+    )
+    batch_lot_number = StringField(
+        'Batch / Lot Number',
         validators=[Optional(), Length(max=100)]
     )
 
@@ -421,7 +472,7 @@ def get_sample_register_form(sample_type):
 class SampleEditForm(FlaskForm):
     sample_name = StringField('Sample Name', validators=[DataRequired(), Length(max=255)])
     sample_type = SelectField(
-        'Sample Type',
+        'Laboratory',
         choices=[(b.name, b.value) for b in Branch],
         validators=[DataRequired()],
     )
@@ -447,6 +498,7 @@ class SampleEditForm(FlaskForm):
         validators=[Optional()]
     )
     claim_butt_number = StringField('Claim/Butt #', validators=[Optional(), Length(max=100)])
+    batch_lot_number = StringField('Batch / Lot Number', validators=[Optional(), Length(max=100)])
     milk_type = SelectField(
         'Milk Type',
         choices=[
@@ -456,9 +508,16 @@ class SampleEditForm(FlaskForm):
         ],
         validators=[Optional()]
     )
+    lot_number = StringField('Lot Number', validators=[Optional(), Length(max=100)])
+    expiration_date = DateField('Expiration Date', validators=[Optional()])
+    toxicology_sample_type_name = SelectField(
+        'Sample Type',
+        choices=TOXICOLOGY_SAMPLE_TYPE_CHOICES,
+        validators=[Optional()],
+    )
     expected_report_date = DateField('Expected Report Date', validators=[Optional()])
     scanned_file = FileField(
-        'Replace Scanned Document',
+        'Replace Submission Form',
         validators=[FileAllowed(
             ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
             'Only PDF, image, and Word document files allowed.'
@@ -501,9 +560,9 @@ class SampleAssignForm(FlaskForm):
     )
     # Fallback free-text field for sample types without predefined tests
     test_name = StringField('Test Name', validators=[Optional(), Length(max=255)])
-    # For sample types with predefined references, use a dropdown
-    test_reference_select = SelectField(
-        'Test Reference',
+    # Multi-select test references
+    test_reference_select = SelectMultipleField(
+        'Test Reference(s)',
         choices=[],
         validators=[Optional()],
     )
@@ -550,28 +609,84 @@ class ReportSubmitForm(FlaskForm):
 
 
 class PreliminaryReviewForm(FlaskForm):
-    """Preliminary administrative / completeness review by Officer."""
+    """Preliminary administrative / completeness review by Officer.
+    Each checklist item uses Yes/No/N/A (tri-state) with visual indicators:
+    Yes → Green, No → Red, N/A → Yellow.
+    If any item is set to 'No', progression is blocked (return only).
+    """
 
     # -- Corrections --
-    chk_original_entry_visible = BooleanField('Original entry remains visible')
+    chk_original_entry_visible = RadioField(
+        'Original entry remains visible',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
 
     # -- Signatures and Review --
-    chk_entries_signed = BooleanField('Entries signed/initialed by analyst')
-    chk_date_recorded = BooleanField('Date of entry recorded')
-    chk_conclusions_signed_dated = BooleanField('Conclusions signed and dated')
-    chk_report_signed_dated = BooleanField('Report signed and dated')
+    chk_entries_signed = RadioField(
+        'Entries signed/initialed by analyst',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_date_recorded = RadioField(
+        'Date of entry recorded',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_conclusions_signed_dated = RadioField(
+        'Conclusions signed and dated',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_report_signed_dated = RadioField(
+        'Report signed and dated',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
 
     # -- Attachments --
-    chk_printouts_attached = BooleanField('Printouts/graphs attached securely')
-    chk_attachments_labeled = BooleanField('Attachments labeled and dated')
-    chk_analyst_initials = BooleanField('Analyst initials across attachment')
-    chk_templates_completed = BooleanField('Templates completed')
+    chk_printouts_attached = RadioField(
+        'Printouts/graphs attached securely',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_attachments_labeled = RadioField(
+        'Attachments labeled and dated',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_analyst_initials = RadioField(
+        'Analyst initials across attachment',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_templates_completed = RadioField(
+        'Templates completed',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
 
     # -- General Documentation --
-    chk_writing_legible = BooleanField('Writing clear and legible')
-    chk_logbooks_updated = BooleanField('Logbooks updated')
-    chk_toc_updated = BooleanField('Table of contents updated')
-    chk_pages_numbered = BooleanField('Pages numbered')
+    chk_writing_legible = RadioField(
+        'Writing clear and legible',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_logbooks_updated = RadioField(
+        'Logbooks updated',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_toc_updated = RadioField(
+        'Table of contents updated',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
+    chk_pages_numbered = RadioField(
+        'Pages numbered',
+        choices=[('yes', 'Yes'), ('no', 'No'), ('na', 'N/A')],
+        default='na', validators=[DataRequired()]
+    )
 
     action = SelectField(
         'Decision',
@@ -609,6 +724,14 @@ class PreliminaryReviewForm(FlaskForm):
             'chk_pages_numbered',
         ]),
     ]
+
+    def has_any_no(self):
+        """Check if any checklist item is set to 'No'."""
+        for _, fields in self.CHECKLIST_CATEGORIES:
+            for field_name in fields:
+                if getattr(self, field_name).data == 'no':
+                    return True
+        return False
 
 
 class ReportReviewForm(FlaskForm):
@@ -686,3 +809,34 @@ class HODReviewForm(FlaskForm):
     )
     review_comments = TextAreaField('Comments', validators=[Optional()])
     submit = SubmitField('Submit Decision')
+
+
+class SupportingDocumentForm(FlaskForm):
+    """Form for uploading additional supporting documents."""
+    file = FileField(
+        'Supporting Document',
+        validators=[
+            DataRequired(message='Please select a file to upload.'),
+            FileAllowed(
+                ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+                'Only PDF, image, and Word document files allowed.'
+            ),
+        ],
+    )
+    description = StringField('Description', validators=[Optional(), Length(max=500)])
+    submit = SubmitField('Upload Document')
+
+
+class NonWorkingDayForm(FlaskForm):
+    """Form for managing non-working days (holidays, emergency closures)."""
+    date = DateField('Date', validators=[DataRequired()])
+    description = StringField('Description', validators=[DataRequired(), Length(max=255)])
+    day_type = SelectField(
+        'Type',
+        choices=[
+            ('holiday', 'Public Holiday'),
+            ('emergency', 'Emergency / Disaster Closure'),
+        ],
+        validators=[DataRequired()],
+    )
+    submit = SubmitField('Add Non-Working Day')

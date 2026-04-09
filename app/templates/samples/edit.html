@@ -70,8 +70,24 @@
                             {{ form.claim_butt_number(class="form-control") }}
                         </div>
                         <div class="col-md-4">
+                            {{ form.batch_lot_number.label(class="form-label fw-semibold") }}
+                            {{ form.batch_lot_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
                             {{ form.milk_type.label(class="form-label fw-semibold") }}
                             {{ form.milk_type(class="form-select") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.lot_number.label(class="form-label fw-semibold") }}
+                            {{ form.lot_number(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.expiration_date.label(class="form-label fw-semibold") }}
+                            {{ form.expiration_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.toxicology_sample_type_name.label(class="form-label fw-semibold") }}
+                            {{ form.toxicology_sample_type_name(class="form-select") }}
                         </div>
 
                         <div class="col-md-6">

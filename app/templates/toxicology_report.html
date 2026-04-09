@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Toxicology Report - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-file-earmark-bar-graph"></i> Toxicology Report</h2>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body py-3 px-4">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-semibold small">Year</label>
+                <select name="year" class="form-select form-select-sm">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold small">Quarter</label>
+                <select name="quarter" class="form-select form-select-sm">
+                    <option value="0" {% if quarter == 0 %}selected{% endif %}>All Quarters</option>
+                    {% for q in [1, 2, 3, 4] %}
+                    <option value="{{ q }}" {% if quarter == q %}selected{% endif %}>Q{{ q }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold small">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for s in SampleStatus %}
+                    <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Filter</button>
+                <a href="{{ url_for('main.toxicology_report_download', year=year, quarter=quarter) }}"
+                   class="btn btn-outline-success btn-sm ms-1">
+                    <i class="bi bi-download me-1"></i>CSV
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div class="text-muted small fw-semibold text-uppercase">Total</div>
+            <div class="fs-4 fw-bold">{{ total }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div class="text-muted small fw-semibold text-uppercase">Certified</div>
+            <div class="fs-4 fw-bold text-success">{{ certified }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div class="text-muted small fw-semibold text-uppercase">In Progress</div>
+            <div class="fs-4 fw-bold text-info">{{ in_progress }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div class="text-muted small fw-semibold text-uppercase">Avg TAT (working days)</div>
+            <div class="fs-4 fw-bold">{{ avg_tat if avg_tat is not none else '—' }}</div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Samples Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Lab Number</th>
+                    <th>Sample Name</th>
+                    <th>Sample Type</th>
+                    <th>Patient Name</th>
+                    <th>Status</th>
+                    <th>Date Received</th>
+                    <th>Registered</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in samples %}
+                <tr>
+                    <td><a href="{{ url_for('samples.detail', sample_id=s.id) }}">{{ s.lab_number }}</a></td>
+                    <td>{{ s.sample_name }}</td>
+                    <td>{{ s.toxicology_sample_type_name or '—' }}</td>
+                    <td>{{ s.patient_name or '—' }}</td>
+                    <td>
+                        {% set status_colors = {
+                            'Registered': 'secondary', 'Assigned': 'primary', 'In Progress': 'info',
+                            'Report Submitted': 'warning', 'Certified': 'success', 'Completed': 'success',
+                            'Rejected': 'danger',
+                        } %}
+                        <span class="badge bg-{{ status_colors.get(s.status.value, 'secondary') }}">
+                            {{ s.status.value }}
+                        </span>
+                    </td>
+                    <td>{{ s.date_received.strftime('%d %b %Y') if s.date_received else '' }}</td>
+                    <td>{{ s.date_registered.strftime('%d %b %Y') if s.date_registered else '' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">No toxicology samples found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

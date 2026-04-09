@@ -1,6 +1,6 @@
 import enum
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 
 from flask import current_app
 from flask_login import UserMixin
@@ -10,6 +10,14 @@ from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db, login_manager
+
+# Jamaica timezone (GMT-05:00) for consistent timestamp handling
+JAMAICA_TZ = timezone(timedelta(hours=-5))
+
+
+def jamaica_now():
+    """Return current datetime in Jamaica timezone (GMT-05:00)."""
+    return datetime.now(JAMAICA_TZ)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +121,7 @@ class User(UserMixin, db.Model):
     is_active_user = db.Column(db.Boolean, default=True)
     must_change_password = db.Column(db.Boolean, default=True)
     created_at = db.Column(
-        db.DateTime, default=lambda: datetime.now(timezone.utc)
+        db.DateTime, default=jamaica_now
     )
 
     # Relationships
@@ -294,6 +302,14 @@ class Sample(db.Model):
     # Food (Alcohol) specific
     alcohol_type = db.Column(db.String(100), nullable=True)
     claim_butt_number = db.Column(db.String(100), nullable=True)
+    batch_lot_number = db.Column(db.String(100), nullable=True)  # Food (Alcohol)
+
+    # Pharmaceutical & Milk shared fields
+    lot_number = db.Column(db.String(100), nullable=True)
+    expiration_date = db.Column(db.Date, nullable=True)
+
+    # Toxicology – sample type dropdown (Blood, Urine, etc.)
+    toxicology_sample_type_name = db.Column(db.String(100), nullable=True)
 
     # Scanned document
     scanned_file = db.Column(db.String(500), nullable=True)
@@ -305,7 +321,7 @@ class Sample(db.Model):
     )
     date_received = db.Column(db.Date, nullable=False)
     date_registered = db.Column(
-        db.DateTime, default=lambda: datetime.now(timezone.utc)
+        db.DateTime, default=jamaica_now
     )
     expected_report_date = db.Column(db.Date, nullable=True)
 
@@ -399,7 +415,7 @@ class SampleAssignment(db.Model):
     )
 
     assigned_date = db.Column(
-        db.DateTime, default=lambda: datetime.now(timezone.utc)
+        db.DateTime, default=jamaica_now
     )
     expected_completion = db.Column(db.Date, nullable=True)
     date_completed = db.Column(db.DateTime, nullable=True)
@@ -465,7 +481,7 @@ class SampleHistory(db.Model):
         db.Integer, db.ForeignKey('users.id'), nullable=False
     )
     created_at = db.Column(
-        db.DateTime, default=lambda: datetime.now(timezone.utc)
+        db.DateTime, default=jamaica_now
     )
 
     performer = db.relationship('User', foreign_keys=[performed_by])
@@ -491,7 +507,7 @@ class Notification(db.Model):
     is_read = db.Column(db.Boolean, default=False)
     email_sent = db.Column(db.Boolean, default=False)
     created_at = db.Column(
-        db.DateTime, default=lambda: datetime.now(timezone.utc)
+        db.DateTime, default=jamaica_now
     )
 
     user = db.relationship('User', backref=db.backref('notifications', lazy='dynamic'))
@@ -594,3 +610,82 @@ class KpiTarget(db.Model):
         return (f'<KpiTarget {self.kpi_key} '
                 f'Y{self.year} Q{self.quarter} '
                 f'T={self.target_value} A={self.actual_override}>')
+
+
+# ---------------------------------------------------------------------------
+# Non-Working Days (holidays, emergency closures) – for TAT calculation
+# ---------------------------------------------------------------------------
+
+class NonWorkingDay(db.Model):
+    """Calendar entries for public holidays and emergency closure days.
+    These dates are excluded from turnaround time (TAT) calculations."""
+    __tablename__ = 'non_working_days'
+
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, unique=True, index=True)
+    description = db.Column(db.String(255), nullable=False)
+    day_type = db.Column(db.String(50), nullable=False, default='holiday')  # 'holiday' or 'emergency'
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=jamaica_now)
+
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    def __repr__(self):
+        return f'<NonWorkingDay {self.date} - {self.description}>'
+
+
+def calculate_working_days(start_date, end_date):
+    """Calculate working days between two dates, excluding weekends and
+    non-working days (public holidays, emergency closures)."""
+    if not start_date or not end_date:
+        return None
+    if isinstance(start_date, datetime):
+        start_date = start_date.date()
+    if isinstance(end_date, datetime):
+        end_date = end_date.date()
+
+    # Get all non-working dates in the range
+    non_working = {
+        row.date for row in NonWorkingDay.query.filter(
+            NonWorkingDay.date >= start_date,
+            NonWorkingDay.date <= end_date,
+        ).all()
+    }
+
+    count = 0
+    current = start_date
+    while current <= end_date:
+        # Exclude weekends (Mon-Fri are 0-4; Sat=5, Sun=6) and non-working days
+        if current.weekday() < 5 and current not in non_working:
+            count += 1
+        current += timedelta(days=1)
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Supporting Documents (additional uploads by officers)
+# ---------------------------------------------------------------------------
+
+class SupportingDocument(db.Model):
+    """Extra supporting documents uploaded for a sample."""
+    __tablename__ = 'supporting_documents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sample_id = db.Column(
+        db.Integer, db.ForeignKey('samples.id'), nullable=False
+    )
+    file_path = db.Column(db.String(500), nullable=False)
+    original_name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    uploaded_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    uploaded_at = db.Column(db.DateTime, default=jamaica_now)
+
+    sample = db.relationship('Sample', backref=db.backref(
+        'supporting_documents', lazy='dynamic', cascade='all, delete-orphan'
+    ))
+    uploader = db.relationship('User', foreign_keys=[uploaded_by])
+
+    def __repr__(self):
+        return f'<SupportingDocument {self.original_name} for Sample {self.sample_id}>'

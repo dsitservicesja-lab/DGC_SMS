@@ -2,6 +2,15 @@
 {% block title %}Preliminary Review - DGC SMS{% endblock %}
 
 {% block content %}
+<style>
+    .check-yes { color: #198754; font-weight: 600; }
+    .check-no { color: #dc3545; font-weight: 600; }
+    .check-na { color: #ffc107; font-weight: 600; }
+    .form-check-inline .form-check-input:checked + .check-yes { background-color: #d1e7dd; padding: 2px 6px; border-radius: 4px; }
+    .form-check-inline .form-check-input:checked + .check-no { background-color: #f8d7da; padding: 2px 6px; border-radius: 4px; }
+    .form-check-inline .form-check-input:checked + .check-na { background-color: #fff3cd; padding: 2px 6px; border-radius: 4px; }
+</style>
+
 <div class="page-header">
     <h2><i class="bi bi-check2-circle"></i> Preliminary Review</h2>
     <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}" class="btn btn-outline-secondary btn-sm">
@@ -26,10 +35,19 @@
                 <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg); white-space: pre-wrap; font-size:.875rem;">{{ assignment.report_text }}</div>
                 {% endif %}
                 {% if assignment.report_file %}
-                <a href="{{ url_for('samples.download_file', filename=assignment.report_file) }}"
-                   class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-download me-1"></i>{{ assignment.report_file_original_name }}
-                </a>
+                {% set rpt_ext = assignment.report_file_original_name.rsplit('.', 1)[-1].lower() if assignment.report_file_original_name else '' %}
+                <div class="d-flex gap-2 align-items-center">
+                    {% if rpt_ext == 'pdf' %}
+                    <a href="{{ url_for('samples.view_file', filename=assignment.report_file) }}"
+                       target="_blank" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-eye me-1"></i>Preview
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('samples.download_file', filename=assignment.report_file) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-download me-1"></i>{{ assignment.report_file_original_name }}
+                    </a>
+                </div>
                 {% endif %}
                 {% if assignment.report_submitted_at %}
                 <p class="mt-2 text-muted small mb-0">
@@ -49,8 +67,18 @@
                 </small>
             </div>
             <div class="card-body p-4">
-                <form method="POST">
+                <form method="POST" id="prelimReviewForm">
                     {{ form.hidden_tag() }}
+
+                    <!-- Select All Controls -->
+                    <div class="mb-3 d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="selectAllYes">
+                            <i class="bi bi-check-all me-1"></i>Select All Yes
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning" id="selectAllNA">
+                            <i class="bi bi-dash-circle me-1"></i>Select All N/A
+                        </button>
+                    </div>
 
                     <!-- Review Checklist -->
                     <h6 class="fw-semibold mb-3"><i class="bi bi-list-check me-1"></i>Review Checklist</h6>
@@ -59,9 +87,18 @@
                         <div class="fw-semibold text-muted small text-uppercase mb-2">{{ category }}</div>
                         {% for field_name in fields %}
                         {% set field = form[field_name] %}
-                        <div class="form-check mb-2">
-                            {{ field(class="form-check-input") }}
-                            {{ field.label(class="form-check-label") }}
+                        <div class="mb-2 p-2 border rounded" id="check_row_{{ field_name }}">
+                            <div class="fw-semibold small mb-1">{{ field.label.text }}</div>
+                            <div class="d-flex gap-3">
+                                {% for subfield in field %}
+                                <div class="form-check form-check-inline">
+                                    {{ subfield(class="form-check-input checklist-radio", **{"data-field": field_name}) }}
+                                    <label class="form-check-label {% if subfield.data == 'yes' %}check-yes{% elif subfield.data == 'no' %}check-no{% else %}check-na{% endif %}" for="{{ subfield.id }}">
+                                        {% if subfield.data == 'yes' %}✓ Yes{% elif subfield.data == 'no' %}✗ No{% else %}— N/A{% endif %}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
@@ -71,10 +108,14 @@
                     <div class="row g-3">
                         <div class="col-12">
                             {{ form.action.label(class="form-label fw-semibold") }}
-                            {{ form.action(class="form-select") }}
+                            {{ form.action(class="form-select", id="reviewAction") }}
                             {% for error in form.action.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
+                            <div class="form-text text-danger d-none" id="noBlockWarning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Cannot approve: one or more items are marked "No". Only return for correction is allowed.
+                            </div>
                         </div>
 
                         <div class="col-12">
@@ -93,4 +134,71 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Select All Yes
+    document.getElementById('selectAllYes').addEventListener('click', function() {
+        document.querySelectorAll('.checklist-radio[value="yes"]').forEach(function(r) {
+            r.checked = true;
+            r.dispatchEvent(new Event('change'));
+        });
+        updateRowColors();
+        checkNoBlocking();
+    });
+
+    // Select All N/A
+    document.getElementById('selectAllNA').addEventListener('click', function() {
+        document.querySelectorAll('.checklist-radio[value="na"]').forEach(function(r) {
+            r.checked = true;
+            r.dispatchEvent(new Event('change'));
+        });
+        updateRowColors();
+        checkNoBlocking();
+    });
+
+    // Color indicators per row
+    function updateRowColors() {
+        document.querySelectorAll('.checklist-radio:checked').forEach(function(r) {
+            var row = document.getElementById('check_row_' + r.dataset.field);
+            if (!row) return;
+            row.classList.remove('border-success', 'border-danger', 'border-warning', 'bg-success-subtle', 'bg-danger-subtle', 'bg-warning-subtle');
+            if (r.value === 'yes') {
+                row.classList.add('border-success', 'bg-success-subtle');
+            } else if (r.value === 'no') {
+                row.classList.add('border-danger', 'bg-danger-subtle');
+            } else {
+                row.classList.add('border-warning', 'bg-warning-subtle');
+            }
+        });
+    }
+
+    // Block "Approve" if any item is "No"
+    function checkNoBlocking() {
+        var hasNo = false;
+        document.querySelectorAll('.checklist-radio[value="no"]:checked').forEach(function() { hasNo = true; });
+        var actionSelect = document.getElementById('reviewAction');
+        var warning = document.getElementById('noBlockWarning');
+        var approveOption = actionSelect.querySelector('option[value="approved"]');
+        if (hasNo) {
+            warning.classList.remove('d-none');
+            if (approveOption) approveOption.disabled = true;
+            if (actionSelect.value === 'approved') actionSelect.value = '';
+        } else {
+            warning.classList.add('d-none');
+            if (approveOption) approveOption.disabled = false;
+        }
+    }
+
+    document.querySelectorAll('.checklist-radio').forEach(function(r) {
+        r.addEventListener('change', function() {
+            updateRowColors();
+            checkNoBlocking();
+        });
+    });
+
+    updateRowColors();
+    checkNoBlocking();
+});
+</script>
 {% endblock %}

@@ -367,6 +367,20 @@ def notify_certificate_signed(sample, action):
     create_notification(sample.uploaded_by, title, message, link)
 
 
+def notify_assignment_removed(chemist_id, sample_ref, test_name, removed_by, sample_id):
+    """Notify the removed assignee when an assignment is removed."""
+    from app.models import jamaica_now
+    timestamp = jamaica_now().strftime('%d %b %Y %H:%M')
+    title = f'Assignment Removed: {sample_ref}'
+    message = (
+        f'Your assignment for test "{test_name}" on sample '
+        f'{sample_ref} has been removed by {removed_by}.\n\n'
+        f'Removed at: {timestamp}'
+    )
+    link = f'/samples/{sample_id}'
+    create_notification(chemist_id, title, message, link)
+
+
 # ---------------------------------------------------------------------------
 # Expected Report Date Reminders
 # ---------------------------------------------------------------------------
