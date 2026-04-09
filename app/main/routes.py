@@ -13,6 +13,7 @@ from app.models import (
     Sample, SampleAssignment, SampleHistory, Notification, User,
     Role, SampleStatus, AssignmentStatus, Setting, Branch,
     KpiTarget, KPI_METRICS, AUTO_ACTUAL_KEYS,
+    NonWorkingDay, calculate_working_days, jamaica_now,
 )
 
 
@@ -250,7 +251,7 @@ def keep_alive():
 def kpi():
     from sqlalchemy import extract, func
 
-    year = request.args.get('year', type=int, default=datetime.now(timezone.utc).year)
+    year = request.args.get('year', type=int, default=jamaica_now().year)
     sort_by = request.args.get('sort', 'quarter')
     sort_dir = request.args.get('dir', 'asc')
 
@@ -395,7 +396,7 @@ def kpi_report():
         return redirect(url_for('main.dashboard'))
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=1)
     if quarter not in (1, 2, 3, 4):
         quarter = 1
@@ -464,7 +465,7 @@ def kpi_report_download():
         return redirect(url_for('main.dashboard'))
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=1)
     if quarter not in (1, 2, 3, 4):
         quarter = 1
@@ -514,7 +515,7 @@ def kpi_targets():
         return redirect(url_for('main.dashboard'))
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=1)
     if quarter not in (1, 2, 3, 4):
         quarter = 1
@@ -560,7 +561,7 @@ def kpi_targets():
     target_years = {
         r.year for r in db.session.query(KpiTarget.year).distinct().all()
     }
-    current_year = datetime.now(timezone.utc).year
+    current_year = jamaica_now().year
     available_years = sorted(
         sample_years | target_years | {current_year, current_year + 1}
     )
@@ -592,7 +593,7 @@ def pharma_report():
     from sqlalchemy import extract
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     status_filter = request.args.get('status', '')
 
@@ -678,7 +679,7 @@ def pharma_report_download():
     from sqlalchemy import extract
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=0)
 
     q = Sample.query.filter(
@@ -745,7 +746,7 @@ def milk_report():
     from sqlalchemy import extract
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     status_filter = request.args.get('status', '')
 
@@ -831,7 +832,7 @@ def milk_report_download():
     from sqlalchemy import extract
 
     year = request.args.get('year', type=int,
-                            default=datetime.now(timezone.utc).year)
+                            default=jamaica_now().year)
     quarter = request.args.get('quarter', type=int, default=0)
 
     q = Sample.query.filter(
@@ -884,6 +885,299 @@ def milk_report_download():
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Toxicology Report
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/reports/toxicology')
+@login_required
+def toxicology_report():
+    """Toxicology sample report with filtering."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=jamaica_now().year)
+    quarter = request.args.get('quarter', type=int, default=0)
+    status_filter = request.args.get('status', '')
+
+    q = Sample.query.filter(
+        Sample.sample_type == Branch.TOXICOLOGY,
+        extract('year', Sample.date_registered) == year,
+    )
+
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+
+    if status_filter:
+        try:
+            st = SampleStatus(status_filter)
+            q = q.filter(Sample.status == st)
+        except ValueError:
+            pass
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    total = len(samples)
+    certified = sum(
+        1 for s in samples
+        if s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    )
+    in_progress = sum(
+        1 for s in samples
+        if s.status not in (
+            SampleStatus.CERTIFIED, SampleStatus.COMPLETED,
+            SampleStatus.REJECTED,
+        )
+    )
+    rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
+
+    tat_days = [
+        calculate_working_days(s.date_received, s.certified_at)
+        for s in samples
+        if s.certified_at and s.date_received
+        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    ]
+    tat_days = [d for d in tat_days if d is not None]
+    avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
+
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', Sample.date_registered).label('yr')
+        ).distinct().all() if r.yr
+    }
+    available_years = sorted(sample_years | {year})
+
+    return render_template(
+        'toxicology_report.html',
+        samples=samples,
+        year=year,
+        quarter=quarter,
+        status_filter=status_filter,
+        available_years=available_years,
+        total=total,
+        certified=certified,
+        in_progress=in_progress,
+        rejected=rejected,
+        avg_tat=avg_tat,
+        SampleStatus=SampleStatus,
+    )
+
+
+@main_bp.route('/reports/toxicology/download')
+@login_required
+def toxicology_report_download():
+    """Download toxicology report as CSV."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=jamaica_now().year)
+    quarter = request.args.get('quarter', type=int, default=0)
+
+    q = Sample.query.filter(
+        Sample.sample_type == Branch.TOXICOLOGY,
+        extract('year', Sample.date_registered) == year,
+    )
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        'Lab Number', 'Sample Name', 'Sample Type', 'Patient Name',
+        'Status', 'Date Received', 'Date Registered',
+        'Certified Date', 'Turnaround (working days)',
+    ])
+    for s in samples:
+        tat = ''
+        if (s.certified_at and s.date_received
+                and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
+            tat = calculate_working_days(s.date_received, s.certified_at) or ''
+        writer.writerow([
+            s.lab_number,
+            s.sample_name,
+            s.toxicology_sample_type_name or '',
+            s.patient_name or '',
+            s.status.value if s.status else '',
+            s.date_received.isoformat() if s.date_received else '',
+            s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
+            s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
+            tat,
+        ])
+
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    filename = f'Toxicology_Report_{year}{q_label}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Toxicology KPI Report
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/kpi/toxicology')
+@login_required
+def kpi_toxicology():
+    """Toxicology-specific KPI report."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int, default=jamaica_now().year)
+
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', Sample.date_registered).label('yr')
+        ).distinct().all() if r.yr
+    }
+    available_years = sorted(sample_years | {year})
+
+    quarters_data = []
+    for q_num in range(1, 5):
+        month_start = (q_num - 1) * 3 + 1
+        month_end = q_num * 3
+
+        base_q = Sample.query.filter(
+            Sample.sample_type == Branch.TOXICOLOGY,
+            extract('year', Sample.date_registered) == year,
+            extract('month', Sample.date_registered) >= month_start,
+            extract('month', Sample.date_registered) <= month_end,
+        )
+        total = base_q.count()
+        certified = base_q.filter(
+            Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED])
+        ).count()
+        in_progress = base_q.filter(
+            Sample.status.notin_([
+                SampleStatus.CERTIFIED, SampleStatus.COMPLETED,
+                SampleStatus.REJECTED
+            ])
+        ).count()
+        rejected = base_q.filter(
+            Sample.status == SampleStatus.REJECTED
+        ).count()
+
+        cert_samples = base_q.filter(
+            Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED]),
+            Sample.certified_at.isnot(None),
+        ).all()
+        if cert_samples:
+            days_list = [
+                calculate_working_days(s.date_received, s.certified_at)
+                for s in cert_samples
+                if s.certified_at and s.date_received
+            ]
+            days_list = [d for d in days_list if d is not None]
+            avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
+        else:
+            avg_tat = None
+
+        quarters_data.append({
+            'quarter': q_num,
+            'label': f'Q{q_num}',
+            'total': total,
+            'certified': certified,
+            'in_progress': in_progress,
+            'rejected': rejected,
+            'avg_tat': avg_tat,
+        })
+
+    return render_template(
+        'kpi_toxicology.html',
+        quarters_data=quarters_data,
+        year=year,
+        available_years=available_years,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Non-Working Days Calendar Management
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/calendar', methods=['GET', 'POST'])
+@login_required
+def calendar_management():
+    """Calendar interface for managing non-working days (Admin/HOD only)."""
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from app.forms import NonWorkingDayForm
+    form = NonWorkingDayForm()
+
+    if form.validate_on_submit():
+        existing = NonWorkingDay.query.filter_by(date=form.date.data).first()
+        if existing:
+            flash('This date is already marked as a non-working day.', 'warning')
+        else:
+            nwd = NonWorkingDay(
+                date=form.date.data,
+                description=form.description.data,
+                day_type=form.day_type.data,
+                created_by=current_user.id,
+            )
+            db.session.add(nwd)
+            db.session.commit()
+            flash('Non-working day added.', 'success')
+        return redirect(url_for('main.calendar_management'))
+
+    year = request.args.get('year', type=int, default=jamaica_now().year)
+    non_working_days = NonWorkingDay.query.filter(
+        db.extract('year', NonWorkingDay.date) == year
+    ).order_by(NonWorkingDay.date).all()
+
+    return render_template(
+        'calendar.html',
+        form=form,
+        non_working_days=non_working_days,
+        year=year,
+    )
+
+
+@main_bp.route('/calendar/<int:nwd_id>/delete', methods=['POST'])
+@login_required
+def delete_non_working_day(nwd_id):
+    """Delete a non-working day entry."""
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    nwd = db.get_or_404(NonWorkingDay, nwd_id)
+    db.session.delete(nwd)
+    db.session.commit()
+    flash('Non-working day removed.', 'success')
+    return redirect(url_for('main.calendar_management'))
 
 
 # ---------------------------------------------------------------------------

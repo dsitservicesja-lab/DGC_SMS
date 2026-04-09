@@ -70,6 +70,11 @@ MIGRATIONS = [
     # sample_assignments – assignment comments and quantity/volume
     ('sample_assignments', 'comments', 'TEXT'),
     ('sample_assignments', 'quantity_volume', 'VARCHAR(100)'),
+    # samples – new fields for requirements
+    ('samples', 'batch_lot_number', 'VARCHAR(100)'),
+    ('samples', 'lot_number', 'VARCHAR(100)'),
+    ('samples', 'expiration_date', 'DATE'),
+    ('samples', 'toxicology_sample_type_name', 'VARCHAR(100)'),
 ]
 
 NEW_TABLES = [
@@ -119,6 +124,29 @@ NEW_TABLES = [
         '  target_value FLOAT,'
         '  actual_override FLOAT,'
         '  UNIQUE (year, quarter, kpi_key)'
+        ')',
+    ),
+    (
+        'non_working_days',
+        'CREATE TABLE IF NOT EXISTS non_working_days ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  date DATE NOT NULL UNIQUE,'
+        '  description VARCHAR(255) NOT NULL,'
+        '  day_type VARCHAR(50) NOT NULL DEFAULT "holiday",'
+        '  created_by INTEGER REFERENCES users(id),'
+        '  created_at DATETIME'
+        ')',
+    ),
+    (
+        'supporting_documents',
+        'CREATE TABLE IF NOT EXISTS supporting_documents ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  sample_id INTEGER NOT NULL REFERENCES samples(id),'
+        '  file_path VARCHAR(500) NOT NULL,'
+        '  original_name VARCHAR(255) NOT NULL,'
+        '  description VARCHAR(500),'
+        '  uploaded_by INTEGER NOT NULL REFERENCES users(id),'
+        '  uploaded_at DATETIME'
         ')',
     ),
 ]

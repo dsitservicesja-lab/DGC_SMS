@@ -1,5 +1,9 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, timezone
+
+
+# Jamaica timezone (GMT-05:00) – used throughout the application
+JAMAICA_TZ = timezone(timedelta(hours=-5))
 
 
 class Config:
@@ -8,6 +12,9 @@ class Config:
         'DATABASE_URL', 'sqlite:///dgc_sms.db'
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Jamaica timezone (GMT-05:00) for all timestamps
+    TIMEZONE = JAMAICA_TZ
 
     # File uploads
     UPLOAD_FOLDER = os.path.join(
