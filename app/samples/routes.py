@@ -390,7 +390,8 @@ def assign(sample_id):
         if has_predefined_refs and form.test_reference_select.data:
             # Filter out empty values from multi-select
             selected_refs = [r for r in form.test_reference_select.data if r]
-            test_ref = ', '.join(selected_refs) if selected_refs else form.test_reference.data
+            # Use semicolon delimiter for robust parsing when multiple refs selected
+            test_ref = '; '.join(selected_refs) if selected_refs else form.test_reference.data
         else:
             test_ref = form.test_reference.data
 

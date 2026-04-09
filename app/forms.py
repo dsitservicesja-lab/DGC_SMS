@@ -375,9 +375,10 @@ class FoodMilkSampleRegisterForm(SampleRegisterForm):
     # Remove parish
     parish = None
 
-    # Fix: Use source field directly instead of overriding sample_name as "Source"
-    # This prevents the duplicate Source issue (sample_name was labeled "Source"
-    # AND the base form had a separate source field)
+    # Fix: The base SampleRegisterForm has an optional source field.
+    # For Milk samples, Source is required and is the primary identifying field.
+    # We override it here with DataRequired to enforce this.
+    # The base class sample_name remains for the milk sample name.
     source = StringField('Source', validators=[DataRequired(), Length(max=255)])
 
     # Use volume instead of quantity

@@ -655,7 +655,7 @@ def calculate_working_days(start_date, end_date):
     count = 0
     current = start_date
     while current <= end_date:
-        # Exclude weekends (5=Saturday, 6=Sunday) and non-working days
+        # Exclude weekends (Mon-Fri are 0-4; Sat=5, Sun=6) and non-working days
         if current.weekday() < 5 and current not in non_working:
             count += 1
         current += timedelta(days=1)

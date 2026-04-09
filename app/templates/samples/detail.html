@@ -226,6 +226,9 @@
                         <i class="bi bi-eye me-1"></i>Preview
                     </a>
                     {% elif ext in ['doc', 'docx'] %}
+                    {# Word preview uses Microsoft Office Online Viewer (external dependency).
+                       The server URL must be publicly accessible for this to work.
+                       Falls back to download-only if not reachable. #}
                     <a href="https://view.officeapps.live.com/op/embed.aspx?src={{ request.url_root }}{{ url_for('samples.view_file', filename=sample.scanned_file)[1:] }}"
                        target="_blank" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-eye me-1"></i>Preview
@@ -281,6 +284,7 @@
                                 <i class="bi bi-eye"></i>
                             </a>
                             {% elif doc_ext in ['doc', 'docx'] %}
+                            {# Word preview via Microsoft Office Online Viewer (external) #}
                             <a href="https://view.officeapps.live.com/op/embed.aspx?src={{ request.url_root }}{{ url_for('samples.view_file', filename=doc.file_path)[1:] }}"
                                target="_blank" class="btn btn-sm btn-outline-info" title="Preview">
                                 <i class="bi bi-eye"></i>
