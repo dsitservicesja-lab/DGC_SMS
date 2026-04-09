@@ -48,10 +48,19 @@
                 <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg); white-space: pre-wrap; font-size:.875rem;">{{ sample.certificate_text }}</div>
                 {% endif %}
                 {% if sample.certificate_file %}
-                <a href="{{ url_for('samples.download_file', filename=sample.certificate_file) }}"
-                   class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-download me-1"></i>{{ sample.certificate_file_original_name }}
-                </a>
+                <div class="d-flex gap-2">
+                    {% set cert_ext = sample.certificate_file_original_name.rsplit('.', 1)[-1].lower() if sample.certificate_file_original_name else '' %}
+                    {% if cert_ext == 'pdf' %}
+                    <a href="{{ url_for('samples.view_file', filename=sample.certificate_file) }}"
+                       target="_blank" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-eye me-1"></i>Preview
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('samples.download_file', filename=sample.certificate_file) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-download me-1"></i>{{ sample.certificate_file_original_name }}
+                    </a>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -77,7 +86,8 @@
 
                         <div class="col-12">
                             {{ form.review_comments.label(class="form-label fw-semibold") }}
-                            {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments") }}
+                            <span class="text-muted small">(optional)</span>
+                            {{ form.review_comments(class="form-control", rows=4, placeholder="Enter review comments (optional)") }}
                         </div>
 
                         <div class="col-12 d-flex gap-2 pt-2">

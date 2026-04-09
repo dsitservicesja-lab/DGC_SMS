@@ -315,7 +315,7 @@ class ToxicologySampleRegisterForm(SampleRegisterForm):
     toxicology_sample_type_name = SelectField(
         'Sample Type',
         choices=TOXICOLOGY_SAMPLE_TYPE_CHOICES,
-        validators=[DataRequired(message='Please select a sample type.')],
+        validators=[Optional()],
     )
 
     patient_name = StringField(

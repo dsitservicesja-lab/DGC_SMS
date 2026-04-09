@@ -261,19 +261,19 @@ def test_preliminary_review_checklist(app, client):
     resp = client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
         'action': 'approved',
         'review_comments': 'All checks passed.',
-        'chk_original_entry_visible': 'y',
-        'chk_entries_signed': 'y',
-        'chk_date_recorded': 'y',
-        'chk_conclusions_signed_dated': 'y',
-        'chk_report_signed_dated': 'y',
-        'chk_printouts_attached': 'y',
-        'chk_attachments_labeled': 'y',
-        'chk_analyst_initials': 'y',
-        'chk_templates_completed': 'y',
-        'chk_writing_legible': 'y',
-        'chk_logbooks_updated': 'y',
-        'chk_toc_updated': 'y',
-        'chk_pages_numbered': 'y',
+        'chk_original_entry_visible': 'yes',
+        'chk_entries_signed': 'yes',
+        'chk_date_recorded': 'yes',
+        'chk_conclusions_signed_dated': 'yes',
+        'chk_report_signed_dated': 'yes',
+        'chk_printouts_attached': 'yes',
+        'chk_attachments_labeled': 'yes',
+        'chk_analyst_initials': 'yes',
+        'chk_templates_completed': 'yes',
+        'chk_writing_legible': 'yes',
+        'chk_logbooks_updated': 'yes',
+        'chk_toc_updated': 'yes',
+        'chk_pages_numbered': 'yes',
     }, follow_redirects=True)
     assert resp.status_code == 200
     assert b'approved and forwarded' in resp.data
@@ -283,8 +283,8 @@ def test_preliminary_review_checklist(app, client):
         assignment = SampleAssignment.query.first()
         assert assignment.preliminary_review_checklist is not None
         checklist = json.loads(assignment.preliminary_review_checklist)
-        assert checklist['chk_original_entry_visible'] is True
-        assert checklist['chk_entries_signed'] is True
+        assert checklist['chk_original_entry_visible'] == 'yes'
+        assert checklist['chk_entries_signed'] == 'yes'
 
 
 def test_preliminary_review_checklist_partial(app, client):
@@ -319,18 +319,28 @@ def test_preliminary_review_checklist_partial(app, client):
     resp = client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
         'action': 'returned',
         'review_comments': 'Missing signatures.',
-        'chk_original_entry_visible': 'y',
-        'chk_entries_signed': 'y',
-        # others not checked
+        'chk_original_entry_visible': 'yes',
+        'chk_entries_signed': 'yes',
+        'chk_date_recorded': 'na',
+        'chk_conclusions_signed_dated': 'na',
+        'chk_report_signed_dated': 'na',
+        'chk_printouts_attached': 'na',
+        'chk_attachments_labeled': 'na',
+        'chk_analyst_initials': 'na',
+        'chk_templates_completed': 'na',
+        'chk_writing_legible': 'na',
+        'chk_logbooks_updated': 'na',
+        'chk_toc_updated': 'na',
+        'chk_pages_numbered': 'na',
     }, follow_redirects=True)
     assert b'returned for correction' in resp.data
 
     with app.app_context():
         assignment = SampleAssignment.query.first()
         checklist = json.loads(assignment.preliminary_review_checklist)
-        assert checklist['chk_original_entry_visible'] is True
-        assert checklist['chk_entries_signed'] is True
-        assert checklist['chk_date_recorded'] is False
+        assert checklist['chk_original_entry_visible'] == 'yes'
+        assert checklist['chk_entries_signed'] == 'yes'
+        assert checklist['chk_date_recorded'] == 'na'
 
 
 def test_technical_review(app, client):

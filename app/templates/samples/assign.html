@@ -52,7 +52,14 @@
                         {% if has_predefined_refs %}
                         <div class="col-md-6">
                             {{ form.test_reference_select.label(class="form-label fw-semibold") }}
-                            {{ form.test_reference_select(class="form-select") }}
+                            <select name="test_reference_select" id="test_reference_select" class="form-select" multiple size="4">
+                                {% for val, label in form.test_reference_select.choices %}
+                                {% if val %}
+                                <option value="{{ val }}" {% if val in (form.test_reference_select.data or []) %}selected{% endif %}>{{ label }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple references</div>
                         </div>
                         {% else %}
                         <div class="col-md-6">

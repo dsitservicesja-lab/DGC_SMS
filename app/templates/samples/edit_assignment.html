@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Edit Assignment - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-pencil"></i> Edit Assignment</h2>
+    <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body py-2 px-3">
+                <span class="text-muted" style="font-size:.875rem;">
+                    {{ sample.lab_number }} &mdash; {{ sample.sample_name }}
+                    <span class="badge bg-info text-dark">{{ sample.sample_type.value }}</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body p-4">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Test Name</label>
+                            {% if predefined_tests %}
+                            <select name="test_name" class="form-select">
+                                {% for val, label in predefined_tests %}
+                                <option value="{{ val }}" {% if val == assignment.test_name %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="text" name="test_name" class="form-control" value="{{ assignment.test_name }}">
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Test Reference</label>
+                            {% if predefined_refs %}
+                            <select name="test_reference" class="form-select">
+                                <option value="">-- Select Reference --</option>
+                                {% for val, label in predefined_refs %}
+                                <option value="{{ val }}" {% if val == assignment.test_reference %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="text" name="test_reference" class="form-control" value="{{ assignment.test_reference or '' }}">
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Assigned To</label>
+                            <select name="chemist_id" class="form-select">
+                                {% for c in chemists %}
+                                <option value="{{ c.id }}" {% if c.id == assignment.chemist_id %}selected{% endif %}>{{ c.full_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Expected Completion</label>
+                            <input type="date" name="expected_completion" class="form-control"
+                                   value="{{ assignment.expected_completion.isoformat() if assignment.expected_completion else '' }}"
+                                   min="{{ today }}">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Comments</label>
+                            <textarea name="comments" class="form-control" rows="3">{{ assignment.comments or '' }}</textarea>
+                        </div>
+
+                        <div class="col-12 d-flex gap-2 pt-2">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

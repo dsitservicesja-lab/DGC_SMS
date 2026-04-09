@@ -296,8 +296,8 @@ def kpi():
             days_list = []
             for s in certified_samples:
                 if s.certified_at and s.date_received:
-                    delta = s.certified_at.date() - s.date_received
-                    days_list.append(delta.days)
+                    delta_days = calculate_working_days(s.date_received, s.certified_at)
+                    days_list.append(delta_days) if delta_days is not None else None
             avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
 
         # By branch
@@ -368,7 +368,7 @@ def _auto_actuals(year, quarter):
             Sample.certified_at.isnot(None),
         ).all()
         days = [
-            (s.certified_at.date() - s.date_received).days
+            calculate_working_days(s.date_received, s.certified_at)
             for s in samples
             if s.certified_at and s.date_received
         ]
@@ -635,7 +635,7 @@ def pharma_report():
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
     tat_days = [
-        (s.certified_at.date() - s.date_received).days
+        calculate_working_days(s.date_received, s.certified_at)
         for s in samples
         if s.certified_at and s.date_received
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
@@ -707,7 +707,7 @@ def pharma_report_download():
         tat = ''
         if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = (s.certified_at.date() - s.date_received).days
+            tat = calculate_working_days(s.date_received, s.certified_at)
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -788,7 +788,7 @@ def milk_report():
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
     tat_days = [
-        (s.certified_at.date() - s.date_received).days
+        calculate_working_days(s.date_received, s.certified_at)
         for s in samples
         if s.certified_at and s.date_received
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
@@ -860,7 +860,7 @@ def milk_report_download():
         tat = ''
         if (s.certified_at and s.date_received
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = (s.certified_at.date() - s.date_received).days
+            tat = calculate_working_days(s.date_received, s.certified_at)
         milk_type_label = ''
         if s.milk_type == 'R':
             milk_type_label = 'Raw Milk'
