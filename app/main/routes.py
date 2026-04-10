@@ -1181,7 +1181,7 @@ def analyst_report():
         entry['total'] += 1
         if a.status in (AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED):
             entry['completed'] += 1
-        elif a.status not in (AssignmentStatus.REJECTED,):
+        elif a.status != AssignmentStatus.REJECTED:
             entry['in_progress'] += 1
         entry['tests'].append(a)
 
