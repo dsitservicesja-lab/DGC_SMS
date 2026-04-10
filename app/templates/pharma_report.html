@@ -131,8 +131,8 @@
                     <td>{{ s.expected_report_date.strftime('%d %b %Y') if s.expected_report_date else '—' }}</td>
                     <td>{{ s.certified_at.strftime('%d %b %Y') if s.certified_at else '—' }}</td>
                     <td>
-                        {% if s.certified_at and s.date_received and s.status.value in ('Certified', 'Completed') %}
-                        {{ (s.certified_at.date() - s.date_received).days }}
+                        {% if s.certified_at and s.date_registered and s.status.value in ('Certified', 'Completed') %}
+                        {{ (s.certified_at.date() - s.date_registered.date()).days if s.date_registered else '—' }}
                         {% else %}
                         —
                         {% endif %}

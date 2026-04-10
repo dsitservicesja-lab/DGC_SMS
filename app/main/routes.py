@@ -286,7 +286,7 @@ def kpi():
             Sample.status == SampleStatus.REJECTED
         ).count()
 
-        # Turnaround: average days from date_received to certified_at
+        # Turnaround: average days from date_registered to certified_at
         avg_tat = None
         certified_samples = base_q.filter(
             Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED]),
@@ -295,8 +295,8 @@ def kpi():
         if certified_samples:
             days_list = []
             for s in certified_samples:
-                if s.certified_at and s.date_received:
-                    delta_days = calculate_working_days(s.date_received, s.certified_at)
+                if s.certified_at and s.date_registered:
+                    delta_days = calculate_working_days(s.date_registered, s.certified_at)
                     days_list.append(delta_days) if delta_days is not None else None
             avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
 
@@ -368,9 +368,9 @@ def _auto_actuals(year, quarter):
             Sample.certified_at.isnot(None),
         ).all()
         days = [
-            calculate_working_days(s.date_received, s.certified_at)
+            calculate_working_days(s.date_registered, s.certified_at)
             for s in samples
-            if s.certified_at and s.date_received
+            if s.certified_at and s.date_registered
         ]
         return round(sum(days) / len(days), 1) if days else None
 
@@ -635,9 +635,9 @@ def pharma_report():
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
     tat_days = [
-        calculate_working_days(s.date_received, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at)
         for s in samples
-        if s.certified_at and s.date_received
+        if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
     ]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
@@ -705,9 +705,9 @@ def pharma_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_received
+        if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_received, s.certified_at)
+            tat = calculate_working_days(s.date_registered, s.certified_at)
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -788,9 +788,9 @@ def milk_report():
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
     tat_days = [
-        calculate_working_days(s.date_received, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at)
         for s in samples
-        if s.certified_at and s.date_received
+        if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
     ]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
@@ -858,9 +858,9 @@ def milk_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_received
+        if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_received, s.certified_at)
+            tat = calculate_working_days(s.date_registered, s.certified_at)
         milk_type_label = ''
         if s.milk_type == 'R':
             milk_type_label = 'Raw Milk'
@@ -944,9 +944,9 @@ def toxicology_report():
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
     tat_days = [
-        calculate_working_days(s.date_received, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at)
         for s in samples
-        if s.certified_at and s.date_received
+        if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
     ]
     tat_days = [d for d in tat_days if d is not None]
@@ -1014,9 +1014,9 @@ def toxicology_report_download():
     ])
     for s in samples:
         tat = ''
-        if (s.certified_at and s.date_received
+        if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_received, s.certified_at) or ''
+            tat = calculate_working_days(s.date_registered, s.certified_at) or ''
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -1094,9 +1094,9 @@ def kpi_toxicology():
         ).all()
         if cert_samples:
             days_list = [
-                calculate_working_days(s.date_received, s.certified_at)
+                calculate_working_days(s.date_registered, s.certified_at)
                 for s in cert_samples
-                if s.certified_at and s.date_received
+                if s.certified_at and s.date_registered
             ]
             days_list = [d for d in days_list if d is not None]
             avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
@@ -1118,6 +1118,180 @@ def kpi_toxicology():
         quarters_data=quarters_data,
         year=year,
         available_years=available_years,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Analyst Performance Report
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/reports/analysts')
+@login_required
+def analyst_report():
+    """Analyst performance report: tests completed per analyst with filters."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract, func
+
+    year = request.args.get('year', type=int,
+                            default=jamaica_now().year)
+    quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
+    branch_filter = request.args.get('branch', '')
+
+    # Build base query on assignments
+    q = SampleAssignment.query.join(
+        Sample, SampleAssignment.sample_id == Sample.id
+    ).filter(
+        extract('year', SampleAssignment.assigned_date) == year,
+    )
+
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', SampleAssignment.assigned_date) >= month_start,
+            extract('month', SampleAssignment.assigned_date) <= month_end,
+        )
+
+    if branch_filter:
+        try:
+            br = Branch[branch_filter]
+            q = q.filter(Sample.sample_type == br)
+        except KeyError:
+            pass
+
+    assignments = q.order_by(SampleAssignment.assigned_date.desc()).all()
+
+    # Group by analyst
+    analyst_data = {}
+    for a in assignments:
+        cid = a.chemist_id
+        if cid not in analyst_data:
+            analyst_data[cid] = {
+                'name': a.chemist.full_name,
+                'total': 0,
+                'completed': 0,
+                'in_progress': 0,
+                'tests': [],
+            }
+        entry = analyst_data[cid]
+        entry['total'] += 1
+        if a.status in (AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED):
+            entry['completed'] += 1
+        elif a.status not in (AssignmentStatus.REJECTED,):
+            entry['in_progress'] += 1
+        entry['tests'].append(a)
+
+    # Sort analysts by completed tests descending
+    sort_by = request.args.get('sort', 'completed')
+    sort_dir = request.args.get('dir', 'desc')
+    reverse = (sort_dir == 'desc')
+    if sort_by == 'name':
+        analyst_list = sorted(analyst_data.values(), key=lambda x: x['name'].lower(), reverse=reverse)
+    elif sort_by == 'total':
+        analyst_list = sorted(analyst_data.values(), key=lambda x: x['total'], reverse=reverse)
+    else:
+        analyst_list = sorted(analyst_data.values(), key=lambda x: x['completed'], reverse=reverse)
+
+    # Available years
+    sample_years = {
+        int(r.yr)
+        for r in db.session.query(
+            extract('year', SampleAssignment.assigned_date).label('yr')
+        ).distinct().all() if r.yr
+    }
+    available_years = sorted(sample_years | {year})
+
+    # Summary totals
+    total_assignments = len(assignments)
+    total_completed = sum(d['completed'] for d in analyst_data.values())
+
+    return render_template(
+        'analyst_report.html',
+        analyst_list=analyst_list,
+        year=year,
+        quarter=quarter,
+        branch_filter=branch_filter,
+        available_years=available_years,
+        total_assignments=total_assignments,
+        total_completed=total_completed,
+        total_analysts=len(analyst_data),
+        Branch=Branch,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        AssignmentStatus=AssignmentStatus,
+    )
+
+
+@main_bp.route('/reports/analysts/download')
+@login_required
+def analyst_report_download():
+    """Download analyst performance report as CSV."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from sqlalchemy import extract
+
+    year = request.args.get('year', type=int,
+                            default=jamaica_now().year)
+    quarter = request.args.get('quarter', type=int, default=0)
+    branch_filter = request.args.get('branch', '')
+
+    q = SampleAssignment.query.join(
+        Sample, SampleAssignment.sample_id == Sample.id
+    ).join(
+        User, SampleAssignment.chemist_id == User.id
+    ).filter(
+        extract('year', SampleAssignment.assigned_date) == year,
+    )
+
+    if quarter in (1, 2, 3, 4):
+        month_start = (quarter - 1) * 3 + 1
+        month_end = quarter * 3
+        q = q.filter(
+            extract('month', SampleAssignment.assigned_date) >= month_start,
+            extract('month', SampleAssignment.assigned_date) <= month_end,
+        )
+
+    if branch_filter:
+        try:
+            br = Branch[branch_filter]
+            q = q.filter(Sample.sample_type == br)
+        except KeyError:
+            pass
+
+    assignments = q.order_by(User.last_name, SampleAssignment.assigned_date.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        'Analyst', 'Lab Number', 'Sample Name', 'Laboratory',
+        'Test Name', 'Status', 'Assigned Date', 'Date Completed',
+    ])
+    for a in assignments:
+        writer.writerow([
+            a.chemist.full_name,
+            a.sample.lab_number,
+            a.sample.sample_name,
+            a.sample.sample_type.value if a.sample.sample_type else '',
+            a.test_name,
+            a.status.value if a.status else '',
+            a.assigned_date.strftime('%Y-%m-%d') if a.assigned_date else '',
+            a.date_completed.strftime('%Y-%m-%d') if a.date_completed else '',
+        ])
+
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    b_label = f'_{branch_filter}' if branch_filter else ''
+    filename = f'Analyst_Report_{year}{q_label}{b_label}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
 
 
