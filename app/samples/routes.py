@@ -102,24 +102,8 @@ def sample_list():
         ).scalar_subquery()
         query = query.filter(Sample.id.in_(assigned_ids))
     elif current_user.has_role(Role.OFFICER) and not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
-        # Officers see samples they uploaded AND all samples with reports submitted
-        submitted_statuses = [
-            SampleStatus.REPORT_SUBMITTED,
-            SampleStatus.UNDER_PRELIMINARY_REVIEW,
-            SampleStatus.UNDER_TECHNICAL_REVIEW,
-            SampleStatus.ACCEPTED,
-            SampleStatus.DEPUTY_REVIEW,
-            SampleStatus.CERTIFICATE_PREPARATION,
-            SampleStatus.HOD_REVIEW,
-            SampleStatus.CERTIFIED,
-            SampleStatus.COMPLETED,
-        ]
-        query = query.filter(
-            db.or_(
-                Sample.uploaded_by == current_user.id,
-                Sample.status.in_(submitted_statuses),
-            )
-        )
+        # Officers see all samples (no additional filtering)
+        pass
     elif current_user.has_role(Role.SENIOR_CHEMIST) and current_user.branches and not current_user.has_any_role(Role.HOD, Role.ADMIN):
         # Senior Chemists see samples in their branch(es)
         query = query.filter(Sample.sample_type.in_(current_user.branches))
