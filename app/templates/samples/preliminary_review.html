@@ -28,6 +28,18 @@
                     {{ assignment.sample.lab_number }} &mdash; {{ assignment.test_name }}
                     &mdash; Analyst: {{ assignment.chemist.full_name }}
                 </small>
+                {% if sibling_assignments|length > 1 %}
+                <div class="mt-2">
+                    <span class="badge bg-info text-dark">
+                        <i class="bi bi-layers me-1"></i>This review will apply to {{ sibling_assignments|length }} test(s):
+                    </span>
+                    <ul class="mb-0 mt-1 small">
+                        {% for sa in sibling_assignments %}
+                        <li>{{ sa.test_name }}{% if sa.chemist %} — {{ sa.chemist.full_name }}{% endif %}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
             </div>
             <div class="card-body">
                 {% if assignment.report_text %}
