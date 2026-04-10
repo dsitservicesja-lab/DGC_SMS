@@ -302,6 +302,11 @@ def edit(sample_id):
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     form = SampleEditForm(obj=sample)
+    # Ensure the Laboratory dropdown is pre-selected with the current value.
+    # obj=sample sets sample_type to the Branch enum, but the SelectField
+    # expects the enum .name string to match its choices.
+    if request.method == 'GET' and sample.sample_type:
+        form.sample_type.data = sample.sample_type.name
     if form.validate_on_submit():
         sample.sample_name = form.sample_name.data
         sample.sample_type = Branch[form.sample_type.data]
@@ -638,33 +643,54 @@ def submit_report(assignment_id):
         flash('Report cannot be submitted in the current state.', 'warning')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
+    # Find all sibling assignments for the same sample assigned to this
+    # chemist that are also in a submittable state.
+    sibling_assignments = SampleAssignment.query.filter(
+        SampleAssignment.sample_id == assignment.sample_id,
+        SampleAssignment.chemist_id == current_user.id,
+        SampleAssignment.status.in_([
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.IN_PROGRESS,
+            AssignmentStatus.RETURNED,
+        ]),
+    ).all()
+
     form = ReportSubmitForm()
     if form.validate_on_submit():
-        assignment.report_text = form.report_text.data
-        assignment.report_submitted_at = jamaica_now()
-        assignment.all_samples_returned = form.all_samples_returned.data or None
-        assignment.return_quantity = form.return_quantity.data or None
+        now = jamaica_now()
+        report_text = form.report_text.data
+        all_returned = form.all_samples_returned.data or None
+        return_qty = form.return_quantity.data or None
 
+        stored = original = None
         if form.report_file.data:
             stored, original = _save_file(form.report_file.data)
-            assignment.report_file = stored
-            assignment.report_file_original_name = original
 
-        # Route to correct review stage based on where it was returned from
-        if assignment.return_stage == 'technical':
-            # Returned by Senior Chemist - skip preliminary, go back to
-            # technical review directly
-            assignment.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
-        else:
-            # First submission or returned from preliminary review
-            assignment.status = AssignmentStatus.REPORT_SUBMITTED
+        # Apply the report to all sibling assignments that are submittable
+        submitted_names = []
+        for a in sibling_assignments:
+            a.report_text = report_text
+            a.report_submitted_at = now
+            a.all_samples_returned = all_returned
+            a.return_quantity = return_qty
 
-        assignment.return_stage = None
+            if stored:
+                a.report_file = stored
+                a.report_file_original_name = original
+
+            # Route to correct review stage based on where it was returned from
+            if a.return_stage == 'technical':
+                a.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
+            else:
+                a.status = AssignmentStatus.REPORT_SUBMITTED
+
+            a.return_stage = None
+            submitted_names.append(a.test_name)
 
         _add_history(
             assignment.sample, 'Report Submitted',
-            f'{current_user.full_name} submitted report for test '
-            f'"{assignment.test_name}"',
+            f'{current_user.full_name} submitted report for test(s): '
+            f'{", ".join(submitted_names)}',
         )
 
         # Update sample status
@@ -675,7 +701,11 @@ def submit_report(assignment_id):
         notify_report_submitted(assignment)
         db.session.commit()
 
-        flash('Report submitted successfully.', 'success')
+        test_count = len(submitted_names)
+        if test_count > 1:
+            flash(f'Report submitted for {test_count} tests successfully.', 'success')
+        else:
+            flash('Report submitted successfully.', 'success')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     # Pre-fill if resubmitting
@@ -683,7 +713,8 @@ def submit_report(assignment_id):
         form.report_text.data = assignment.report_text
 
     return render_template(
-        'samples/submit_report.html', form=form, assignment=assignment
+        'samples/submit_report.html', form=form, assignment=assignment,
+        sibling_assignments=sibling_assignments,
     )
 
 

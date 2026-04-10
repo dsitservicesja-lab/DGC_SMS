@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Analyst Performance Report - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h2><i class="bi bi-people"></i> Analyst Performance Report</h2>
+    <a href="{{ url_for('main.analyst_report_download', year=year, quarter=quarter, branch=branch_filter) }}"
+       class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-download me-1"></i>Download CSV
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Year</label>
+                <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Quarter</label>
+                <select name="quarter" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="0" {% if quarter == 0 %}selected{% endif %}>All Quarters</option>
+                    {% for q in [1,2,3,4] %}
+                    <option value="{{ q }}" {% if q == quarter %}selected{% endif %}>Q{{ q }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Laboratory</label>
+                <select name="branch" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Laboratories</option>
+                    {% for b in Branch %}
+                    <option value="{{ b.name }}" {% if branch_filter == b.name %}selected{% endif %}>{{ b.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-primary">{{ total_analysts }}</div>
+                <small class="text-muted">Analysts</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-info">{{ total_assignments }}</div>
+                <small class="text-muted">Total Tests Assigned</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-success">{{ total_completed }}</div>
+                <small class="text-muted">Tests Completed</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-warning">{{ total_assignments - total_completed }}</div>
+                <small class="text-muted">Tests In Progress</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analyst Summary Table -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Analyst Summary — {{ year }}{% if quarter %} Q{{ quarter }}{% endif %}{% if branch_filter %} — {{ Branch[branch_filter].value }}{% endif %}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    {% set toggle_dir = 'asc' if sort_by == 'name' and sort_dir == 'desc' else 'desc' %}
+                    <th>
+                        <a href="{{ url_for('main.analyst_report', year=year, quarter=quarter, branch=branch_filter, sort='name', dir=toggle_dir) }}"
+                           class="text-decoration-none text-dark">
+                            Analyst
+                            {% if sort_by == 'name' %}
+                            <i class="bi bi-caret-{{ 'up' if sort_dir == 'asc' else 'down' }}-fill small"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    {% set toggle_dir = 'asc' if sort_by == 'total' and sort_dir == 'desc' else 'desc' %}
+                    <th class="text-center">
+                        <a href="{{ url_for('main.analyst_report', year=year, quarter=quarter, branch=branch_filter, sort='total', dir=toggle_dir) }}"
+                           class="text-decoration-none text-dark">
+                            Total Assigned
+                            {% if sort_by == 'total' %}
+                            <i class="bi bi-caret-{{ 'up' if sort_dir == 'asc' else 'down' }}-fill small"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    {% set toggle_dir = 'asc' if sort_by == 'completed' and sort_dir == 'desc' else 'desc' %}
+                    <th class="text-center">
+                        <a href="{{ url_for('main.analyst_report', year=year, quarter=quarter, branch=branch_filter, sort='completed', dir=toggle_dir) }}"
+                           class="text-decoration-none text-dark">
+                            Completed
+                            {% if sort_by == 'completed' %}
+                            <i class="bi bi-caret-{{ 'up' if sort_dir == 'asc' else 'down' }}-fill small"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="text-center">In Progress</th>
+                    <th class="text-center">Completion Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for analyst in analyst_list %}
+                <tr>
+                    <td class="fw-semibold">{{ analyst.name }}</td>
+                    <td class="text-center">{{ analyst.total }}</td>
+                    <td class="text-center">
+                        <span class="badge bg-success">{{ analyst.completed }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-warning text-dark">{{ analyst.in_progress }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if analyst.total > 0 %}
+                        {% set pct = (analyst.completed / analyst.total * 100) | round(1) %}
+                        <div class="progress" style="height: 20px; min-width: 80px;">
+                            <div class="progress-bar bg-success" role="progressbar"
+                                 style="width: {{ pct }}%;" aria-valuenow="{{ pct }}"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                {{ pct }}%
+                            </div>
+                        </div>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">No analyst data found for this period.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Detailed Test Breakdown per Analyst -->
+{% for analyst in analyst_list %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-person me-1"></i>{{ analyst.name }} — {{ analyst.total }} test(s)</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Lab Number</th>
+                    <th>Sample Name</th>
+                    <th>Laboratory</th>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Assigned</th>
+                    <th>Completed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set a_colors = {
+                    'Assigned': 'primary', 'In Progress': 'info',
+                    'Report Submitted': 'warning', 'Preliminary Review': 'warning',
+                    'Senior Chemist Review': 'warning',
+                    'Returned for Correction': 'danger', 'Accepted': 'success',
+                    'Rejected': 'danger', 'Completed': 'success',
+                } %}
+                {% for a in analyst.tests %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('samples.detail', sample_id=a.sample.id) }}"
+                           class="text-decoration-none fw-semibold">{{ a.sample.lab_number }}</a>
+                    </td>
+                    <td>{{ a.sample.sample_name }}</td>
+                    <td><span class="badge bg-info text-dark">{{ a.sample.sample_type.value }}</span></td>
+                    <td>{{ a.test_name }}</td>
+                    <td>
+                        <span class="badge bg-{{ a_colors.get(a.status.value, 'secondary') }}">
+                            {{ a.status.value }}
+                        </span>
+                    </td>
+                    <td>{{ a.assigned_date.strftime('%d %b %Y') if a.assigned_date else '—' }}</td>
+                    <td>{{ a.date_completed.strftime('%d %b %Y') if a.date_completed else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Quick links -->
+<div class="mt-3 d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('main.kpi', year=year) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-bar-chart-line me-1"></i>KPI Dashboard
+    </a>
+    <a href="{{ url_for('main.pharma_report', year=year) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-capsule me-1"></i>Pharm Report
+    </a>
+</div>
+{% endblock %}
