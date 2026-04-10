@@ -719,6 +719,13 @@ def preliminary_review(assignment_id):
         flash('This report is not awaiting preliminary review.', 'warning')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
+    # Find all sibling assignments for the same sample that are also
+    # awaiting preliminary review (REPORT_SUBMITTED).
+    sibling_assignments = SampleAssignment.query.filter(
+        SampleAssignment.sample_id == assignment.sample_id,
+        SampleAssignment.status == AssignmentStatus.REPORT_SUBMITTED,
+    ).all()
+
     form = PreliminaryReviewForm()
     if form.validate_on_submit():
         action = form.action.data
@@ -728,51 +735,72 @@ def preliminary_review(assignment_id):
             flash('Cannot approve: one or more checklist items are marked "No". '
                   'Please return for correction.', 'danger')
             return render_template(
-                'samples/preliminary_review.html', form=form, assignment=assignment
+                'samples/preliminary_review.html', form=form,
+                assignment=assignment,
+                sibling_assignments=sibling_assignments,
             )
 
-        assignment.preliminary_review_comments = form.review_comments.data
-        assignment.preliminary_reviewed_by = current_user.id
-        assignment.preliminary_reviewed_at = jamaica_now()
+        now = jamaica_now()
+        comments = form.review_comments.data
 
         # Save checklist answers
         checklist = {}
         for _, fields in form.CHECKLIST_CATEGORIES:
             for field_name in fields:
                 checklist[field_name] = getattr(form, field_name).data
-        assignment.preliminary_review_checklist = json.dumps(checklist)
+        checklist_json = json.dumps(checklist)
 
+        # Apply the review to all sibling assignments
+        reviewed_names = []
+        for a in sibling_assignments:
+            a.preliminary_review_comments = comments
+            a.preliminary_reviewed_by = current_user.id
+            a.preliminary_reviewed_at = now
+            a.preliminary_review_checklist = checklist_json
+
+            if action == 'approved':
+                a.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
+            else:  # returned
+                a.status = AssignmentStatus.RETURNED
+                a.return_stage = 'preliminary'
+                a.date_completed = None
+
+            reviewed_names.append(a.test_name)
+
+        test_list = ', '.join(reviewed_names)
         if action == 'approved':
-            assignment.status = AssignmentStatus.UNDER_TECHNICAL_REVIEW
             _add_history(
                 sample, 'Preliminary Review Approved',
                 f'{current_user.full_name} approved preliminary review for '
-                f'test "{assignment.test_name}". '
+                f'test(s): {test_list}. '
                 f'Forwarded to Senior Chemist for technical review.',
             )
-        else:  # returned
-            assignment.status = AssignmentStatus.RETURNED
-            assignment.return_stage = 'preliminary'
-            assignment.date_completed = None
+        else:
             _add_history(
                 sample, 'Preliminary Review Returned',
-                f'{current_user.full_name} returned report for test '
-                f'"{assignment.test_name}" for correction. '
-                f'Comments: {form.review_comments.data or "N/A"}',
+                f'{current_user.full_name} returned report for test(s): '
+                f'{test_list} for correction. '
+                f'Comments: {comments or "N/A"}',
             )
 
         _update_sample_status(sample)
         db.session.commit()
 
-        notify_preliminary_review_completed(assignment, action)
+        for a in sibling_assignments:
+            notify_preliminary_review_completed(a, action)
         db.session.commit()
 
         action_text = 'approved and forwarded' if action == 'approved' else 'returned for correction'
-        flash(f'Report has been {action_text}.', 'success')
+        test_count = len(reviewed_names)
+        if test_count > 1:
+            flash(f'{test_count} reports have been {action_text}.', 'success')
+        else:
+            flash(f'Report has been {action_text}.', 'success')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     return render_template(
-        'samples/preliminary_review.html', form=form, assignment=assignment
+        'samples/preliminary_review.html', form=form,
+        assignment=assignment, sibling_assignments=sibling_assignments,
     )
 
 
