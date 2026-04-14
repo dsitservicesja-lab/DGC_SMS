@@ -118,6 +118,7 @@
                 <th style="width:120px;">Action Type</th>
                 <th>Action</th>
                 <th>Details</th>
+                <th>Change Description</th>
             </tr>
         </thead>
         <tbody>
@@ -127,11 +128,12 @@
                 <td>{{ h.performer.full_name if h.performer else '—' }}</td>
                 <td>{{ h.action_type or h.action }}</td>
                 <td>{{ h.action }}</td>
-                <td>{{ h.details or h.change_description or '—' }}</td>
+                <td>{{ h.details or '—' }}</td>
+                <td>{{ h.change_description or '—' }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" style="text-align:center; color:#999; padding:20px;">
+                <td colspan="6" style="text-align:center; color:#999; padding:20px;">
                     No activity history recorded.
                 </td>
             </tr>

@@ -16,13 +16,13 @@ from app.models import (
     Sample, SampleAssignment, SampleHistory, User, SupportingDocument,
     Role, Branch, SampleStatus, AssignmentStatus,
     user_roles, user_branches, jamaica_now,
-    DocumentVersion, ReviewHistory,
+    DocumentVersion, ReviewHistory, BackDateRequest,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
     ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
     SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
-    get_sample_register_form, SupportingDocumentForm,
+    get_sample_register_form, SupportingDocumentForm, BackDateRequestForm,
     BRANCH_TEST_NAMES, BRANCH_TEST_REFERENCES,
 )
 from app.notifications import (
@@ -286,6 +286,9 @@ def detail(sample_id):
     review_histories = ReviewHistory.query.filter_by(
         sample_id=sample.id
     ).order_by(ReviewHistory.review_type, ReviewHistory.review_number).all()
+    pending_backdate = BackDateRequest.query.filter_by(
+        sample_id=sample.id, field_name='date_registered', status='pending',
+    ).first()
     return render_template(
         'samples/detail.html',
         sample=sample,
@@ -296,6 +299,7 @@ def detail(sample_id):
         today_date=date.today(),
         document_versions=document_versions,
         review_histories=review_histories,
+        pending_backdate=pending_backdate,
     )
 
 
@@ -446,11 +450,23 @@ def assign(sample_id):
                 assignment_count += 1
 
         sample.status = SampleStatus.ASSIGNED
+        # Collect assigned chemist names for the history detail
+        assigned_chemist_names = [
+            c.full_name for c in chemists
+            if c.id in form.chemist_ids.data
+        ]
+        test_list = ', '.join(selected_test_names)
+        chemist_list = ', '.join(assigned_chemist_names) if assigned_chemist_names else 'N/A'
         _add_history(
             sample, 'Sample Assigned',
-            f'Assigned {assignment_count} test(s) to '
-            f'{len(form.chemist_ids.data)} chemist(s) '
-            f'by {current_user.full_name}',
+            (f'{current_user.full_name} assigned {assignment_count} test(s) '
+             f'({test_list}) to {chemist_list}'),
+            action_type='Assignment',
+            object_affected='Sample Assignment',
+            change_description=(
+                f'Tests: {test_list}; '
+                f'Assigned to: {chemist_list}; '
+                f'Assigned by: {current_user.full_name}'),
         )
         db.session.commit()
         flash('Sample assigned successfully.', 'success')
@@ -521,8 +537,13 @@ def remove_assignment(assignment_id):
     sample_ref = sample.lab_number
     _add_history(
         sample, 'Assignment Removed',
-        f'{current_user.full_name} removed assignment of test '
-        f'"{test_name}" from {chemist_name}.',
+        (f'{current_user.full_name} removed assignment of test '
+         f'"{test_name}" from {chemist_name}.'),
+        action_type='Assignment Removed',
+        object_affected='Sample Assignment',
+        change_description=(
+            f'Test "{test_name}" unassigned from {chemist_name} '
+            f'by {current_user.full_name}'),
     )
 
     db.session.delete(assignment)
@@ -607,7 +628,11 @@ def edit_assignment(assignment_id):
         if changes:
             _add_history(
                 sample, 'Assignment Edited',
-                f'{current_user.full_name} edited assignment: {"; ".join(changes)}',
+                (f'{current_user.full_name} edited assignment for '
+                 f'{assignment.chemist.full_name}: {"; ".join(changes)}'),
+                action_type='Assignment Edit',
+                object_affected='Sample Assignment',
+                change_description='; '.join(changes) + f' (by {current_user.full_name})',
             )
             db.session.commit()
             flash('Assignment updated.', 'success')
@@ -647,7 +672,10 @@ def upload_supporting_document(sample_id):
         )
         db.session.add(doc)
         _add_history(sample, 'Supporting Document Uploaded',
-                     f'{current_user.full_name} uploaded "{original}"')
+                     f'{current_user.full_name} uploaded "{original}"',
+                     action_type='Document Upload',
+                     object_affected='Supporting Document',
+                     change_description=f'File: {original} (uploaded by {current_user.full_name})')
         db.session.commit()
         flash('Supporting document uploaded.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
@@ -742,8 +770,13 @@ def submit_report(assignment_id):
 
         _add_history(
             assignment.sample, 'Report Submitted',
-            f'{current_user.full_name} submitted report for test(s): '
-            f'{", ".join(submitted_names)}',
+            (f'{current_user.full_name} submitted report for test(s): '
+             f'{", ".join(submitted_names)}'),
+            action_type='Report Submission',
+            object_affected='Report',
+            change_description=(
+                f'Report submitted for: {", ".join(submitted_names)} '
+                f'by {current_user.full_name}'),
         )
 
         # Update sample status
@@ -868,16 +901,26 @@ def preliminary_review(assignment_id):
         if action == 'approved':
             _add_history(
                 sample, 'Preliminary Review Approved',
-                f'{current_user.full_name} approved preliminary review for '
-                f'test(s): {test_list}. '
-                f'Forwarded to Senior Chemist for technical review.',
+                (f'{current_user.full_name} approved preliminary review for '
+                 f'test(s): {test_list}. '
+                 f'Forwarded to Senior Chemist for technical review.'),
+                action_type='Preliminary Review',
+                object_affected='Report',
+                change_description=(
+                    f'Tests: {test_list} — approved by {current_user.full_name}, '
+                    f'forwarded to Senior Chemist Review'),
             )
         else:
             _add_history(
                 sample, 'Preliminary Review Returned',
-                f'{current_user.full_name} returned report for test(s): '
-                f'{test_list} for correction. '
-                f'Comments: {comments or "N/A"}',
+                (f'{current_user.full_name} returned report for test(s): '
+                 f'{test_list} for correction. '
+                 f'Comments: {comments or "N/A"}'),
+                action_type='Preliminary Review',
+                object_affected='Report',
+                change_description=(
+                    f'Tests: {test_list} — returned for correction '
+                    f'by {current_user.full_name}. Comments: {comments or "N/A"}'),
             )
 
         _update_sample_status(sample)
@@ -955,10 +998,16 @@ def review_report(assignment_id):
 
         _add_history(
             assignment.sample,
-            f'Technical Review – {action.title()}',
-            f'{current_user.full_name} {action} report for test '
-            f'"{assignment.test_name}". '
-            f'Comments: {form.review_comments.data or "N/A"}',
+            f'Senior Chemist Review – {action.title()}',
+            (f'{current_user.full_name} {action} report for test '
+             f'"{assignment.test_name}" '
+             f'(Chemist: {assignment.chemist.full_name}). '
+             f'Comments: {form.review_comments.data or "N/A"}'),
+            action_type='Senior Chemist Review',
+            object_affected='Report',
+            change_description=(
+                f'Test "{assignment.test_name}" {action} '
+                f'by {current_user.full_name}'),
         )
 
         _update_sample_status(assignment.sample)
@@ -1020,7 +1069,12 @@ def submit_to_deputy(sample_id):
         if is_pharma:
             detail_parts.append('Summary report included (Pharmaceutical sample).')
 
-        _add_history(sample, 'Submitted to Deputy', ' '.join(detail_parts))
+        _add_history(sample, 'Submitted to Deputy', ' '.join(detail_parts),
+                     action_type='Deputy Submission',
+                     object_affected='Sample',
+                     change_description=(
+                         f'Submitted to Deputy Government Chemist '
+                         f'by {current_user.full_name}'))
         db.session.commit()
 
         notify_submitted_to_deputy(sample)
@@ -1080,15 +1134,27 @@ def deputy_review(sample_id):
             sample.status = SampleStatus.CERTIFICATE_PREPARATION
             _add_history(
                 sample, 'Deputy Review Approved',
-                f'{current_user.full_name} approved the submission. '
-                f'Certificate of Analysis to be prepared.',
+                (f'{current_user.full_name} approved the submission. '
+                 f'Certificate of Analysis to be prepared.'),
+                action_type='Deputy Review',
+                object_affected='Sample',
+                change_description=(
+                    f'Approved by Deputy Government Chemist '
+                    f'{current_user.full_name}. '
+                    f'Proceeding to Certificate Preparation.'),
             )
         else:  # returned
             sample.status = SampleStatus.DEPUTY_RETURNED
             _add_history(
                 sample, 'Deputy Review Returned',
-                f'{current_user.full_name} returned submission to '
-                f'Senior Chemist. Comments: {form.review_comments.data or "N/A"}',
+                (f'{current_user.full_name} returned submission to '
+                 f'Senior Chemist. Comments: {form.review_comments.data or "N/A"}'),
+                action_type='Deputy Review',
+                object_affected='Sample',
+                change_description=(
+                    f'Returned by Deputy Government Chemist '
+                    f'{current_user.full_name}. '
+                    f'Comments: {form.review_comments.data or "N/A"}'),
             )
 
         db.session.commit()
@@ -1127,8 +1193,12 @@ def resubmit_to_deputy(sample_id):
     sample.status = SampleStatus.DEPUTY_REVIEW
     _add_history(
         sample, 'Resubmitted to Deputy',
-        f'{current_user.full_name} resubmitted to Deputy Government Chemist '
-        f'after corrections.',
+        (f'{current_user.full_name} resubmitted to Deputy Government Chemist '
+         f'after corrections.'),
+        action_type='Deputy Resubmission',
+        object_affected='Sample',
+        change_description=(
+            f'Resubmitted by {current_user.full_name} after corrections'),
     )
     db.session.commit()
 
@@ -1189,8 +1259,14 @@ def prepare_certificate(sample_id):
 
         _add_history(
             sample, 'Certificate Prepared',
-            f'Certificate of Analysis prepared by {current_user.full_name}. '
-            f'Submitted to Government Chemist for review and signing.',
+            (f'Certificate of Analysis prepared by {current_user.full_name}. '
+             f'Submitted to Government Chemist for review and signing.'
+             + (f' COA Ref: {form.coa_reference.data}' if form.coa_reference.data else '')),
+            action_type='Certificate Preparation',
+            object_affected='Certificate of Analysis',
+            change_description=(
+                f'COA prepared by {current_user.full_name}, '
+                f'submitted to Government Chemist for signing'),
         )
         db.session.commit()
 
@@ -1258,17 +1334,27 @@ def hod_review(sample_id):
             sample.status = SampleStatus.CERTIFIED
             _add_history(
                 sample, 'Certificate Signed',
-                f'Certificate of Analysis signed by '
-                f'Government Chemist {current_user.full_name}. '
-                f'Sample analysis process completed.',
+                (f'Certificate of Analysis signed by '
+                 f'Government Chemist {current_user.full_name}. '
+                 f'Sample analysis process completed.'),
+                action_type='Certificate Signed',
+                object_affected='Certificate of Analysis',
+                change_description=(
+                    f'Signed by Government Chemist {current_user.full_name}. '
+                    f'Process completed.'),
             )
         else:  # returned
             sample.status = SampleStatus.HOD_RETURNED
             _add_history(
                 sample, 'Certificate Returned by HOD',
-                f'Government Chemist {current_user.full_name} returned '
-                f'certificate for correction. '
-                f'Comments: {form.review_comments.data or "N/A"}',
+                (f'Government Chemist {current_user.full_name} returned '
+                 f'certificate for correction. '
+                 f'Comments: {form.review_comments.data or "N/A"}'),
+                action_type='HOD Review',
+                object_affected='Certificate of Analysis',
+                change_description=(
+                    f'Returned by Government Chemist {current_user.full_name}. '
+                    f'Comments: {form.review_comments.data or "N/A"}'),
             )
 
         db.session.commit()
@@ -1284,6 +1370,67 @@ def hod_review(sample_id):
 
     return render_template(
         'samples/hod_review.html', form=form, sample=sample,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Back-date registration date request
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/<int:sample_id>/request-backdate', methods=['GET', 'POST'])
+@login_required
+def request_backdate(sample_id):
+    """Request to back-date the registration date of a sample."""
+    sample = db.get_or_404(Sample, sample_id)
+
+    # Officers, Senior Chemists, Admin, HOD can request
+    if not current_user.has_any_role(
+        Role.OFFICER, Role.SENIOR_CHEMIST, Role.ADMIN, Role.HOD, Role.DEPUTY
+    ):
+        flash('You do not have permission to request a back-date.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    # Check for existing pending request on date_registered
+    pending = BackDateRequest.query.filter_by(
+        sample_id=sample.id,
+        field_name='date_registered',
+        status='pending',
+    ).first()
+    if pending:
+        flash('A back-date request for the registration date is already pending.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    form = BackDateRequestForm()
+    if form.validate_on_submit():
+        original = sample.date_registered.strftime('%Y-%m-%d') if sample.date_registered else ''
+        proposed = form.proposed_date.data.strftime('%Y-%m-%d')
+
+        bdr = BackDateRequest(
+            sample_id=sample.id,
+            field_name='date_registered',
+            original_date=original,
+            proposed_date=proposed,
+            reason=form.reason.data,
+            requested_by=current_user.id,
+        )
+        db.session.add(bdr)
+
+        _add_history(
+            sample, 'Back-Date Requested',
+            (f'{current_user.full_name} requested to change registration date '
+             f'from {original} to {proposed}. Reason: {form.reason.data}'),
+            action_type='Back-Date Request',
+            object_affected='Sample',
+            change_description=(
+                f'date_registered: {original} → {proposed} '
+                f'(requested by {current_user.full_name})'),
+        )
+        db.session.commit()
+        flash('Back-date request submitted for approval.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    return render_template(
+        'samples/request_backdate.html', form=form, sample=sample,
     )
 
 

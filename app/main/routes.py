@@ -1510,7 +1510,12 @@ def decide_backdate(req_id):
             from datetime import datetime as dt
             try:
                 new_date = dt.strptime(bdr.proposed_date, '%Y-%m-%d').date()
-                setattr(sample, bdr.field_name, new_date)
+                # date_registered is a DateTime column – preserve the time
+                if bdr.field_name == 'date_registered' and sample.date_registered:
+                    new_value = dt.combine(new_date, sample.date_registered.time())
+                    setattr(sample, bdr.field_name, new_value)
+                else:
+                    setattr(sample, bdr.field_name, new_date)
             except (ValueError, AttributeError):
                 current_app.logger.error(
                     'Failed to apply back-date for request %d: field=%s, proposed=%s',
@@ -1524,13 +1529,15 @@ def decide_backdate(req_id):
         sample_id=bdr.sample_id,
         action=f'Back-date request {decision}',
         details=(f'Field: {bdr.field_name}, Original: {bdr.original_date}, '
-                 f'Proposed: {bdr.proposed_date}, Decision: {decision}'
+                 f'Proposed: {bdr.proposed_date}, Decision: {decision}. '
+                 f'Requested by: {bdr.requester.full_name}'
                  f'{", Comments: " + comments if comments else ""}'),
         performed_by=current_user.id,
         action_type=f'Back-Date {decision.title()}',
         object_affected='Sample',
         change_description=(f'{bdr.field_name}: {bdr.original_date} → {bdr.proposed_date} '
-                           f'({decision} by {current_user.full_name})'),
+                           f'({decision} by {current_user.full_name}, '
+                           f'requested by {bdr.requester.full_name})'),
     ))
     db.session.commit()
 

@@ -843,3 +843,21 @@ class NonWorkingDayForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit = SubmitField('Add Non-Working Day')
+
+
+# ---------------------------------------------------------------------------
+# Back-Date Request
+# ---------------------------------------------------------------------------
+
+class BackDateRequestForm(FlaskForm):
+    """Request to back-date the registration date of a sample."""
+    proposed_date = DateField(
+        'Proposed Date',
+        validators=[DataRequired(message='A proposed date is required.')],
+    )
+    reason = TextAreaField(
+        'Reason for Back-Dating',
+        validators=[DataRequired(message='Please provide a reason for the request.'),
+                    Length(max=1000)],
+    )
+    submit = SubmitField('Submit Back-Date Request')
