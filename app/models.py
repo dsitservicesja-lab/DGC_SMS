@@ -776,13 +776,17 @@ class BackDateRequest(db.Model):
 # Financial Year Utilities
 # ---------------------------------------------------------------------------
 
+# Financial year starts in April
+FISCAL_YEAR_START_MONTH = 4
+
+
 def fiscal_year_for_date(d):
     """Return the financial year (integer) for a given date.
     Financial year runs April 1 – March 31.
     E.g. April 2025 → FY 2025, March 2026 → FY 2025."""
     if isinstance(d, datetime):
         d = d.date()
-    if d.month >= 4:
+    if d.month >= FISCAL_YEAR_START_MONTH:
         return d.year
     return d.year - 1
 

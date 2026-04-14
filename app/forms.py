@@ -573,8 +573,9 @@ class SampleAssignForm(FlaskForm):
     quantity_volume = StringField('Quantity / Volume', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Assign Sample')
 
-    # No date restriction - allow future and past dates for scheduling
-    # Back-dating of dates is handled via the BackDateRequest approval workflow
+    # Validation removed to allow flexible scheduling: future dates for
+    # forward-scheduling and back-dated corrections via BackDateRequest
+    # approval workflow
 
 
 # ---------------------------------------------------------------------------

@@ -1512,7 +1512,12 @@ def decide_backdate(req_id):
                 new_date = dt.strptime(bdr.proposed_date, '%Y-%m-%d').date()
                 setattr(sample, bdr.field_name, new_date)
             except (ValueError, AttributeError):
-                pass
+                current_app.logger.error(
+                    'Failed to apply back-date for request %d: field=%s, proposed=%s',
+                    bdr.id, bdr.field_name, bdr.proposed_date,
+                )
+                flash('Back-date approved but could not be applied automatically. '
+                      'Please update the date manually.', 'warning')
 
     # Log the decision
     db.session.add(SampleHistory(
@@ -1563,9 +1568,10 @@ def export_history_pdf(sample_id):
 def preview_file(filename):
     """Serve a file for inline preview."""
     import os
+    from werkzeug.security import safe_join
     upload_folder = current_app.config['UPLOAD_FOLDER']
-    filepath = os.path.join(upload_folder, filename)
-    if not os.path.isfile(filepath):
+    filepath = safe_join(upload_folder, filename)
+    if filepath is None or not os.path.isfile(filepath):
         abort(404)
 
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
