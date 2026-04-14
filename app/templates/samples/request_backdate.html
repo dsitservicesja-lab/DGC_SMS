@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Request Back-Date — {{ sample.lab_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-calendar-event me-2"></i>Request Back-Date</h2>
+        <p class="text-muted mb-0 mt-1">{{ sample.lab_number }} — {{ sample.sample_name }}</p>
+    </div>
+    <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Sample
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Change Registration Date</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Current Registration Date:</strong>
+                    {{ sample.date_registered.strftime('%d %b %Y %H:%M') if sample.date_registered else '—' }}
+                    <br>
+                    <small class="text-muted">This request will be sent to the HOD / Deputy for approval.</small>
+                </div>
+
+                <form method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.proposed_date.label(class="form-label fw-semibold") }}
+                        {{ form.proposed_date(class="form-control" + (" is-invalid" if form.proposed_date.errors else ""), type="date") }}
+                        {% for error in form.proposed_date.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.reason.label(class="form-label fw-semibold") }}
+                        {{ form.reason(class="form-control" + (" is-invalid" if form.reason.errors else ""), rows="4", placeholder="Explain why the registration date needs to be changed…") }}
+                        {% for error in form.reason.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
