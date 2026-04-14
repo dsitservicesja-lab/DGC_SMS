@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Back-Date Requests - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h2><i class="bi bi-calendar-event"></i> Back-Date Requests</h2>
+</div>
+
+<!-- Status filter -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('main.backdate_requests', status='pending') }}"
+               class="btn btn-sm {% if status_filter == 'pending' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                Pending
+            </a>
+            <a href="{{ url_for('main.backdate_requests', status='approved') }}"
+               class="btn btn-sm {% if status_filter == 'approved' %}btn-success{% else %}btn-outline-success{% endif %}">
+                Approved
+            </a>
+            <a href="{{ url_for('main.backdate_requests', status='denied') }}"
+               class="btn btn-sm {% if status_filter == 'denied' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                Denied
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Sample</th>
+                    <th>Field</th>
+                    <th>Original Date</th>
+                    <th>Proposed Date</th>
+                    <th>Requested By</th>
+                    <th>Requested At</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    {% if status_filter == 'pending' %}
+                    <th>Action</th>
+                    {% else %}
+                    <th>Decided By</th>
+                    <th>Decision</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in requests %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('samples.detail', sample_id=req.sample_id) }}"
+                           class="fw-semibold text-decoration-none">
+                            {{ req.sample.lab_number }}
+                        </a>
+                    </td>
+                    <td>{{ req.field_name | replace('_', ' ') | title }}</td>
+                    <td>{{ req.original_date }}</td>
+                    <td>{{ req.proposed_date }}</td>
+                    <td>{{ req.requester.full_name }}</td>
+                    <td>{{ req.requested_at.strftime('%d %b %Y %H:%M') if req.requested_at else '—' }}</td>
+                    <td>{{ req.reason or '—' }}</td>
+                    <td>
+                        {% if req.status == 'pending' %}
+                        <span class="badge bg-warning">Pending</span>
+                        {% elif req.status == 'approved' %}
+                        <span class="badge bg-success">Approved</span>
+                        {% else %}
+                        <span class="badge bg-danger">Denied</span>
+                        {% endif %}
+                    </td>
+                    {% if status_filter == 'pending' %}
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('main.decide_backdate', req_id=req.id) }}"
+                              class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-1">
+                                <input type="text" name="comments" placeholder="Comments (optional)"
+                                       class="form-control form-control-sm" style="width:200px">
+                            </div>
+                            <button type="submit" name="decision" value="approved"
+                                    class="btn btn-success btn-sm me-1">
+                                <i class="bi bi-check-lg"></i> Approve
+                            </button>
+                            <button type="submit" name="decision" value="denied"
+                                    class="btn btn-danger btn-sm">
+                                <i class="bi bi-x-lg"></i> Deny
+                            </button>
+                        </form>
+                    </td>
+                    {% else %}
+                    <td>{{ req.decider.full_name if req.decider else '—' }}</td>
+                    <td>{{ req.decision_comments or '—' }}</td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">
+                        No {{ status_filter }} back-date requests.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

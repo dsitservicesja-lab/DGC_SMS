@@ -1,6 +1,6 @@
 from flask import (
     render_template, redirect, url_for, flash, jsonify, request,
-    current_app, Response,
+    current_app, Response, abort,
 )
 from flask_login import login_required, current_user
 from datetime import datetime, timezone, date
@@ -985,6 +985,135 @@ def toxicology_report_download():
 
 
 # ---------------------------------------------------------------------------
+# Alcohol Report
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/reports/alcohol')
+@login_required
+def alcohol_report():
+    """Alcohol sample report with filtering and download."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int,
+                            default=_current_fiscal_year())
+    quarter = request.args.get('quarter', type=int, default=0)
+    status_filter = request.args.get('status', '')
+
+    q = Sample.query.filter(
+        Sample.sample_type == Branch.FOOD_ALCOHOL,
+    )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter else None)
+
+    if status_filter:
+        try:
+            st = SampleStatus(status_filter)
+            q = q.filter(Sample.status == st)
+        except ValueError:
+            pass
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    total = len(samples)
+    certified = sum(
+        1 for s in samples
+        if s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    )
+    in_progress = sum(
+        1 for s in samples
+        if s.status not in (
+            SampleStatus.CERTIFIED, SampleStatus.COMPLETED,
+            SampleStatus.REJECTED,
+        )
+    )
+    rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
+
+    tat_days = [
+        calculate_working_days(s.date_registered, s.certified_at)
+        for s in samples
+        if s.certified_at and s.date_registered
+        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    ]
+    tat_days = [d for d in tat_days if d is not None]
+    avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
+
+    available_years = _available_fiscal_years()
+
+    return render_template(
+        'alcohol_report.html',
+        samples=samples,
+        year=year,
+        quarter=quarter,
+        status_filter=status_filter,
+        available_years=available_years,
+        total=total,
+        certified=certified,
+        in_progress=in_progress,
+        rejected=rejected,
+        avg_tat=avg_tat,
+        SampleStatus=SampleStatus,
+    )
+
+
+@main_bp.route('/reports/alcohol/download')
+@login_required
+def alcohol_report_download():
+    """Download alcohol report as CSV."""
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                     Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int,
+                            default=_current_fiscal_year())
+    quarter = request.args.get('quarter', type=int, default=0)
+
+    q = Sample.query.filter(
+        Sample.sample_type == Branch.FOOD_ALCOHOL,
+    )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter in (1, 2, 3, 4) else None)
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        'Lab Number', 'Sample Name', 'Alcohol Type', 'Claim/Butt #',
+        'Batch/Lot #', 'Status', 'Date Received', 'Date Registered',
+        'Certified Date', 'Turnaround (working days)',
+    ])
+    for s in samples:
+        tat = ''
+        if (s.certified_at and s.date_registered
+                and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
+            tat = calculate_working_days(s.date_registered, s.certified_at) or ''
+        writer.writerow([
+            s.lab_number,
+            s.sample_name,
+            s.alcohol_type or '',
+            s.claim_butt_number or '',
+            s.batch_lot_number or '',
+            s.status.value if s.status else '',
+            s.date_received.isoformat() if s.date_received else '',
+            s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
+            s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
+            tat,
+        ])
+
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    filename = f'Alcohol_Report_{year}{q_label}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Toxicology KPI Report
 # ---------------------------------------------------------------------------
 
@@ -1318,3 +1447,144 @@ def clear_sample_data():
 
     flash('All sample data has been cleared.', 'success')
     return redirect(url_for('main.settings'))
+
+
+# ---------------------------------------------------------------------------
+# Back-Dating Request & Approval
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/backdate-requests')
+@login_required
+def backdate_requests():
+    """View pending back-date requests (HOD/Deputy only)."""
+    if not current_user.has_any_role(Role.HOD, Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    status_filter = request.args.get('status', 'pending')
+    q = BackDateRequest.query
+    if status_filter in ('pending', 'approved', 'denied'):
+        q = q.filter_by(status=status_filter)
+    requests_list = q.order_by(BackDateRequest.requested_at.desc()).all()
+
+    return render_template(
+        'backdate_requests.html',
+        requests=requests_list,
+        status_filter=status_filter,
+    )
+
+
+@main_bp.route('/backdate-requests/<int:req_id>/decide', methods=['POST'])
+@login_required
+def decide_backdate(req_id):
+    """Approve or deny a back-date request."""
+    if not current_user.has_any_role(Role.HOD, Role.DEPUTY, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    bdr = db.get_or_404(BackDateRequest, req_id)
+    if bdr.status != 'pending':
+        flash('This request has already been decided.', 'warning')
+        return redirect(url_for('main.backdate_requests'))
+
+    decision = request.form.get('decision')
+    comments = request.form.get('comments', '')
+
+    if decision not in ('approved', 'denied'):
+        flash('Invalid decision.', 'danger')
+        return redirect(url_for('main.backdate_requests'))
+
+    bdr.status = decision
+    bdr.decided_by = current_user.id
+    bdr.decided_at = jamaica_now()
+    bdr.decision_comments = comments
+
+    # If approved, apply the back-dated value
+    if decision == 'approved':
+        sample = db.session.get(Sample, bdr.sample_id)
+        if sample and hasattr(sample, bdr.field_name):
+            from datetime import datetime as dt
+            try:
+                new_date = dt.strptime(bdr.proposed_date, '%Y-%m-%d').date()
+                setattr(sample, bdr.field_name, new_date)
+            except (ValueError, AttributeError):
+                pass
+
+    # Log the decision
+    db.session.add(SampleHistory(
+        sample_id=bdr.sample_id,
+        action=f'Back-date request {decision}',
+        details=(f'Field: {bdr.field_name}, Original: {bdr.original_date}, '
+                 f'Proposed: {bdr.proposed_date}, Decision: {decision}'
+                 f'{", Comments: " + comments if comments else ""}'),
+        performed_by=current_user.id,
+        action_type=f'Back-Date {decision.title()}',
+        object_affected='Sample',
+        change_description=(f'{bdr.field_name}: {bdr.original_date} → {bdr.proposed_date} '
+                           f'({decision} by {current_user.full_name})'),
+    ))
+    db.session.commit()
+
+    flash(f'Back-date request {decision}.', 'success')
+    return redirect(url_for('main.backdate_requests'))
+
+
+# ---------------------------------------------------------------------------
+# Activity History PDF Export
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/samples/<int:sample_id>/history/pdf')
+@login_required
+def export_history_pdf(sample_id):
+    """Export sample activity history as a simple HTML-based printable page."""
+    sample = db.get_or_404(Sample, sample_id)
+    history = SampleHistory.query.filter_by(
+        sample_id=sample_id
+    ).order_by(SampleHistory.created_at.asc()).all()
+
+    return render_template(
+        'history_export.html',
+        sample=sample,
+        history=history,
+        now=jamaica_now(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Document Preview
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/preview/<path:filename>')
+@login_required
+def preview_file(filename):
+    """Serve a file for inline preview."""
+    import os
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    filepath = os.path.join(upload_folder, filename)
+    if not os.path.isfile(filepath):
+        abort(404)
+
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+
+    # Determine MIME type for inline preview
+    mime_map = {
+        'pdf': 'application/pdf',
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'bmp': 'image/bmp',
+        'tiff': 'image/tiff',
+        'doc': 'application/msword',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls': 'application/vnd.ms-excel',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }
+    mime_type = mime_map.get(ext, 'application/octet-stream')
+
+    from flask import send_from_directory
+    return send_from_directory(
+        upload_folder, filename,
+        mimetype=mime_type,
+        as_attachment=False,
+    )

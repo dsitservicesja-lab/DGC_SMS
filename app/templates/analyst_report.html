@@ -15,10 +15,10 @@
     <div class="card-body py-2">
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-sm-6 col-md-2">
-                <label class="form-label small fw-semibold mb-1">Year</label>
+                <label class="form-label small fw-semibold mb-1">Financial Year</label>
                 <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
                     {% for y in available_years %}
-                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}/{{ y + 1 }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -26,9 +26,10 @@
                 <label class="form-label small fw-semibold mb-1">Quarter</label>
                 <select name="quarter" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="0" {% if quarter == 0 %}selected{% endif %}>All Quarters</option>
-                    {% for q in [1,2,3,4] %}
-                    <option value="{{ q }}" {% if q == quarter %}selected{% endif %}>Q{{ q }}</option>
-                    {% endfor %}
+                    <option value="1" {% if quarter == 1 %}selected{% endif %}>Q1 (Apr-Jun)</option>
+                    <option value="2" {% if quarter == 2 %}selected{% endif %}>Q2 (Jul-Sep)</option>
+                    <option value="3" {% if quarter == 3 %}selected{% endif %}>Q3 (Oct-Dec)</option>
+                    <option value="4" {% if quarter == 4 %}selected{% endif %}>Q4 (Jan-Mar)</option>
                 </select>
             </div>
             <div class="col-sm-6 col-md-2">
@@ -212,11 +213,11 @@
 
 <!-- Quick links -->
 <div class="mt-3 d-flex gap-2 flex-wrap">
-    <a href="{{ url_for('main.kpi', year=year) }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-bar-chart-line me-1"></i>KPI Dashboard
-    </a>
     <a href="{{ url_for('main.pharma_report', year=year) }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-capsule me-1"></i>Pharm Report
+    </a>
+    <a href="{{ url_for('main.alcohol_report', year=year) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-cup me-1"></i>Alcohol Report
     </a>
 </div>
 {% endblock %}

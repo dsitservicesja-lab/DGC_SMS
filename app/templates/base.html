@@ -540,16 +540,11 @@
                     </a>
                 </li>
                 {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) %}
+                <li><div class="sidebar-section-label">Reports</div></li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'main.kpi' %}active{% endif %}"
-                       href="{{ url_for('main.kpi') }}">
-                        <i class="bi bi-bar-chart-line"></i> KPI Dashboard
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'main.kpi_report' %}active{% endif %}"
-                       href="{{ url_for('main.kpi_report') }}">
-                        <i class="bi bi-clipboard-data"></i> KPI Report
+                    <a class="nav-link {% if request.endpoint == 'main.analyst_report' %}active{% endif %}"
+                       href="{{ url_for('main.analyst_report') }}">
+                        <i class="bi bi-person-lines-fill"></i> Analyst Report
                     </a>
                 </li>
                 <li class="nav-item">
@@ -571,21 +566,30 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'main.kpi_toxicology' %}active{% endif %}"
-                       href="{{ url_for('main.kpi_toxicology') }}">
-                        <i class="bi bi-bar-chart-line"></i> Toxicology KPI
+                    <a class="nav-link {% if request.endpoint == 'main.alcohol_report' %}active{% endif %}"
+                       href="{{ url_for('main.alcohol_report') }}">
+                        <i class="bi bi-cup"></i> Alcohol Report
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'main.analyst_report' %}active{% endif %}"
-                       href="{{ url_for('main.analyst_report') }}">
-                        <i class="bi bi-person-lines-fill"></i> Analyst Report
+                    <a class="nav-link {% if request.endpoint == 'main.kpi_report' %}active{% endif %}"
+                       href="{{ url_for('main.kpi_report') }}">
+                        <i class="bi bi-clipboard-data"></i> KPI Report
                     </a>
                 </li>
                 {% endif %}
 
-                {% if current_user.has_any_role(Role.ADMIN, Role.HOD) %}
+                {% if current_user.has_any_role(Role.ADMIN, Role.HOD, Role.DEPUTY) %}
                 <li><div class="sidebar-section-label">Admin</div></li>
+                {% if current_user.has_any_role(Role.HOD, Role.DEPUTY, Role.ADMIN) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.backdate_requests' %}active{% endif %}"
+                       href="{{ url_for('main.backdate_requests') }}">
+                        <i class="bi bi-calendar-event"></i> Back-Date Requests
+                    </a>
+                </li>
+                {% endif %}
+                {% if current_user.has_any_role(Role.ADMIN, Role.HOD) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.endpoint and 'auth.user' in request.endpoint %}active{% endif %}"
                        href="{{ url_for('auth.user_list') }}">
@@ -604,6 +608,7 @@
                         <i class="bi bi-gear"></i> Settings
                     </a>
                 </li>
+                {% endif %}
                 {% endif %}
             </ul>
         </nav>

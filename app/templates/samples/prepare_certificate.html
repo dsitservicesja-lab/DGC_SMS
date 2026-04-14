@@ -78,9 +78,18 @@
                             {% if sample.certificate_file %}
                             <div class="form-text">
                                 Current file: <strong>{{ sample.certificate_file_original_name }}</strong>
-                                &mdash; uploading a new file will replace it.
+                                &mdash; uploading a new file creates a new version (previous file is retained).
                             </div>
                             {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            {{ form.coa_reference.label(class="form-label fw-semibold") }}
+                            {{ form.coa_reference(class="form-control", placeholder="e.g. COA-2025-001") }}
+                            <div class="form-text">Reference number for this Certificate of Analysis.</div>
+                            {% for error in form.coa_reference.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
                         </div>
 
                         <div class="col-12 d-flex gap-2 pt-2">
