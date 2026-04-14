@@ -349,6 +349,7 @@ class Sample(db.Model):
         db.Integer, db.ForeignKey('users.id'), nullable=True
     )
     certificate_prepared_at = db.Column(db.DateTime, nullable=True)
+    coa_reference = db.Column(db.String(255), nullable=True)  # Certificate reference number
 
     # Government Chemist (HOD) review & signing
     hod_review_comments = db.Column(db.Text, nullable=True)
@@ -483,6 +484,10 @@ class SampleHistory(db.Model):
     created_at = db.Column(
         db.DateTime, default=jamaica_now
     )
+    # Enhanced audit fields
+    action_type = db.Column(db.String(100), nullable=True)     # e.g. 'Original Submission', 'Resubmission'
+    object_affected = db.Column(db.String(255), nullable=True)  # e.g. 'Report', 'COA', 'Sample'
+    change_description = db.Column(db.Text, nullable=True)      # what changed and why
 
     performer = db.relationship('User', foreign_keys=[performed_by])
 
@@ -689,3 +694,143 @@ class SupportingDocument(db.Model):
 
     def __repr__(self):
         return f'<SupportingDocument {self.original_name} for Sample {self.sample_id}>'
+
+
+# ---------------------------------------------------------------------------
+# Document Version (tracks every file upload as a new version)
+# ---------------------------------------------------------------------------
+
+class DocumentVersion(db.Model):
+    """Tracks every uploaded file version for full retention.
+    New uploads never overwrite previous documents; each is stored as a
+    new version linked to the parent record."""
+    __tablename__ = 'document_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sample_id = db.Column(
+        db.Integer, db.ForeignKey('samples.id'), nullable=False
+    )
+    document_type = db.Column(db.String(50), nullable=False)  # 'scanned_file', 'report', 'certificate', 'summary_report', 'supporting'
+    version_number = db.Column(db.Integer, nullable=False, default=1)
+    file_path = db.Column(db.String(500), nullable=False)
+    original_name = db.Column(db.String(255), nullable=False)
+    upload_label = db.Column(db.String(50), nullable=True)  # 'original', 'revised', 'resubmission'
+    uploaded_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    uploaded_at = db.Column(db.DateTime, default=jamaica_now)
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey('sample_assignments.id'), nullable=True
+    )
+
+    sample = db.relationship('Sample', backref=db.backref(
+        'document_versions', lazy='dynamic', cascade='all, delete-orphan'
+    ))
+    uploader = db.relationship('User', foreign_keys=[uploaded_by])
+    assignment = db.relationship('SampleAssignment', backref=db.backref(
+        'document_versions', lazy='dynamic'
+    ))
+
+    def __repr__(self):
+        return f'<DocumentVersion v{self.version_number} {self.document_type} for Sample {self.sample_id}>'
+
+
+# ---------------------------------------------------------------------------
+# Back-Date Request (controlled back-dating with approval workflow)
+# ---------------------------------------------------------------------------
+
+class BackDateRequest(db.Model):
+    """Tracks requests to back-date entries, requiring HOD/Deputy approval."""
+    __tablename__ = 'back_date_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sample_id = db.Column(
+        db.Integer, db.ForeignKey('samples.id'), nullable=False
+    )
+    field_name = db.Column(db.String(100), nullable=False)  # e.g. 'date_received', 'report_date'
+    original_date = db.Column(db.String(50), nullable=False)
+    proposed_date = db.Column(db.String(50), nullable=False)
+    reason = db.Column(db.Text, nullable=True)
+    requested_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    requested_at = db.Column(db.DateTime, default=jamaica_now)
+    status = db.Column(db.String(20), nullable=False, default='pending')  # 'pending', 'approved', 'denied'
+    decided_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    decided_at = db.Column(db.DateTime, nullable=True)
+    decision_comments = db.Column(db.Text, nullable=True)
+
+    sample = db.relationship('Sample', backref=db.backref(
+        'back_date_requests', lazy='dynamic', cascade='all, delete-orphan'
+    ))
+    requester = db.relationship('User', foreign_keys=[requested_by])
+    decider = db.relationship('User', foreign_keys=[decided_by])
+
+    def __repr__(self):
+        return f'<BackDateRequest {self.field_name} for Sample {self.sample_id} ({self.status})>'
+
+
+# ---------------------------------------------------------------------------
+# Financial Year Utilities
+# ---------------------------------------------------------------------------
+
+def fiscal_year_for_date(d):
+    """Return the financial year (integer) for a given date.
+    Financial year runs April 1 – March 31.
+    E.g. April 2025 → FY 2025, March 2026 → FY 2025."""
+    if isinstance(d, datetime):
+        d = d.date()
+    if d.month >= 4:
+        return d.year
+    return d.year - 1
+
+
+def fiscal_quarter_for_date(d):
+    """Return the fiscal quarter (1-4) for a given date.
+    Q1: Apr-Jun, Q2: Jul-Sep, Q3: Oct-Dec, Q4: Jan-Mar."""
+    if isinstance(d, datetime):
+        d = d.date()
+    month = d.month
+    if month >= 4 and month <= 6:
+        return 1
+    elif month >= 7 and month <= 9:
+        return 2
+    elif month >= 10 and month <= 12:
+        return 3
+    else:  # Jan-Mar
+        return 4
+
+
+def fiscal_quarter_months(quarter):
+    """Return (month_start, month_end) for a given fiscal quarter.
+    Q1: (4,6), Q2: (7,9), Q3: (10,12), Q4: (1,3)."""
+    mapping = {1: (4, 6), 2: (7, 9), 3: (10, 12), 4: (1, 3)}
+    return mapping.get(quarter, (1, 3))
+
+
+def fiscal_year_date_range(year, quarter=None):
+    """Return (start_date, end_date) for a fiscal year or specific quarter.
+    If quarter is None, returns the full fiscal year range."""
+    if quarter:
+        month_start, month_end = fiscal_quarter_months(quarter)
+        if quarter == 4:
+            start = date(year + 1, month_start, 1)
+            # End of March
+            end = date(year + 1, 3, 31)
+        else:
+            start = date(year, month_start, 1)
+            # Last day of end month
+            if month_end == 6:
+                end = date(year, 6, 30)
+            elif month_end == 9:
+                end = date(year, 9, 30)
+            elif month_end == 12:
+                end = date(year, 12, 31)
+            else:
+                end = date(year, month_end, 31)
+        return start, end
+    else:
+        # Full fiscal year: April 1 of year to March 31 of year+1
+        return date(year, 4, 1), date(year + 1, 3, 31)

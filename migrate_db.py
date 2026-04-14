@@ -75,6 +75,12 @@ MIGRATIONS = [
     ('samples', 'lot_number', 'VARCHAR(100)'),
     ('samples', 'expiration_date', 'DATE'),
     ('samples', 'toxicology_sample_type_name', 'VARCHAR(100)'),
+    # samples – COA reference
+    ('samples', 'coa_reference', 'VARCHAR(255)'),
+    # sample_history – enhanced audit fields
+    ('sample_history', 'action_type', 'VARCHAR(100)'),
+    ('sample_history', 'object_affected', 'VARCHAR(255)'),
+    ('sample_history', 'change_description', 'TEXT'),
 ]
 
 NEW_TABLES = [
@@ -147,6 +153,38 @@ NEW_TABLES = [
         '  description VARCHAR(500),'
         '  uploaded_by INTEGER NOT NULL REFERENCES users(id),'
         '  uploaded_at DATETIME'
+        ')',
+    ),
+    (
+        'document_versions',
+        'CREATE TABLE IF NOT EXISTS document_versions ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  sample_id INTEGER NOT NULL REFERENCES samples(id),'
+        '  document_type VARCHAR(50) NOT NULL,'
+        '  version_number INTEGER NOT NULL DEFAULT 1,'
+        '  file_path VARCHAR(500) NOT NULL,'
+        '  original_name VARCHAR(255) NOT NULL,'
+        '  upload_label VARCHAR(50),'
+        '  uploaded_by INTEGER NOT NULL REFERENCES users(id),'
+        '  uploaded_at DATETIME,'
+        '  assignment_id INTEGER REFERENCES sample_assignments(id)'
+        ')',
+    ),
+    (
+        'back_date_requests',
+        'CREATE TABLE IF NOT EXISTS back_date_requests ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  sample_id INTEGER NOT NULL REFERENCES samples(id),'
+        '  field_name VARCHAR(100) NOT NULL,'
+        '  original_date VARCHAR(50) NOT NULL,'
+        '  proposed_date VARCHAR(50) NOT NULL,'
+        '  reason TEXT,'
+        '  requested_by INTEGER NOT NULL REFERENCES users(id),'
+        '  requested_at DATETIME,'
+        '  status VARCHAR(20) NOT NULL DEFAULT "pending",'
+        '  decided_by INTEGER REFERENCES users(id),'
+        '  decided_at DATETIME,'
+        '  decision_comments TEXT'
         ')',
     ),
 ]

@@ -14,7 +14,41 @@ from app.models import (
     Role, SampleStatus, AssignmentStatus, Setting, Branch,
     KpiTarget, KPI_METRICS, AUTO_ACTUAL_KEYS,
     NonWorkingDay, calculate_working_days, jamaica_now,
+    DocumentVersion, BackDateRequest,
+    fiscal_year_for_date, fiscal_quarter_for_date,
+    fiscal_quarter_months, fiscal_year_date_range,
 )
+
+
+def _current_fiscal_year():
+    """Return the current fiscal year (April-March)."""
+    return fiscal_year_for_date(jamaica_now())
+
+
+def _available_fiscal_years():
+    """Return sorted list of fiscal years with data, plus the current one."""
+    from sqlalchemy import extract
+    rows = db.session.query(
+        extract('year', Sample.date_registered).label('yr'),
+        extract('month', Sample.date_registered).label('mo'),
+    ).distinct().all()
+    fy_set = set()
+    for r in rows:
+        if r.yr and r.mo:
+            if int(r.mo) >= 4:
+                fy_set.add(int(r.yr))
+            else:
+                fy_set.add(int(r.yr) - 1)
+    fy_set.add(_current_fiscal_year())
+    return sorted(fy_set)
+
+
+def _fiscal_year_filter(query, date_column, year, quarter=None):
+    """Apply fiscal year (and optional quarter) filter to a query.
+    Financial year: April 1 of `year` to March 31 of `year+1`.
+    Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar."""
+    start, end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+    return query.filter(date_column >= start, date_column <= end)
 
 
 def _maybe_send_report_reminders():
@@ -251,26 +285,22 @@ def keep_alive():
 def kpi():
     from sqlalchemy import extract, func
 
-    year = request.args.get('year', type=int, default=jamaica_now().year)
+    year = request.args.get('year', type=int, default=_current_fiscal_year())
     sort_by = request.args.get('sort', 'quarter')
     sort_dir = request.args.get('dir', 'asc')
 
-    # Get distinct years available
-    years_result = db.session.query(
-        extract('year', Sample.date_registered).label('yr')
-    ).distinct().order_by('yr').all()
-    available_years = [int(row.yr) for row in years_result if row.yr]
+    available_years = _available_fiscal_years()
 
-    # Quarterly stats: registered, certified, in_progress per quarter
+    # Quarterly stats using fiscal year quarters
     quarters_data = []
+    fiscal_q_labels = {1: 'Q1 (Apr-Jun)', 2: 'Q2 (Jul-Sep)',
+                       3: 'Q3 (Oct-Dec)', 4: 'Q4 (Jan-Mar)'}
     for q in range(1, 5):
-        month_start = (q - 1) * 3 + 1
-        month_end = q * 3
+        start, end = fiscal_year_date_range(year, q)
 
         base_q = Sample.query.filter(
-            extract('year', Sample.date_registered) == year,
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
+            Sample.date_registered >= start,
+            Sample.date_registered <= end,
         )
         total = base_q.count()
         certified = base_q.filter(
@@ -309,7 +339,7 @@ def kpi():
 
         quarters_data.append({
             'quarter': q,
-            'label': f'Q{q}',
+            'label': fiscal_q_labels[q],
             'total': total,
             'certified': certified,
             'in_progress': in_progress,
@@ -339,17 +369,14 @@ def kpi():
 # ---------------------------------------------------------------------------
 
 def _auto_actuals(year, quarter):
-    """Return a dict of auto-computed KPI actual values for *year* / *quarter*."""
-    from sqlalchemy import extract
-
-    month_start = (quarter - 1) * 3 + 1
-    month_end = quarter * 3
+    """Return a dict of auto-computed KPI actual values for *year* / *quarter*.
+    Uses fiscal year quarters (Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar)."""
+    start, end = fiscal_year_date_range(year, quarter)
 
     def _base(branch_filter):
         q = Sample.query.filter(
-            extract('year', Sample.date_registered) == year,
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
+            Sample.date_registered >= start,
+            Sample.date_registered <= end,
         )
         if isinstance(branch_filter, (list, tuple)):
             q = q.filter(Sample.sample_type.in_(branch_filter))
@@ -396,23 +423,17 @@ def kpi_report():
         return redirect(url_for('main.dashboard'))
 
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=1)
     if quarter not in (1, 2, 3, 4):
         quarter = 1
 
-    # Available years (from sample data + any year that has KPI targets)
-    from sqlalchemy import extract
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', Sample.date_registered).label('yr')
-        ).distinct().all() if r.yr
-    }
+    # Available years (fiscal years from sample data + any year that has KPI targets)
+    available_years = _available_fiscal_years()
     target_years = {
         r.year for r in db.session.query(KpiTarget.year).distinct().all()
     }
-    available_years = sorted(sample_years | target_years | {year})
+    available_years = sorted(set(available_years) | target_years | {year})
 
     # Load saved targets for this year/quarter
     targets = {
@@ -515,7 +536,7 @@ def kpi_targets():
         return redirect(url_for('main.dashboard'))
 
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=1)
     if quarter not in (1, 2, 3, 4):
         quarter = 1
@@ -550,20 +571,14 @@ def kpi_targets():
         for t in KpiTarget.query.filter_by(year=year, quarter=quarter).all()
     }
 
-    # Available years
-    from sqlalchemy import extract
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', Sample.date_registered).label('yr')
-        ).distinct().all() if r.yr
-    }
+    # Available years (fiscal years)
+    available_years = _available_fiscal_years()
     target_years = {
         r.year for r in db.session.query(KpiTarget.year).distinct().all()
     }
-    current_year = jamaica_now().year
+    fy = _current_fiscal_year()
     available_years = sorted(
-        sample_years | target_years | {current_year, current_year + 1}
+        set(available_years) | target_years | {fy, fy + 1}
     )
 
     return render_template(
@@ -590,25 +605,16 @@ def pharma_report():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     status_filter = request.args.get('status', '')
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
-        extract('year', Sample.date_registered) == year,
     )
-
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
-        )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter else None)
 
     if status_filter:
         try:
@@ -642,14 +648,8 @@ def pharma_report():
     ]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
-    # Available years
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', Sample.date_registered).label('yr')
-        ).distinct().all() if r.yr
-    }
-    available_years = sorted(sample_years | {year})
+    # Available years (fiscal)
+    available_years = _available_fiscal_years()
 
     return render_template(
         'pharma_report.html',
@@ -676,23 +676,15 @@ def pharma_report_download():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
-        extract('year', Sample.date_registered) == year,
     )
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
-        )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -743,25 +735,16 @@ def milk_report():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     status_filter = request.args.get('status', '')
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
-        extract('year', Sample.date_registered) == year,
     )
-
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
-        )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter else None)
 
     if status_filter:
         try:
@@ -795,14 +778,8 @@ def milk_report():
     ]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
-    # Available years
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', Sample.date_registered).label('yr')
-        ).distinct().all() if r.yr
-    }
-    available_years = sorted(sample_years | {year})
+    # Available years (fiscal)
+    available_years = _available_fiscal_years()
 
     return render_template(
         'milk_report.html',
@@ -829,23 +806,15 @@ def milk_report_download():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
-        extract('year', Sample.date_registered) == year,
     )
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
-        )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -900,25 +869,16 @@ def toxicology_report():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
     status_filter = request.args.get('status', '')
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
-        extract('year', Sample.date_registered) == year,
     )
-
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
-        )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter else None)
 
     if status_filter:
         try:
@@ -952,13 +912,7 @@ def toxicology_report():
     tat_days = [d for d in tat_days if d is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', Sample.date_registered).label('yr')
-        ).distinct().all() if r.yr
-    }
-    available_years = sorted(sample_years | {year})
+    available_years = _available_fiscal_years()
 
     return render_template(
         'toxicology_report.html',
@@ -985,23 +939,15 @@ def toxicology_report_download():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
-        extract('year', Sample.date_registered) == year,
     )
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
-        )
+    q = _fiscal_year_filter(q, Sample.date_registered, year,
+                            quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -1051,28 +997,19 @@ def kpi_toxicology():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
+    year = request.args.get('year', type=int, default=_current_fiscal_year())
+    available_years = _available_fiscal_years()
 
-    year = request.args.get('year', type=int, default=jamaica_now().year)
-
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', Sample.date_registered).label('yr')
-        ).distinct().all() if r.yr
-    }
-    available_years = sorted(sample_years | {year})
-
+    fiscal_q_labels = {1: 'Q1 (Apr-Jun)', 2: 'Q2 (Jul-Sep)',
+                       3: 'Q3 (Oct-Dec)', 4: 'Q4 (Jan-Mar)'}
     quarters_data = []
     for q_num in range(1, 5):
-        month_start = (q_num - 1) * 3 + 1
-        month_end = q_num * 3
+        start, end = fiscal_year_date_range(year, q_num)
 
         base_q = Sample.query.filter(
             Sample.sample_type == Branch.TOXICOLOGY,
-            extract('year', Sample.date_registered) == year,
-            extract('month', Sample.date_registered) >= month_start,
-            extract('month', Sample.date_registered) <= month_end,
+            Sample.date_registered >= start,
+            Sample.date_registered <= end,
         )
         total = base_q.count()
         certified = base_q.filter(
@@ -1105,7 +1042,7 @@ def kpi_toxicology():
 
         quarters_data.append({
             'quarter': q_num,
-            'label': f'Q{q_num}',
+            'label': fiscal_q_labels[q_num],
             'total': total,
             'certified': certified,
             'in_progress': in_progress,
@@ -1134,27 +1071,17 @@ def analyst_report():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract, func
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     branch_filter = request.args.get('branch', '')
 
     # Build base query on assignments
     q = SampleAssignment.query.join(
         Sample, SampleAssignment.sample_id == Sample.id
-    ).filter(
-        extract('year', SampleAssignment.assigned_date) == year,
     )
-
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', SampleAssignment.assigned_date) >= month_start,
-            extract('month', SampleAssignment.assigned_date) <= month_end,
-        )
+    q = _fiscal_year_filter(q, SampleAssignment.assigned_date, year,
+                            quarter if quarter else None)
 
     if branch_filter:
         try:
@@ -1196,14 +1123,8 @@ def analyst_report():
     else:
         analyst_list = sorted(analyst_data.values(), key=lambda x: x['completed'], reverse=reverse)
 
-    # Available years
-    sample_years = {
-        int(r.yr)
-        for r in db.session.query(
-            extract('year', SampleAssignment.assigned_date).label('yr')
-        ).distinct().all() if r.yr
-    }
-    available_years = sorted(sample_years | {year})
+    # Available years (fiscal)
+    available_years = _available_fiscal_years()
 
     # Summary totals
     total_assignments = len(assignments)
@@ -1235,10 +1156,8 @@ def analyst_report_download():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from sqlalchemy import extract
-
     year = request.args.get('year', type=int,
-                            default=jamaica_now().year)
+                            default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
     branch_filter = request.args.get('branch', '')
 
@@ -1246,17 +1165,9 @@ def analyst_report_download():
         Sample, SampleAssignment.sample_id == Sample.id
     ).join(
         User, SampleAssignment.chemist_id == User.id
-    ).filter(
-        extract('year', SampleAssignment.assigned_date) == year,
     )
-
-    if quarter in (1, 2, 3, 4):
-        month_start = (quarter - 1) * 3 + 1
-        month_end = quarter * 3
-        q = q.filter(
-            extract('month', SampleAssignment.assigned_date) >= month_start,
-            extract('month', SampleAssignment.assigned_date) <= month_end,
-        )
+    q = _fiscal_year_filter(q, SampleAssignment.assigned_date, year,
+                            quarter if quarter in (1, 2, 3, 4) else None)
 
     if branch_filter:
         try:
