@@ -1440,8 +1440,12 @@ def clear_sample_data():
     Notification.query.filter(
         Notification.link.like('%/samples/%')
     ).delete(synchronize_session=False)
+    BackDateRequest.query.delete()
+    DocumentVersion.query.delete()
     SampleHistory.query.delete()
     SampleAssignment.query.delete()
+    from app.models import SupportingDocument
+    SupportingDocument.query.delete()
     Sample.query.delete()
     db.session.commit()
 

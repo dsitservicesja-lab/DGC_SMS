@@ -245,6 +245,87 @@
     </div>
 </div>
 
+<!-- Report Metadata -->
+<div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Report &amp; Review Information</h5></div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <h6 class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Sample &amp; Laboratory</h6>
+                <dl class="mb-0 small">
+                    <dt>Date Received</dt>
+                    <dd>{{ sample.date_received.strftime('%d %b %Y') if sample.date_received else '—' }}</dd>
+                    <dt>Date Registered</dt>
+                    <dd>{{ sample.date_registered.strftime('%d %b %Y %H:%M') if sample.date_registered else '—' }}</dd>
+                    <dt>Lab Number</dt>
+                    <dd>{{ sample.lab_number }}</dd>
+                    <dt>Laboratory</dt>
+                    <dd>{{ sample.sample_type.value if sample.sample_type else '—' }}</dd>
+                </dl>
+            </div>
+            <div class="col-md-4">
+                <h6 class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Assignment &amp; Review</h6>
+                <dl class="mb-0 small">
+                    {% if assignments %}
+                    {% for a in assignments[:3] %}
+                    <dt>{{ a.test_name }}</dt>
+                    <dd>
+                        Assigned to {{ a.chemist.full_name }}
+                        {% if a.assigned_date %} on {{ a.assigned_date.strftime('%d %b %Y') }}{% endif %}
+                        <br>Status: <span class="badge bg-secondary" style="font-size:.7rem;">{{ a.status.value }}</span>
+                    </dd>
+                    {% endfor %}
+                    {% else %}
+                    <dd class="text-muted">No assignments yet</dd>
+                    {% endif %}
+                    {% if sample.deputy_reviewed_by %}
+                    <dt>Deputy Review</dt>
+                    <dd>{{ sample.deputy_reviewer.full_name if sample.deputy_reviewer else '—' }}
+                        {% if sample.deputy_reviewed_at %} on {{ sample.deputy_reviewed_at.strftime('%d %b %Y') }}{% endif %}
+                    </dd>
+                    {% endif %}
+                    {% if sample.hod_reviewed_by %}
+                    <dt>HOD Review</dt>
+                    <dd>{{ sample.hod_reviewer.full_name if sample.hod_reviewer else '—' }}
+                        {% if sample.hod_reviewed_at %} on {{ sample.hod_reviewed_at.strftime('%d %b %Y') }}{% endif %}
+                    </dd>
+                    {% endif %}
+                </dl>
+            </div>
+            <div class="col-md-4">
+                <h6 class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">COA Information</h6>
+                <dl class="mb-0 small">
+                    {% if sample.coa_reference %}
+                    <dt>COA Reference</dt>
+                    <dd>{{ sample.coa_reference }}</dd>
+                    {% endif %}
+                    {% if sample.certificate_prepared_at %}
+                    <dt>COA Upload Date</dt>
+                    <dd>{{ sample.certificate_prepared_at.strftime('%d %b %Y %H:%M') }}</dd>
+                    {% endif %}
+                    {% if sample.certificate_preparer %}
+                    <dt>COA Uploaded By</dt>
+                    <dd>{{ sample.certificate_preparer.full_name }}
+                        <span class="badge bg-secondary" style="font-size:.65rem;">
+                            {% for r in sample.certificate_preparer.roles %}{{ r.value }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        </span>
+                    </dd>
+                    {% endif %}
+                    {% if sample.certified_at %}
+                    <dt>Certified</dt>
+                    <dd>{{ sample.certified_at.strftime('%d %b %Y %H:%M') }}
+                        {% if sample.certifier %} by {{ sample.certifier.full_name }}{% endif %}
+                    </dd>
+                    {% endif %}
+                    {% if not sample.coa_reference and not sample.certificate_prepared_at %}
+                    <dd class="text-muted">No COA information yet</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Supporting Documents -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
