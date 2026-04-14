@@ -496,6 +496,45 @@ class SampleHistory(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# Review History  (logs every review iteration for full traceability)
+# ---------------------------------------------------------------------------
+
+class ReviewHistory(db.Model):
+    """Stores a snapshot of every review performed so that previous reviews
+    are never lost when a report is returned and re-reviewed."""
+    __tablename__ = 'review_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sample_id = db.Column(
+        db.Integer, db.ForeignKey('samples.id'), nullable=False
+    )
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey('sample_assignments.id'), nullable=True
+    )
+    review_type = db.Column(db.String(50), nullable=False)   # 'preliminary', 'technical', 'deputy', 'hod'
+    review_number = db.Column(db.Integer, nullable=False, default=1)
+    action = db.Column(db.String(50), nullable=False)        # 'approved', 'returned', 'accepted', 'rejected', 'sign'
+    reviewer_id = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    reviewed_at = db.Column(db.DateTime, default=jamaica_now)
+    comments = db.Column(db.Text, nullable=True)
+    checklist_data = db.Column(db.Text, nullable=True)       # JSON for preliminary review checklist
+
+    # Relationships
+    sample = db.relationship('Sample', backref=db.backref(
+        'review_histories', lazy='dynamic', order_by='ReviewHistory.reviewed_at.desc()'
+    ))
+    assignment = db.relationship('SampleAssignment', backref=db.backref(
+        'review_histories', lazy='dynamic', order_by='ReviewHistory.reviewed_at.desc()'
+    ))
+    reviewer = db.relationship('User', foreign_keys=[reviewer_id])
+
+    def __repr__(self):
+        return f'<ReviewHistory #{self.review_number} {self.review_type} {self.action} for Sample {self.sample_id}>'
+
+
+# ---------------------------------------------------------------------------
 # Notification
 # ---------------------------------------------------------------------------
 

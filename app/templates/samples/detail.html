@@ -562,7 +562,7 @@
 
 <!-- Document Versions -->
 {% if document_versions %}
-<div class="card">
+<div class="card mb-4">
     <div class="card-header">
         <h5 class="mb-0"><i class="bi bi-archive me-2"></i>Document Versions</h5>
     </div>
@@ -619,8 +619,74 @@
 </div>
 {% endif %}
 
+<!-- Review History -->
+{% if review_histories %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-journal-check me-2"></i>Review History</h5>
+    </div>
+    <div class="card-body">
+        {% set review_type_labels = {'preliminary': 'Preliminary Review', 'technical': 'Senior Chemist Review', 'deputy': 'Deputy Review', 'hod': 'HOD Review'} %}
+        {% set action_colors = {'approved': 'success', 'returned': 'danger', 'accepted': 'success', 'rejected': 'danger', 'sign': 'success'} %}
+        {% for rh in review_histories | reverse %}
+        <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg);">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    <span class="badge bg-{{ action_colors.get(rh.action, 'secondary') }} me-1">{{ rh.action | title }}</span>
+                    <strong>{{ review_type_labels.get(rh.review_type, rh.review_type | title) }}</strong>
+                    <span class="text-muted">— Review #{{ rh.review_number }}</span>
+                    {% if rh.assignment %}
+                    <span class="text-muted small ms-1">({{ rh.assignment.test_name }})</span>
+                    {% endif %}
+                </div>
+                <small class="text-muted">{{ rh.reviewed_at.strftime('%d %b %Y %H:%M') if rh.reviewed_at else '—' }}</small>
+            </div>
+            <p class="mb-1 small"><strong>Reviewer:</strong> {{ rh.reviewer.full_name }}</p>
+            {% if rh.comments %}
+            <p class="mb-1 small"><strong>Comments:</strong> {{ rh.comments }}</p>
+            {% endif %}
+            {% if rh.checklist_data %}
+            {% set rh_checklist = rh.checklist_data | tojson_load %}
+            {% if rh_checklist %}
+            <details class="mt-2">
+                <summary class="fw-semibold small" style="cursor:pointer;"><i class="bi bi-list-check me-1"></i>View Checklist</summary>
+                <div class="row mt-2">
+                    {% for category, fields in checklist_categories %}
+                    <div class="col-md-6 mb-2">
+                        <div class="fw-semibold text-muted small text-uppercase">{{ category }}</div>
+                        <ul class="list-unstyled mb-0 ms-1">
+                            {% for field_name, label in fields %}
+                            <li>
+                                {% set val = rh_checklist.get(field_name, 'na') %}
+                                {% if val == 'yes' or val == true %}
+                                <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                {% elif val == 'no' or val == false %}
+                                <i class="bi bi-x-circle-fill text-danger me-1"></i>
+                                {% else %}
+                                <i class="bi bi-dash-circle-fill text-warning me-1"></i>
+                                {% endif %}
+                                <small>{{ label }}
+                                    {% if val == 'yes' or val == true %}<span class="text-success">(Yes)</span>
+                                    {% elif val == 'no' or val == false %}<span class="text-danger">(No)</span>
+                                    {% else %}<span class="text-warning">(N/A)</span>{% endif %}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Activity History -->
-<div class="card">
+<div class="card mb-4">
     <div class="card-header d-flex align-items-center justify-content-between">
         <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Activity History</h5>
         {% if history %}
