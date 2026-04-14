@@ -232,7 +232,7 @@
         {% set review_type_labels = {'preliminary': 'Preliminary Review', 'technical': 'Senior Chemist Review'} %}
         {% set action_colors = {'approved': 'success', 'returned': 'danger', 'accepted': 'success', 'rejected': 'danger'} %}
         {% for rh in review_histories | reverse %}
-        <div class="border rounded p-3 mb-3{% if not loop.last %} {% endif %}" style="background: var(--bs-tertiary-bg);">
+        <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg);">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                 <div>
                     <span class="badge bg-{{ action_colors.get(rh.action, 'secondary') }} me-1">{{ rh.action | title }}</span>

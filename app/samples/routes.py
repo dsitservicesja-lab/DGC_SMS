@@ -822,12 +822,22 @@ def preliminary_review(assignment_id):
         checklist_json = json.dumps(checklist)
 
         # Apply the review to all sibling assignments
+        # Pre-fetch existing review counts to avoid N+1 queries
+        sibling_ids = [a.id for a in sibling_assignments]
+        existing_counts = dict(
+            db.session.query(
+                ReviewHistory.assignment_id,
+                db.func.count(ReviewHistory.id)
+            ).filter(
+                ReviewHistory.assignment_id.in_(sibling_ids),
+                ReviewHistory.review_type == 'preliminary'
+            ).group_by(ReviewHistory.assignment_id).all()
+        )
+
         reviewed_names = []
         for a in sibling_assignments:
             # Log the review in ReviewHistory BEFORE overwriting fields
-            prev_count = ReviewHistory.query.filter_by(
-                assignment_id=a.id, review_type='preliminary'
-            ).count()
+            prev_count = existing_counts.get(a.id, 0)
             db.session.add(ReviewHistory(
                 sample_id=sample.id,
                 assignment_id=a.id,
