@@ -1520,14 +1520,18 @@ def bulk_delete():
 
     for sample in samples:
         # Build a snapshot of sample data for the audit log
+        uploader = db.session.get(User, sample.uploaded_by)
         snapshot = json.dumps({
             'lab_number': sample.lab_number,
             'sample_name': sample.sample_name,
             'sample_type': sample.sample_type.value,
             'status': sample.status.value,
+            'description': sample.description,
+            'quantity': sample.quantity,
             'date_received': sample.date_received.isoformat() if sample.date_received else None,
             'date_registered': sample.date_registered.isoformat() if sample.date_registered else None,
             'uploaded_by': sample.uploaded_by,
+            'uploaded_by_name': uploader.full_name if uploader else None,
             'assignment_count': sample.assignments.count(),
         })
 
@@ -1542,11 +1546,6 @@ def bulk_delete():
             performed_at=now,
         ))
 
-        # Remove related notifications
-        Notification.query.filter(
-            Notification.link.like(f'%/samples/{sample.id}%')
-        ).delete(synchronize_session=False)
-
         # Remove uploaded files from disk
         _delete_sample_files(sample)
 
@@ -1555,6 +1554,13 @@ def bulk_delete():
         db.session.delete(sample)
 
         deleted_labels.append(sample.lab_number)
+
+    # Bulk-remove related notifications for all deleted samples
+    notif_patterns = [f'%/samples/{sid}%' for sid in sample_ids]
+    for pattern in notif_patterns:
+        Notification.query.filter(
+            Notification.link.like(pattern)
+        ).delete(synchronize_session=False)
 
     db.session.commit()
 

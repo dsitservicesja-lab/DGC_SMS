@@ -184,7 +184,7 @@
 {% if current_user.has_role(Role.ADMIN) and samples %}
 <!-- Bulk-delete floating action bar (visible when ≥1 checkbox checked) -->
 <div id="bulk-action-bar" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 px-4 py-2 bg-white border rounded-pill shadow d-flex align-items-center gap-3"
-     style="z-index:1050; display:none !important;">
+     style="z-index:1050; display:none;">
     <span class="fw-semibold text-muted" style="font-size:.85rem;">
         <span id="selected-count">0</span> selected
     </span>
@@ -294,22 +294,22 @@ pdfModal.addEventListener('hide.bs.modal', function() {
     });
 
     /* Populate the confirmation modal just before it opens */
-    var confirmModal = document.getElementById('confirmBulkDeleteModal');
+    const confirmModal = document.getElementById('confirmBulkDeleteModal');
     if (confirmModal) {
         confirmModal.addEventListener('show.bs.modal', function () {
-            var checked = document.querySelectorAll('.sample-checkbox:checked');
+            const checked = document.querySelectorAll('.sample-checkbox:checked');
             modalCount.textContent = checked.length;
             modalList.innerHTML = '';
             /* Remove any previously injected hidden inputs */
             form.querySelectorAll('input[name="sample_ids"]').forEach(function (el) { el.remove(); });
             checked.forEach(function (cb) {
                 /* List item */
-                var li = document.createElement('li');
+                const li = document.createElement('li');
                 li.className = 'mb-1';
                 li.innerHTML = '<i class="bi bi-dot"></i> <strong>' + cb.dataset.lab + '</strong>';
                 modalList.appendChild(li);
                 /* Hidden input for the form */
-                var inp = document.createElement('input');
+                const inp = document.createElement('input');
                 inp.type = 'hidden';
                 inp.name = 'sample_ids';
                 inp.value = cb.value;
