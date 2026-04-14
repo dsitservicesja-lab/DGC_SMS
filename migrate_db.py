@@ -202,6 +202,19 @@ NEW_TABLES = [
         '  checklist_data TEXT'
         ')',
     ),
+    (
+        'audit_log',
+        'CREATE TABLE IF NOT EXISTS audit_log ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  action VARCHAR(100) NOT NULL,'
+        '  entity_type VARCHAR(100) NOT NULL,'
+        '  entity_id INTEGER,'
+        '  entity_label VARCHAR(255),'
+        '  details TEXT,'
+        '  performed_by INTEGER NOT NULL REFERENCES users(id),'
+        '  performed_at DATETIME'
+        ')',
+    ),
 ]
 
 # ------------------------------------------------------------------------------

@@ -1026,3 +1026,175 @@ def test_assign_with_comments_and_quantity(app, client):
         assignment = SampleAssignment.query.first()
         assert assignment.comments == 'Handle with care, priority sample.'
         assert assignment.quantity_volume == '100ml'
+
+
+# ---------------------------------------------------------------------------
+# Bulk Delete Tests
+# ---------------------------------------------------------------------------
+
+def _create_admin(app):
+    """Create and return an admin user."""
+    with app.app_context():
+        admin = _create_user(Role.ADMIN, username='admin')
+        return admin.id
+
+
+def _register_sample_with_lab(client, lab, name='Test Sample'):
+    """Register a sample with a specific lab number."""
+    return client.post('/samples/register', data={
+        'lab_number': lab,
+        'sample_name': name,
+        'sample_type': 'TOXICOLOGY',
+        'date_received': '2026-01-15',
+        'description': 'Test',
+        'quantity': '50ml',
+    }, follow_redirects=True)
+
+
+def test_bulk_delete_admin_deletes_samples(app, client):
+    """Admin can bulk-delete samples and related data is removed."""
+    _setup_users(app)
+    _create_admin(app)
+
+    # Register two samples as officer
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-001')
+    _register_sample_with_lab(client, 'TOX-002')
+    client.get('/auth/logout')
+
+    _login(client, 'admin')
+    with app.app_context():
+        samples = Sample.query.all()
+        assert len(samples) == 2
+        ids = [s.id for s in samples]
+
+    resp = client.post('/samples/bulk-delete', data={
+        'sample_ids': ids,
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'2 samples deleted' in resp.data
+
+    with app.app_context():
+        assert Sample.query.count() == 0
+
+
+def test_bulk_delete_creates_audit_log(app, client):
+    """Every bulk deletion creates a permanent AuditLog entry."""
+    from app.models import AuditLog
+
+    _setup_users(app)
+    _create_admin(app)
+
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-AUDIT')
+    client.get('/auth/logout')
+
+    _login(client, 'admin')
+    with app.app_context():
+        sample = Sample.query.first()
+        sample_id = sample.id
+
+    client.post('/samples/bulk-delete', data={
+        'sample_ids': [sample_id],
+    }, follow_redirects=True)
+
+    with app.app_context():
+        # Sample is gone
+        assert Sample.query.count() == 0
+        # Audit log entry exists
+        logs = AuditLog.query.all()
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.action == 'SAMPLE_DELETED'
+        assert log.entity_type == 'Sample'
+        assert log.entity_label == 'TOX-AUDIT'
+        assert log.entity_id == sample_id
+        assert '"lab_number": "TOX-AUDIT"' in log.details
+
+
+def test_bulk_delete_denied_for_non_admin(app, client):
+    """Non-admin users cannot bulk-delete samples."""
+    _setup_users(app)
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-001')
+
+    with app.app_context():
+        sample = Sample.query.first()
+        sample_id = sample.id
+
+    resp = client.post('/samples/bulk-delete', data={
+        'sample_ids': [sample_id],
+    }, follow_redirects=True)
+    assert b'Access denied' in resp.data
+
+    with app.app_context():
+        assert Sample.query.count() == 1
+
+
+def test_bulk_delete_no_selection(app, client):
+    """Submitting with no sample_ids flashes a warning."""
+    _create_admin(app)
+    _login(client, 'admin')
+
+    resp = client.post('/samples/bulk-delete', data={}, follow_redirects=True)
+    assert b'No samples selected' in resp.data
+
+
+def test_bulk_delete_cascades_assignments(app, client):
+    """Assignments are also deleted when the parent sample is bulk-deleted."""
+    from app.models import AuditLog
+
+    officer_id, sc_id, chemist_id, _, _ = _setup_users(app)
+    _create_admin(app)
+
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-CASCADE')
+    client.get('/auth/logout')
+
+    # Assign a chemist
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Quality',
+    })
+    client.get('/auth/logout')
+
+    with app.app_context():
+        assert SampleAssignment.query.count() == 1
+
+    _login(client, 'admin')
+    client.post('/samples/bulk-delete', data={
+        'sample_ids': [sample.id],
+    }, follow_redirects=True)
+
+    with app.app_context():
+        assert Sample.query.count() == 0
+        assert SampleAssignment.query.count() == 0
+        # Audit log captures assignment count
+        log = AuditLog.query.first()
+        assert '"assignment_count": 1' in log.details
+
+
+def test_bulk_delete_checkboxes_visible_for_admin(app, client):
+    """The sample list page shows checkboxes only for admin users."""
+    _setup_users(app)
+    _create_admin(app)
+
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-VIS')
+    client.get('/auth/logout')
+
+    # Non-admin sees no checkboxes
+    _login(client, 'officer')
+    resp = client.get('/samples/')
+    assert b'id="select-all-samples"' not in resp.data
+    assert b'class="form-check-input sample-checkbox"' not in resp.data
+    client.get('/auth/logout')
+
+    # Admin sees checkboxes
+    _login(client, 'admin')
+    resp = client.get('/samples/')
+    assert b'id="select-all-samples"' in resp.data
+    assert b'class="form-check-input sample-checkbox"' in resp.data

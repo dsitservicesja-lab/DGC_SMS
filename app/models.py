@@ -812,6 +812,36 @@ class BackDateRequest(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# Audit Log  (permanent, survives sample deletion)
+# ---------------------------------------------------------------------------
+
+class AuditLog(db.Model):
+    """Permanent audit trail for destructive actions (e.g. sample deletion).
+
+    Unlike SampleHistory (which is cascade-deleted with its sample), AuditLog
+    records are *never* deleted and serve as a tamper-resistant record of who
+    did what and when.
+    """
+    __tablename__ = 'audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(100), nullable=False)          # e.g. 'BULK_DELETE'
+    entity_type = db.Column(db.String(100), nullable=False)     # e.g. 'Sample'
+    entity_id = db.Column(db.Integer, nullable=True)            # FK-free – record may be gone
+    entity_label = db.Column(db.String(255), nullable=True)     # human-readable, e.g. lab_number
+    details = db.Column(db.Text, nullable=True)                 # JSON or free-text snapshot
+    performed_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    performed_at = db.Column(db.DateTime, default=jamaica_now)
+
+    performer = db.relationship('User', foreign_keys=[performed_by])
+
+    def __repr__(self):
+        return f'<AuditLog {self.action} {self.entity_type}#{self.entity_id}>'
+
+
+# ---------------------------------------------------------------------------
 # Financial Year Utilities
 # ---------------------------------------------------------------------------
 
