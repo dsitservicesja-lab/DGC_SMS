@@ -1257,11 +1257,12 @@ def prepare_certificate(sample_id):
 
         sample.status = SampleStatus.HOD_REVIEW
 
+        coa_ref = form.coa_reference.data
         _add_history(
             sample, 'Certificate Prepared',
             (f'Certificate of Analysis prepared by {current_user.full_name}. '
              f'Submitted to Government Chemist for review and signing.'
-             + (f' COA Ref: {form.coa_reference.data}' if form.coa_reference.data else '')),
+             f'{" COA Ref: " + coa_ref if coa_ref else ""}'),
             action_type='Certificate Preparation',
             object_affected='Certificate of Analysis',
             change_description=(
@@ -1402,8 +1403,9 @@ def request_backdate(sample_id):
 
     form = BackDateRequestForm()
     if form.validate_on_submit():
-        original = sample.date_registered.strftime('%Y-%m-%d') if sample.date_registered else ''
-        proposed = form.proposed_date.data.strftime('%Y-%m-%d')
+        date_fmt = '%Y-%m-%d'
+        original = sample.date_registered.strftime(date_fmt) if sample.date_registered else ''
+        proposed = form.proposed_date.data.strftime(date_fmt)
 
         bdr = BackDateRequest(
             sample_id=sample.id,
