@@ -14,10 +14,10 @@
     <div class="card-body py-3 px-4">
         <form method="GET" class="row g-3 align-items-end">
             <div class="col-auto">
-                <label class="form-label fw-semibold small">Year</label>
+                <label class="form-label fw-semibold small">Financial Year</label>
                 <select name="year" class="form-select form-select-sm">
                     {% for y in available_years %}
-                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}/{{ y + 1 }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -25,9 +25,10 @@
                 <label class="form-label fw-semibold small">Quarter</label>
                 <select name="quarter" class="form-select form-select-sm">
                     <option value="0" {% if quarter == 0 %}selected{% endif %}>All Quarters</option>
-                    {% for q in [1, 2, 3, 4] %}
-                    <option value="{{ q }}" {% if quarter == q %}selected{% endif %}>Q{{ q }}</option>
-                    {% endfor %}
+                    <option value="1" {% if quarter == 1 %}selected{% endif %}>Q1 (Apr-Jun)</option>
+                    <option value="2" {% if quarter == 2 %}selected{% endif %}>Q2 (Jul-Sep)</option>
+                    <option value="3" {% if quarter == 3 %}selected{% endif %}>Q3 (Oct-Dec)</option>
+                    <option value="4" {% if quarter == 4 %}selected{% endif %}>Q4 (Jan-Mar)</option>
                 </select>
             </div>
             <div class="col-auto">

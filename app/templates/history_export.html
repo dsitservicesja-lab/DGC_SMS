@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity History — {{ sample.lab_number }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 11pt;
+            color: #222;
+            padding: 20mm;
+            max-width: 210mm;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #1a5276;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+        .header h1 { font-size: 18pt; color: #1a5276; margin-bottom: 4px; }
+        .header h2 { font-size: 13pt; color: #555; font-weight: normal; }
+        .meta-table {
+            width: 100%;
+            margin-bottom: 20px;
+            border-collapse: collapse;
+        }
+        .meta-table td {
+            padding: 4px 8px;
+            vertical-align: top;
+        }
+        .meta-table td:first-child {
+            font-weight: 600;
+            width: 180px;
+            color: #1a5276;
+        }
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        .history-table th {
+            background: #1a5276;
+            color: white;
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 10pt;
+        }
+        .history-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #ddd;
+            font-size: 10pt;
+            vertical-align: top;
+        }
+        .history-table tr:nth-child(even) td {
+            background: #f8f9fa;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9pt;
+            color: #999;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+        .print-btn {
+            display: block;
+            margin: 0 auto 20px;
+            padding: 8px 24px;
+            background: #1a5276;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12pt;
+        }
+        .print-btn:hover { background: #154360; }
+        @media print {
+            .print-btn { display: none; }
+            body { padding: 10mm; }
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn" onclick="window.print()" aria-label="Print or save as PDF">
+        &#128424; Print / Save as PDF
+    </button>
+
+    <div class="header">
+        <h1>Department of Government Chemist</h1>
+        <h2>Activity History — {{ sample.lab_number }}</h2>
+    </div>
+
+    <table class="meta-table">
+        <tr><td>Lab Number:</td><td>{{ sample.lab_number }}</td></tr>
+        <tr><td>Sample Name:</td><td>{{ sample.sample_name }}</td></tr>
+        <tr><td>Laboratory:</td><td>{{ sample.sample_type.value if sample.sample_type else '—' }}</td></tr>
+        <tr><td>Status:</td><td>{{ sample.status.value if sample.status else '—' }}</td></tr>
+        <tr><td>Date Received:</td><td>{{ sample.date_received.strftime('%d %b %Y') if sample.date_received else '—' }}</td></tr>
+        <tr><td>Date Registered:</td><td>{{ sample.date_registered.strftime('%d %b %Y %H:%M') if sample.date_registered else '—' }}</td></tr>
+        {% if sample.certified_at %}
+        <tr><td>Certified:</td><td>{{ sample.certified_at.strftime('%d %b %Y %H:%M') }}</td></tr>
+        {% endif %}
+        {% if sample.coa_reference %}
+        <tr><td>COA Reference:</td><td>{{ sample.coa_reference }}</td></tr>
+        {% endif %}
+    </table>
+
+    <h3 style="color:#1a5276; margin-bottom: 8px;">Activity Log ({{ history|length }} entries)</h3>
+
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th style="width:150px;">Date &amp; Time</th>
+                <th style="width:140px;">User</th>
+                <th style="width:120px;">Action Type</th>
+                <th>Action</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in history %}
+            <tr>
+                <td>{{ h.created_at.strftime('%d %b %Y %H:%M') if h.created_at else '—' }}</td>
+                <td>{{ h.performer.full_name if h.performer else '—' }}</td>
+                <td>{{ h.action_type or h.action }}</td>
+                <td>{{ h.action }}</td>
+                <td>{{ h.details or h.change_description or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align:center; color:#999; padding:20px;">
+                    No activity history recorded.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Exported on {{ now.strftime('%d %B %Y at %H:%M') if now else '' }} — DGC Sample Management System
+    </div>
+</body>
+</html>

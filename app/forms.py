@@ -573,10 +573,9 @@ class SampleAssignForm(FlaskForm):
     quantity_volume = StringField('Quantity / Volume', validators=[Optional(), Length(max=100)])
     submit = SubmitField('Assign Sample')
 
-    def validate_expected_completion(self, field):
-        if field.data:
-            if field.data < date_today.today():
-                raise ValidationError('Expected completion date cannot be in the past.')
+    # Validation removed to allow flexible scheduling: future dates for
+    # forward-scheduling and back-dated corrections via BackDateRequest
+    # approval workflow
 
 
 # ---------------------------------------------------------------------------
@@ -792,6 +791,10 @@ class CertificateForm(FlaskForm):
             ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
             'Only PDF, image, and Word document files allowed.'
         )],
+    )
+    coa_reference = StringField(
+        'COA Reference Number',
+        validators=[Optional(), Length(max=255)]
     )
     submit = SubmitField('Submit Certificate for HOD Review')
 

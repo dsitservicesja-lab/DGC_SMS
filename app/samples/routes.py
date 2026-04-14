@@ -16,6 +16,7 @@ from app.models import (
     Sample, SampleAssignment, SampleHistory, User, SupportingDocument,
     Role, Branch, SampleStatus, AssignmentStatus,
     user_roles, user_branches, jamaica_now,
+    DocumentVersion,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -52,12 +53,16 @@ def _get_field(form, name):
     return field.data or None
 
 
-def _add_history(sample, action, details=None):
+def _add_history(sample, action, details=None, action_type=None,
+                 object_affected=None, change_description=None):
     entry = SampleHistory(
         sample_id=sample.id,
         action=action,
         details=details,
         performed_by=current_user.id,
+        action_type=action_type or action,
+        object_affected=object_affected,
+        change_description=change_description,
     )
     db.session.add(entry)
 
@@ -232,8 +237,24 @@ def register():
 
         db.session.add(sample)
         db.session.flush()
+
+        # Create document version for scanned file
+        if form.scanned_file.data:
+            from app.models import DocumentVersion
+            db.session.add(DocumentVersion(
+                sample_id=sample.id,
+                document_type='scanned_file',
+                version_number=1,
+                file_path=sample.scanned_file,
+                original_name=sample.scanned_file_original_name,
+                upload_label='original',
+                uploaded_by=current_user.id,
+            ))
+
         _add_history(sample, 'Sample Registered',
-                     f'Registered by {current_user.full_name}')
+                     f'Registered by {current_user.full_name}',
+                     action_type='Original Submission',
+                     object_affected='Sample')
         db.session.commit()
 
         notify_sample_uploaded(sample)
@@ -259,6 +280,9 @@ def detail(sample_id):
         SupportingDocument.uploaded_at.desc()
     ).all()
     supporting_doc_form = SupportingDocumentForm()
+    document_versions = sample.document_versions.order_by(
+        DocumentVersion.document_type, DocumentVersion.version_number.desc()
+    ).all() if hasattr(sample, 'document_versions') else []
     return render_template(
         'samples/detail.html',
         sample=sample,
@@ -267,6 +291,7 @@ def detail(sample_id):
         supporting_docs=supporting_docs,
         supporting_doc_form=supporting_doc_form,
         today_date=date.today(),
+        document_versions=document_versions,
     )
 
 
@@ -313,7 +338,23 @@ def edit(sample_id):
             sample.scanned_file = stored
             sample.scanned_file_original_name = original
 
-        _add_history(sample, 'Sample Updated', f'Updated by {current_user.full_name}')
+            # Create document version for replaced scanned file
+            from app.models import DocumentVersion
+            existing = DocumentVersion.query.filter_by(
+                sample_id=sample.id, document_type='scanned_file'
+            ).count()
+            db.session.add(DocumentVersion(
+                sample_id=sample.id,
+                document_type='scanned_file',
+                version_number=existing + 1,
+                file_path=stored,
+                original_name=original,
+                upload_label='revised',
+                uploaded_by=current_user.id,
+            ))
+
+        _add_history(sample, 'Sample Updated', f'Updated by {current_user.full_name}',
+                     action_type='Edit', object_affected='Sample')
         db.session.commit()
         flash('Sample updated.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
@@ -647,6 +688,25 @@ def submit_report(assignment_id):
         stored = original = None
         if form.report_file.data:
             stored, original = _save_file(form.report_file.data)
+
+            # Create document version for the report file
+            from app.models import DocumentVersion
+            existing_versions = DocumentVersion.query.filter_by(
+                sample_id=assignment.sample_id, document_type='report',
+                assignment_id=assignment.id,
+            ).count()
+            version_num = existing_versions + 1
+            upload_label = 'original' if version_num == 1 else 'resubmission'
+            db.session.add(DocumentVersion(
+                sample_id=assignment.sample_id,
+                document_type='report',
+                version_number=version_num,
+                file_path=stored,
+                original_name=original,
+                upload_label=upload_label,
+                uploaded_by=current_user.id,
+                assignment_id=assignment.id,
+            ))
 
         # Apply the report to all sibling assignments that are submittable
         submitted_names = []
@@ -1030,11 +1090,29 @@ def prepare_certificate(sample_id):
         sample.certificate_text = form.certificate_text.data
         sample.certificate_prepared_by = current_user.id
         sample.certificate_prepared_at = jamaica_now()
+        sample.coa_reference = form.coa_reference.data or sample.coa_reference
 
         if form.certificate_file.data:
             stored, original = _save_file(form.certificate_file.data)
             sample.certificate_file = stored
             sample.certificate_file_original_name = original
+
+            # Create a document version entry for the COA
+            from app.models import DocumentVersion
+            existing_versions = DocumentVersion.query.filter_by(
+                sample_id=sample.id, document_type='certificate'
+            ).count()
+            version_num = existing_versions + 1
+            upload_label = 'original' if version_num == 1 else 'revised'
+            db.session.add(DocumentVersion(
+                sample_id=sample.id,
+                document_type='certificate',
+                version_number=version_num,
+                file_path=stored,
+                original_name=original,
+                upload_label=upload_label,
+                uploaded_by=current_user.id,
+            ))
 
         sample.status = SampleStatus.HOD_REVIEW
 
@@ -1054,6 +1132,8 @@ def prepare_certificate(sample_id):
     # Pre-fill if resubmitting after HOD return
     if request.method == 'GET' and sample.certificate_text:
         form.certificate_text.data = sample.certificate_text
+    if request.method == 'GET' and sample.coa_reference:
+        form.coa_reference.data = sample.coa_reference
 
     return render_template(
         'samples/prepare_certificate.html', form=form, sample=sample,
