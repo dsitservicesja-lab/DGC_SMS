@@ -5,7 +5,7 @@ from datetime import datetime, timezone, date
 
 from flask import (
     render_template, redirect, url_for, flash, request,
-    current_app, send_from_directory, abort,
+    current_app, send_from_directory, abort, jsonify,
 )
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -17,6 +17,7 @@ from app.models import (
     Role, Branch, SampleStatus, AssignmentStatus,
     user_roles, user_branches, jamaica_now,
     DocumentVersion, ReviewHistory, BackDateRequest,
+    AuditLog, Notification,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -1486,3 +1487,129 @@ def view_file(filename):
     return send_from_directory(
         current_app.config['UPLOAD_FOLDER'], safe_name, as_attachment=False
     )
+
+
+# ---------------------------------------------------------------------------
+# Bulk Delete Samples  (Admin only – always audited)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/bulk-delete', methods=['POST'])
+@login_required
+def bulk_delete():
+    """Delete one or more samples and all related data.
+
+    Every deletion is recorded in the permanent AuditLog table so that
+    the action can never be lost – even after the sample row is gone.
+    """
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('samples.sample_list'))
+
+    sample_ids = request.form.getlist('sample_ids', type=int)
+    if not sample_ids:
+        flash('No samples selected.', 'warning')
+        return redirect(url_for('samples.sample_list'))
+
+    samples = Sample.query.filter(Sample.id.in_(sample_ids)).all()
+    if not samples:
+        flash('No matching samples found.', 'warning')
+        return redirect(url_for('samples.sample_list'))
+
+    deleted_labels = []
+    now = jamaica_now()
+
+    for sample in samples:
+        # Build a snapshot of sample data for the audit log
+        uploader = db.session.get(User, sample.uploaded_by)
+        snapshot = json.dumps({
+            'lab_number': sample.lab_number,
+            'sample_name': sample.sample_name,
+            'sample_type': sample.sample_type.value,
+            'status': sample.status.value,
+            'description': sample.description,
+            'quantity': sample.quantity,
+            'date_received': sample.date_received.isoformat() if sample.date_received else None,
+            'date_registered': sample.date_registered.isoformat() if sample.date_registered else None,
+            'uploaded_by': sample.uploaded_by,
+            'uploaded_by_name': uploader.full_name if uploader else None,
+            'assignment_count': sample.assignments.count(),
+        })
+
+        # Write permanent audit record
+        db.session.add(AuditLog(
+            action='SAMPLE_DELETED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=snapshot,
+            performed_by=current_user.id,
+            performed_at=now,
+        ))
+
+        # Remove uploaded files from disk
+        _delete_sample_files(sample)
+
+        # Delete sample (cascades to assignments, history, supporting docs,
+        # document versions, back-date requests via relationship cascades)
+        db.session.delete(sample)
+
+        deleted_labels.append(sample.lab_number)
+
+    # Bulk-remove related notifications for all deleted samples
+    notif_patterns = [f'%/samples/{sid}%' for sid in sample_ids]
+    for pattern in notif_patterns:
+        Notification.query.filter(
+            Notification.link.like(pattern)
+        ).delete(synchronize_session=False)
+
+    db.session.commit()
+
+    count = len(deleted_labels)
+    flash(
+        f'{count} sample{"s" if count != 1 else ""} deleted: '
+        f'{", ".join(deleted_labels)}.',
+        'success',
+    )
+    return redirect(url_for('samples.sample_list'))
+
+
+def _delete_sample_files(sample):
+    """Remove all uploaded files associated with a sample from disk."""
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    if not upload_folder:
+        return
+
+    paths_to_remove = set()
+
+    # Scanned file on the sample itself
+    if sample.scanned_file:
+        paths_to_remove.add(sample.scanned_file)
+    if sample.summary_report_file:
+        paths_to_remove.add(sample.summary_report_file)
+    if sample.certificate_file:
+        paths_to_remove.add(sample.certificate_file)
+
+    # Assignment report files
+    for assignment in sample.assignments.all():
+        if assignment.report_file:
+            paths_to_remove.add(assignment.report_file)
+
+    # Supporting documents
+    for doc in sample.supporting_documents.all():
+        if doc.file_path:
+            paths_to_remove.add(doc.file_path)
+
+    # Document versions
+    for dv in sample.document_versions.all():
+        if dv.file_path:
+            paths_to_remove.add(dv.file_path)
+
+    for filename in paths_to_remove:
+        full_path = os.path.join(upload_folder, filename)
+        if os.path.isfile(full_path):
+            try:
+                os.remove(full_path)
+            except OSError:
+                current_app.logger.warning(
+                    'Could not remove file %s during sample deletion', full_path
+                )
