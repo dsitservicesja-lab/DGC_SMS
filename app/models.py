@@ -797,11 +797,11 @@ def fiscal_quarter_for_date(d):
     if isinstance(d, datetime):
         d = d.date()
     month = d.month
-    if month >= 4 and month <= 6:
+    if 4 <= month <= 6:
         return 1
-    elif month >= 7 and month <= 9:
+    elif 7 <= month <= 9:
         return 2
-    elif month >= 10 and month <= 12:
+    elif 10 <= month <= 12:
         return 3
     else:  # Jan-Mar
         return 4
