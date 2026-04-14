@@ -187,6 +187,21 @@ NEW_TABLES = [
         '  decision_comments TEXT'
         ')',
     ),
+    (
+        'review_history',
+        'CREATE TABLE IF NOT EXISTS review_history ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  sample_id INTEGER NOT NULL REFERENCES samples(id),'
+        '  assignment_id INTEGER REFERENCES sample_assignments(id),'
+        '  review_type VARCHAR(50) NOT NULL,'
+        '  review_number INTEGER NOT NULL DEFAULT 1,'
+        '  action VARCHAR(50) NOT NULL,'
+        '  reviewer_id INTEGER NOT NULL REFERENCES users(id),'
+        '  reviewed_at DATETIME,'
+        '  comments TEXT,'
+        '  checklist_data TEXT'
+        ')',
+    ),
 ]
 
 # ------------------------------------------------------------------------------

@@ -16,7 +16,7 @@ from app.models import (
     Sample, SampleAssignment, SampleHistory, User, SupportingDocument,
     Role, Branch, SampleStatus, AssignmentStatus,
     user_roles, user_branches, jamaica_now,
-    DocumentVersion,
+    DocumentVersion, ReviewHistory,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -283,6 +283,9 @@ def detail(sample_id):
     document_versions = sample.document_versions.order_by(
         DocumentVersion.document_type, DocumentVersion.version_number.desc()
     ).all() if hasattr(sample, 'document_versions') else []
+    review_histories = ReviewHistory.query.filter_by(
+        sample_id=sample.id
+    ).order_by(ReviewHistory.review_type, ReviewHistory.review_number).all()
     return render_template(
         'samples/detail.html',
         sample=sample,
@@ -292,6 +295,7 @@ def detail(sample_id):
         supporting_doc_form=supporting_doc_form,
         today_date=date.today(),
         document_versions=document_versions,
+        review_histories=review_histories,
     )
 
 
@@ -469,7 +473,14 @@ def assignment_detail(assignment_id):
     # Access: the assigned chemist, branch heads, officer who uploaded, admin
     if not _can_view_assignment(assignment):
         abort(403)
-    return render_template('samples/assignment_detail.html', assignment=assignment)
+    review_histories = ReviewHistory.query.filter_by(
+        assignment_id=assignment.id
+    ).order_by(ReviewHistory.review_type, ReviewHistory.review_number).all()
+    return render_template(
+        'samples/assignment_detail.html',
+        assignment=assignment,
+        review_histories=review_histories,
+    )
 
 
 def _can_view_assignment(assignment):
@@ -811,8 +822,34 @@ def preliminary_review(assignment_id):
         checklist_json = json.dumps(checklist)
 
         # Apply the review to all sibling assignments
+        # Pre-fetch existing review counts to avoid N+1 queries
+        sibling_ids = [a.id for a in sibling_assignments]
+        existing_counts = dict(
+            db.session.query(
+                ReviewHistory.assignment_id,
+                db.func.count(ReviewHistory.id)
+            ).filter(
+                ReviewHistory.assignment_id.in_(sibling_ids),
+                ReviewHistory.review_type == 'preliminary'
+            ).group_by(ReviewHistory.assignment_id).all()
+        )
+
         reviewed_names = []
         for a in sibling_assignments:
+            # Log the review in ReviewHistory BEFORE overwriting fields
+            prev_count = existing_counts.get(a.id, 0)
+            db.session.add(ReviewHistory(
+                sample_id=sample.id,
+                assignment_id=a.id,
+                review_type='preliminary',
+                review_number=prev_count + 1,
+                action=action,
+                reviewer_id=current_user.id,
+                reviewed_at=now,
+                comments=comments,
+                checklist_data=checklist_json,
+            ))
+
             a.preliminary_review_comments = comments
             a.preliminary_reviewed_by = current_user.id
             a.preliminary_reviewed_at = now
@@ -884,20 +921,37 @@ def review_report(assignment_id):
     form = ReportReviewForm()
     if form.validate_on_submit():
         action = form.action.data
+        now = jamaica_now()
+
+        # Log the review in ReviewHistory
+        prev_count = ReviewHistory.query.filter_by(
+            assignment_id=assignment.id, review_type='technical'
+        ).count()
+        db.session.add(ReviewHistory(
+            sample_id=assignment.sample_id,
+            assignment_id=assignment.id,
+            review_type='technical',
+            review_number=prev_count + 1,
+            action=action,
+            reviewer_id=current_user.id,
+            reviewed_at=now,
+            comments=form.review_comments.data,
+        ))
+
         assignment.review_comments = form.review_comments.data
         assignment.reviewed_by = current_user.id
-        assignment.reviewed_at = jamaica_now()
+        assignment.reviewed_at = now
 
         if action == 'accepted':
             assignment.status = AssignmentStatus.ACCEPTED
-            assignment.date_completed = jamaica_now()
+            assignment.date_completed = now
         elif action == 'returned':
             assignment.status = AssignmentStatus.RETURNED
             assignment.return_stage = 'technical'
             assignment.date_completed = None
         elif action == 'rejected':
             assignment.status = AssignmentStatus.REJECTED
-            assignment.date_completed = jamaica_now()
+            assignment.date_completed = now
 
         _add_history(
             assignment.sample,
@@ -1001,9 +1055,26 @@ def deputy_review(sample_id):
     form = DeputyReviewForm()
     if form.validate_on_submit():
         action = form.action.data
+        now = jamaica_now()
+
+        # Log the review in ReviewHistory
+        prev_count = ReviewHistory.query.filter_by(
+            sample_id=sample.id, review_type='deputy'
+        ).count()
+        db.session.add(ReviewHistory(
+            sample_id=sample.id,
+            assignment_id=None,
+            review_type='deputy',
+            review_number=prev_count + 1,
+            action=action,
+            reviewer_id=current_user.id,
+            reviewed_at=now,
+            comments=form.review_comments.data,
+        ))
+
         sample.deputy_review_comments = form.review_comments.data
         sample.deputy_reviewed_by = current_user.id
-        sample.deputy_reviewed_at = jamaica_now()
+        sample.deputy_reviewed_at = now
 
         if action == 'approved':
             sample.status = SampleStatus.CERTIFICATE_PREPARATION
@@ -1160,12 +1231,29 @@ def hod_review(sample_id):
     form = HODReviewForm()
     if form.validate_on_submit():
         action = form.action.data
+        now = jamaica_now()
+
+        # Log the review in ReviewHistory
+        prev_count = ReviewHistory.query.filter_by(
+            sample_id=sample.id, review_type='hod'
+        ).count()
+        db.session.add(ReviewHistory(
+            sample_id=sample.id,
+            assignment_id=None,
+            review_type='hod',
+            review_number=prev_count + 1,
+            action=action,
+            reviewer_id=current_user.id,
+            reviewed_at=now,
+            comments=form.review_comments.data,
+        ))
+
         sample.hod_review_comments = form.review_comments.data
         sample.hod_reviewed_by = current_user.id
-        sample.hod_reviewed_at = jamaica_now()
+        sample.hod_reviewed_at = now
 
         if action == 'sign':
-            sample.certified_at = jamaica_now()
+            sample.certified_at = now
             sample.certified_by = current_user.id
             sample.status = SampleStatus.CERTIFIED
             _add_history(

@@ -154,10 +154,10 @@
 </div>
 {% endif %}
 
-<!-- Preliminary Review Section -->
+<!-- Preliminary Review Section (current/latest) -->
 {% if assignment.preliminary_review_comments or assignment.preliminary_reviewed_at %}
 <div class="card mb-4">
-    <div class="card-header"><h5 class="mb-0"><i class="bi bi-check2-circle me-2"></i>Preliminary Review</h5></div>
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-check2-circle me-2"></i>Preliminary Review (Latest)</h5></div>
     <div class="card-body">
         {% if assignment.preliminary_reviewer %}
         <p class="mb-1"><strong>Reviewed by:</strong> {{ assignment.preliminary_reviewer.full_name }}</p>
@@ -204,10 +204,10 @@
 </div>
 {% endif %}
 
-<!-- Technical Review Section -->
+<!-- Technical Review Section (current/latest) -->
 {% if assignment.review_comments or assignment.reviewed_at %}
 <div class="card mb-4">
-    <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>Senior Chemist Review</h5></div>
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>Senior Chemist Review (Latest)</h5></div>
     <div class="card-body">
         {% if assignment.reviewer %}
         <p class="mb-1"><strong>Reviewed by:</strong> {{ assignment.reviewer.full_name }}</p>
@@ -218,6 +218,69 @@
         {% if assignment.review_comments %}
         <div class="border rounded p-3" style="background: var(--bs-tertiary-bg); font-size:.875rem;">{{ assignment.review_comments }}</div>
         {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Review History (all previous reviews for this assignment) -->
+{% if review_histories %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Review History</h5>
+    </div>
+    <div class="card-body">
+        {% set review_type_labels = {'preliminary': 'Preliminary Review', 'technical': 'Senior Chemist Review'} %}
+        {% set action_colors = {'approved': 'success', 'returned': 'danger', 'accepted': 'success', 'rejected': 'danger'} %}
+        {% for rh in review_histories | reverse %}
+        <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg);">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    <span class="badge bg-{{ action_colors.get(rh.action, 'secondary') }} me-1">{{ rh.action | title }}</span>
+                    <strong>{{ review_type_labels.get(rh.review_type, rh.review_type | title) }}</strong>
+                    <span class="text-muted">— Review #{{ rh.review_number }}</span>
+                </div>
+                <small class="text-muted">{{ rh.reviewed_at.strftime('%d %b %Y %H:%M') if rh.reviewed_at else '—' }}</small>
+            </div>
+            <p class="mb-1 small"><strong>Reviewer:</strong> {{ rh.reviewer.full_name }}</p>
+            {% if rh.comments %}
+            <p class="mb-1 small"><strong>Comments:</strong> {{ rh.comments }}</p>
+            {% endif %}
+            {% if rh.checklist_data %}
+            {% set rh_checklist = rh.checklist_data | tojson_load %}
+            {% if rh_checklist %}
+            <details class="mt-2">
+                <summary class="fw-semibold small" style="cursor:pointer;"><i class="bi bi-list-check me-1"></i>View Checklist</summary>
+                <div class="row mt-2">
+                    {% for category, fields in checklist_categories %}
+                    <div class="col-md-6 mb-2">
+                        <div class="fw-semibold text-muted small text-uppercase">{{ category }}</div>
+                        <ul class="list-unstyled mb-0 ms-1">
+                            {% for field_name, label in fields %}
+                            <li>
+                                {% set val = rh_checklist.get(field_name, 'na') %}
+                                {% if val == 'yes' or val == true %}
+                                <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                {% elif val == 'no' or val == false %}
+                                <i class="bi bi-x-circle-fill text-danger me-1"></i>
+                                {% else %}
+                                <i class="bi bi-dash-circle-fill text-warning me-1"></i>
+                                {% endif %}
+                                <small>{{ label }}
+                                    {% if val == 'yes' or val == true %}<span class="text-success">(Yes)</span>
+                                    {% elif val == 'no' or val == false %}<span class="text-danger">(No)</span>
+                                    {% else %}<span class="text-warning">(N/A)</span>{% endif %}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
 </div>
 {% endif %}
