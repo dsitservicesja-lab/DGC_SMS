@@ -11,9 +11,26 @@ from wtforms import (
 )
 from wtforms.validators import (
     DataRequired, Email, EqualTo, Length, Optional, ValidationError,
+    Regexp,
 )
 
 from app.models import Role, Branch, User
+
+
+def _strong_password(form, field):
+    """Ensure password meets complexity requirements."""
+    pw = field.data or ''
+    errors = []
+    if not any(c.isupper() for c in pw):
+        errors.append('one uppercase letter')
+    if not any(c.islower() for c in pw):
+        errors.append('one lowercase letter')
+    if not any(c.isdigit() for c in pw):
+        errors.append('one digit')
+    if errors:
+        raise ValidationError(
+            'Password must contain at least: ' + ', '.join(errors) + '.'
+        )
 
 FORMULATION_TYPE_CHOICES = [
     ('', '-- Select Formulation --'),
@@ -184,7 +201,9 @@ class ForgotPasswordForm(FlaskForm):
 
 
 class ResetPasswordForm(FlaskForm):
-    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    password = PasswordField('New Password', validators=[
+        DataRequired(), Length(min=8), _strong_password,
+    ])
     password2 = PasswordField(
         'Confirm Password', validators=[DataRequired(), EqualTo('password')]
     )
@@ -193,7 +212,9 @@ class ResetPasswordForm(FlaskForm):
 
 class ChangePasswordForm(FlaskForm):
     current_password = PasswordField('Current Password', validators=[DataRequired()])
-    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    password = PasswordField('New Password', validators=[
+        DataRequired(), Length(min=8), _strong_password,
+    ])
     password2 = PasswordField(
         'Confirm New Password', validators=[DataRequired(), EqualTo('password')]
     )
@@ -216,7 +237,9 @@ class UserCreateForm(FlaskForm):
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=120)])
     username = StringField('Username', validators=[DataRequired(), Length(min=3, max=120)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
-    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
+    password = PasswordField('Password', validators=[
+        DataRequired(), Length(min=8), _strong_password,
+    ])
     password2 = PasswordField(
         'Confirm Password', validators=[DataRequired(), EqualTo('password')]
     )
@@ -254,7 +277,9 @@ class UserEditForm(FlaskForm):
     def validate_roles(self, field):
         if not field.data:
             raise ValidationError('Please select at least one role.')
-    new_password = PasswordField('New Password', validators=[Optional(), Length(min=6)])
+    new_password = PasswordField('New Password', validators=[
+        Optional(), Length(min=8), _strong_password,
+    ])
     confirm_password = PasswordField(
         'Confirm New Password',
         validators=[Optional(), EqualTo('new_password', message='Passwords must match.')],

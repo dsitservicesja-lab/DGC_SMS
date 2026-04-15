@@ -123,6 +123,9 @@ class User(UserMixin, db.Model):
     created_at = db.Column(
         db.DateTime, default=jamaica_now
     )
+    # Account lockout – brute-force protection
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
 
     # Relationships
     uploaded_samples = db.relationship(
@@ -134,11 +137,42 @@ class User(UserMixin, db.Model):
         foreign_keys='SampleAssignment.chemist_id'
     )
 
+    # Maximum failed attempts before account is temporarily locked
+    MAX_FAILED_ATTEMPTS = 5
+    # Lockout duration in minutes
+    LOCKOUT_MINUTES = 15
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def is_locked(self):
+        """Return True if account is currently locked due to failed attempts."""
+        if self.locked_until is None:
+            return False
+        now = jamaica_now()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=JAMAICA_TZ)
+        locked = self.locked_until
+        if locked.tzinfo is None:
+            locked = locked.replace(tzinfo=JAMAICA_TZ)
+        return now < locked
+
+    def record_failed_login(self):
+        """Increment failed login counter; lock account if threshold reached."""
+        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
+        if self.failed_login_attempts >= self.MAX_FAILED_ATTEMPTS:
+            self.locked_until = jamaica_now() + timedelta(
+                minutes=self.LOCKOUT_MINUTES
+            )
+
+    def reset_failed_logins(self):
+        """Clear failed login counter after a successful login."""
+        self.failed_login_attempts = 0
+        self.locked_until = None
 
     # ----- role / branch helpers (backed by association tables) -----
 

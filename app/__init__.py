@@ -85,6 +85,27 @@ def create_app(config_name=None):
         from flask import session
         session.permanent = True
 
+    @app.after_request
+    def set_security_headers(response):
+        """Add HTTP security headers to every response."""
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy'] = (
+            'geolocation=(), camera=(), microphone=()'
+        )
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "img-src 'self' data:; "
+            "frame-ancestors 'self'"
+        )
+        response.headers['Content-Security-Policy'] = csp
+        return response
+
     @app.before_request
     def check_password_change():
         from flask import request, redirect, url_for

@@ -81,6 +81,9 @@ MIGRATIONS = [
     ('sample_history', 'action_type', 'VARCHAR(100)'),
     ('sample_history', 'object_affected', 'VARCHAR(255)'),
     ('sample_history', 'change_description', 'TEXT'),
+    # users – account lockout (brute-force protection)
+    ('users', 'failed_login_attempts', 'INTEGER DEFAULT 0'),
+    ('users', 'locked_until', 'DATETIME'),
 ]
 
 NEW_TABLES = [
