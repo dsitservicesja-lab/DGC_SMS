@@ -64,8 +64,8 @@ def test_create_user(app, client):
         'last_name': 'User',
         'username': 'newuser',
         'email': 'new@test.com',
-        'password': 'pass1234',
-        'password2': 'pass1234',
+        'password': 'Pass1234',
+        'password2': 'Pass1234',
         'roles': ['CHEMIST'],
         'branches': ['TOXICOLOGY'],
     }, follow_redirects=True)
@@ -83,8 +83,8 @@ def test_new_user_redirected_to_change_password(app, client):
         'last_name': 'Doe',
         'username': 'janedoe',
         'email': 'jane@test.com',
-        'password': 'pass1234',
-        'password2': 'pass1234',
+        'password': 'Pass1234',
+        'password2': 'Pass1234',
         'roles': ['CHEMIST'],
         'branches': ['TOXICOLOGY'],
     }, follow_redirects=True)
@@ -92,7 +92,7 @@ def test_new_user_redirected_to_change_password(app, client):
     client.get('/auth/logout')
     resp = client.post('/auth/login', data={
         'username': 'janedoe',
-        'password': 'pass1234',
+        'password': 'Pass1234',
     }, follow_redirects=True)
     # Should reach change-password page, not a 500
     assert resp.status_code == 200

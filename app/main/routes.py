@@ -235,7 +235,7 @@ def mark_notification_read(notif_id):
         return redirect(url_for('main.notifications'))
     notif.is_read = True
     db.session.commit()
-    if notif.link:
+    if notif.link and notif.link.startswith('/'):
         return redirect(notif.link)
     return redirect(url_for('main.notifications'))
 
@@ -542,14 +542,23 @@ def kpi_targets():
         quarter = 1
 
     if request.method == 'POST':
-        year = int(request.form.get('year', year))
-        quarter = int(request.form.get('quarter', quarter))
+        try:
+            year = int(request.form.get('year', year))
+            quarter = int(request.form.get('quarter', quarter))
+        except (ValueError, TypeError):
+            flash('Invalid year or quarter.', 'danger')
+            return redirect(url_for('main.kpi_targets'))
+        if quarter not in (1, 2, 3, 4):
+            quarter = 1
         for key, _label in KPI_METRICS:
             target_raw = request.form.get(f'target_{key}', '').strip()
             actual_raw = request.form.get(f'actual_{key}', '').strip()
 
-            target_val = float(target_raw) if target_raw else None
-            actual_val = float(actual_raw) if actual_raw else None
+            try:
+                target_val = float(target_raw) if target_raw else None
+                actual_val = float(actual_raw) if actual_raw else None
+            except (ValueError, TypeError):
+                continue  # skip malformed values
 
             existing = KpiTarget.query.filter_by(
                 year=year, quarter=quarter, kpi_key=key

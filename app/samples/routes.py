@@ -685,6 +685,15 @@ def edit_assignment(assignment_id):
 @login_required
 def upload_supporting_document(sample_id):
     sample = db.get_or_404(Sample, sample_id)
+
+    # Only Officers, Admin, HOD, or the sample uploader may add documents
+    if not (
+        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD)
+        or current_user.id == sample.uploaded_by
+    ):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
     form = SupportingDocumentForm()
 
     if form.validate_on_submit():

@@ -1,6 +1,6 @@
 import time
 
-from flask import render_template, redirect, url_for, flash, request, current_app
+from flask import render_template, redirect, url_for, flash, request, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import OperationalError
 
@@ -32,16 +32,32 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
+        if user and user.is_locked:
+            flash(
+                'This account is temporarily locked due to too many failed '
+                'login attempts. Please try again later.',
+                'danger',
+            )
+            return render_template('auth/login.html', form=form)
         if user and user.check_password(form.password.data) and user.is_active_user:
+            user.reset_failed_logins()
+            db.session.commit()
             login_user(user, remember=form.remember_me.data)
             if user.must_change_password:
                 flash('Please change your password before continuing.', 'warning')
                 return redirect(url_for('auth.change_password'))
             next_page = request.args.get('next')
-            # Only allow relative redirects to prevent open-redirect
-            if next_page and not next_page.startswith('/'):
+            # Only allow safe relative redirects to prevent open-redirect
+            if next_page and (
+                not next_page.startswith('/')
+                or next_page.startswith('//')
+            ):
                 next_page = None
             return redirect(next_page or url_for('main.dashboard'))
+        # Record the failed attempt
+        if user:
+            user.record_failed_login()
+            db.session.commit()
         flash('Invalid username or password.', 'danger')
     return render_template('auth/login.html', form=form)
 
@@ -109,6 +125,7 @@ def change_password():
 @login_required
 def logout():
     logout_user()
+    session.clear()
     flash('You have been logged out.', 'info')
     return redirect(url_for('auth.login'))
 

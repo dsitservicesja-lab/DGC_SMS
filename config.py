@@ -36,6 +36,10 @@ class Config:
     # Session timeout (server-side)
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
 
+    # Secure session cookies
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
