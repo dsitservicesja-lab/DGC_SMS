@@ -20,6 +20,8 @@ from app.models import Role, Branch, User
 def _strong_password(form, field):
     """Ensure password meets complexity requirements."""
     pw = field.data or ''
+    if not pw:
+        return  # skip if empty (Optional fields)
     errors = []
     if not any(c.isupper() for c in pw):
         errors.append('one uppercase letter')

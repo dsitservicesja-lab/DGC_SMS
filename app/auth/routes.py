@@ -47,8 +47,11 @@ def login():
                 flash('Please change your password before continuing.', 'warning')
                 return redirect(url_for('auth.change_password'))
             next_page = request.args.get('next')
-            # Only allow relative redirects to prevent open-redirect
-            if next_page and not next_page.startswith('/'):
+            # Only allow safe relative redirects to prevent open-redirect
+            if next_page and (
+                not next_page.startswith('/')
+                or next_page.startswith('//')
+            ):
                 next_page = None
             return redirect(next_page or url_for('main.dashboard'))
         # Record the failed attempt
