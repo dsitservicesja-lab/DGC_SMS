@@ -468,6 +468,7 @@ def assign(sample_id):
                 assignment_count += 1
 
         if assignment_count == 0:
+            db.session.rollback()
             flash('All selected test/chemist combinations are already assigned.', 'warning')
             return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -845,7 +846,7 @@ def preliminary_review(assignment_id):
         Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN
     ) or current_user.id == sample.uploaded_by
     if not allowed:
-        flash('Only Officers, Senior Chemists, Deputy Government Chemist, or HOD can perform preliminary reviews.', 'danger')
+        flash('You do not have permission to perform preliminary reviews.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     if assignment.status != AssignmentStatus.REPORT_SUBMITTED:
