@@ -32,6 +32,7 @@ from app.notifications import (
     notify_report_reviewed, notify_submitted_to_deputy,
     notify_deputy_review_completed, notify_certificate_prepared,
     notify_certificate_signed, notify_assignment_removed,
+    notify_backdate_request_submitted,
 )
 
 
@@ -433,8 +434,24 @@ def assign(sample_id):
             test_ref = form.test_reference.data
 
         assignment_count = 0
+        skipped_count = 0
         for chemist_id in form.chemist_ids.data:
             for test_name in selected_test_names:
+                # Prevent duplicate assignments for the same
+                # (sample, chemist, test_name) combination.
+                existing = SampleAssignment.query.filter_by(
+                    sample_id=sample.id,
+                    chemist_id=chemist_id,
+                    test_name=test_name,
+                ).filter(
+                    SampleAssignment.status.notin_([
+                        AssignmentStatus.REJECTED,
+                    ])
+                ).first()
+                if existing:
+                    skipped_count += 1
+                    continue
+
                 assignment = SampleAssignment(
                     sample_id=sample.id,
                     chemist_id=chemist_id,
@@ -449,6 +466,10 @@ def assign(sample_id):
                 db.session.flush()
                 notify_sample_assigned(assignment)
                 assignment_count += 1
+
+        if assignment_count == 0:
+            flash('All selected test/chemist combinations are already assigned.', 'warning')
+            return redirect(url_for('samples.detail', sample_id=sample.id))
 
         sample.status = SampleStatus.ASSIGNED
         # Collect assigned chemist names for the history detail
@@ -470,7 +491,10 @@ def assign(sample_id):
                 f'Assigned by: {current_user.full_name}'),
         )
         db.session.commit()
-        flash('Sample assigned successfully.', 'success')
+        if skipped_count > 0:
+            flash(f'Sample assigned successfully. {skipped_count} duplicate assignment(s) skipped.', 'success')
+        else:
+            flash('Sample assigned successfully.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     return render_template('samples/assign.html', form=form, sample=sample,
@@ -814,9 +838,13 @@ def submit_report(assignment_id):
 def preliminary_review(assignment_id):
     assignment = db.get_or_404(SampleAssignment, assignment_id)
 
-    # Officers, Senior Chemists, Deputy, HOD, or Admin can do preliminary review
+    # Officers, Senior Chemists, Deputy, HOD, Admin, or the sample uploader
+    # can do preliminary review.
     sample = assignment.sample
-    if not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
+    allowed = current_user.has_any_role(
+        Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN
+    ) or current_user.id == sample.uploaded_by
+    if not allowed:
         flash('Only Officers, Senior Chemists, Deputy Government Chemist, or HOD can perform preliminary reviews.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
@@ -1429,6 +1457,10 @@ def request_backdate(sample_id):
                 f'(requested by {current_user.full_name})'),
         )
         db.session.commit()
+
+        notify_backdate_request_submitted(bdr)
+        db.session.commit()
+
         flash('Back-date request submitted for approval.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 

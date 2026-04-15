@@ -1198,3 +1198,275 @@ def test_bulk_delete_checkboxes_visible_for_admin(app, client):
     resp = client.get('/samples/')
     assert b'id="select-all-samples"' in resp.data
     assert b'class="form-check-input sample-checkbox"' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Duplicate assignment prevention
+# ---------------------------------------------------------------------------
+
+def test_assign_duplicate_skipped(app, client):
+    """Assigning the same chemist+test again should skip duplicates."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+
+    # First assignment
+    resp = client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis',
+    }, follow_redirects=True)
+    assert b'assigned successfully' in resp.data
+
+    with app.app_context():
+        count = SampleAssignment.query.filter_by(sample_id=sample.id).count()
+        assert count == 1
+
+    # Duplicate assignment attempt
+    resp = client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis',
+    }, follow_redirects=True)
+    assert b'already assigned' in resp.data
+
+    with app.app_context():
+        count = SampleAssignment.query.filter_by(sample_id=sample.id).count()
+        assert count == 1  # Still only one assignment
+
+
+def test_assign_different_test_allowed(app, client):
+    """Assigning a different test to the same chemist should work."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis A',
+    }, follow_redirects=True)
+
+    resp = client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis B',
+    }, follow_redirects=True)
+    assert b'assigned successfully' in resp.data
+
+    with app.app_context():
+        count = SampleAssignment.query.filter_by(sample_id=sample.id).count()
+        assert count == 2
+
+
+# ---------------------------------------------------------------------------
+# Preliminary review – uploader access
+# ---------------------------------------------------------------------------
+
+def test_uploader_can_do_preliminary_review(app, client):
+    """The user who uploaded the sample can do preliminary review
+    even if the template allows it via uploaded_by check."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Results.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    # Officer (the uploader) does preliminary review
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    resp = client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'Looks good.',
+        'chk_original_entry_visible': 'yes',
+        'chk_entries_signed': 'yes',
+        'chk_date_recorded': 'yes',
+        'chk_conclusions_signed_dated': 'yes',
+        'chk_report_signed_dated': 'yes',
+        'chk_printouts_attached': 'yes',
+        'chk_attachments_labeled': 'yes',
+        'chk_analyst_initials': 'yes',
+        'chk_templates_completed': 'yes',
+        'chk_writing_legible': 'yes',
+        'chk_logbooks_updated': 'yes',
+        'chk_toc_updated': 'yes',
+        'chk_pages_numbered': 'yes',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'approved and forwarded' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Backdate request notifications
+# ---------------------------------------------------------------------------
+
+def test_backdate_request_notifies_hod_deputy(app, client):
+    """Submitting a backdate request should create notifications for HOD/Deputy."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    _login(client, 'officer')
+    _register_sample(client)
+
+    with app.app_context():
+        sample = Sample.query.first()
+        from app.models import Notification
+        initial_count = Notification.query.count()
+
+    resp = client.post(f'/samples/{sample.id}/request-backdate', data={
+        'proposed_date': '2025-12-01',
+        'reason': 'Sample arrived earlier than recorded.',
+    }, follow_redirects=True)
+    assert b'submitted for approval' in resp.data
+
+    with app.app_context():
+        from app.models import Notification
+        new_notifs = Notification.query.filter(
+            Notification.title.contains('Back-Date Request')
+        ).all()
+        # Should have notifications for both HOD and Deputy
+        notified_user_ids = {n.user_id for n in new_notifs}
+        assert deputy_id in notified_user_ids
+        assert hod_id in notified_user_ids
+
+
+def test_backdate_decision_notifies_requester(app, client):
+    """Approving/denying a backdate request should notify the requester."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    _login(client, 'officer')
+    _register_sample(client)
+
+    with app.app_context():
+        sample = Sample.query.first()
+
+    client.post(f'/samples/{sample.id}/request-backdate', data={
+        'proposed_date': '2025-12-01',
+        'reason': 'Earlier arrival.',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'hod')
+    with app.app_context():
+        from app.models import BackDateRequest, Notification
+        bdr = BackDateRequest.query.first()
+        initial_count = Notification.query.filter_by(user_id=officer_id).count()
+
+    resp = client.post(f'/backdate-requests/{bdr.id}/decide', data={
+        'decision': 'approved',
+        'comments': 'Approved.',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        from app.models import Notification
+        notifs = Notification.query.filter(
+            Notification.user_id == officer_id,
+            Notification.title.contains('Back-Date Request Approved'),
+        ).all()
+        assert len(notifs) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Resubmit to Deputy
+# ---------------------------------------------------------------------------
+
+def test_resubmit_to_deputy_redirects(app, client):
+    """Resubmitting to deputy should redirect properly, not download HTML."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Analysis',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Results.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved', 'review_comments': 'OK',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/review', data={
+        'action': 'accepted', 'review_comments': 'Good.',
+    })
+
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/submit-to-deputy', data={
+        'summary_report': '',
+    })
+
+    # Deputy returns
+    client.get('/auth/logout')
+    _login(client, 'deputy')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/deputy-review', data={
+        'action': 'returned',
+        'review_comments': 'Needs corrections.',
+    })
+    client.get('/auth/logout')
+
+    # Senior chemist resubmits to deputy
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+        assert sample.status == SampleStatus.DEPUTY_RETURNED
+
+    resp = client.post(
+        f'/samples/{sample.id}/resubmit-to-deputy',
+        follow_redirects=False,
+    )
+    # Should redirect, not return HTML content
+    assert resp.status_code == 302
+    assert '/samples/' in resp.headers['Location']
+
+    # Following the redirect should work
+    resp2 = client.get(resp.headers['Location'])
+    assert resp2.status_code == 200

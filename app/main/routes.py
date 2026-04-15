@@ -1541,6 +1541,10 @@ def decide_backdate(req_id):
     ))
     db.session.commit()
 
+    from app.notifications import notify_backdate_request_decided
+    notify_backdate_request_decided(bdr)
+    db.session.commit()
+
     flash(f'Back-date request {decision}.', 'success')
     return redirect(url_for('main.backdate_requests'))
 
