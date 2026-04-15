@@ -381,6 +381,48 @@ def notify_assignment_removed(chemist_id, sample_ref, test_name, removed_by, sam
     create_notification(chemist_id, title, message, link)
 
 
+def notify_backdate_request_submitted(backdate_request):
+    """Notify HOD and Deputy when a back-date request is submitted."""
+    sample = backdate_request.sample
+    requester = backdate_request.requester
+    title = f'Back-Date Request: {sample.lab_number}'
+    message = (
+        f'{requester.full_name} has requested to change the registration '
+        f'date of sample "{sample.sample_name}" '
+        f'(Lab# {sample.lab_number}) from {backdate_request.original_date} '
+        f'to {backdate_request.proposed_date}.\n\n'
+        f'Reason: {backdate_request.reason or "N/A"}\n\n'
+        f'Please review and approve or deny this request.'
+    )
+    link = '/backdate-requests'
+    # Notify HOD and Deputy users
+    deputies = User.query.join(user_roles).filter(
+        user_roles.c.role.in_([Role.DEPUTY, Role.HOD]),
+        User.is_active_user.is_(True),
+    ).distinct().all()
+    for user in deputies:
+        if user.id != requester.id:
+            create_notification(user.id, title, message, link)
+
+
+def notify_backdate_request_decided(backdate_request):
+    """Notify the requester when a back-date request is approved or denied."""
+    sample = backdate_request.sample
+    decision = backdate_request.status  # 'approved' or 'denied'
+    decider = backdate_request.decider
+    title = f'Back-Date Request {decision.title()}: {sample.lab_number}'
+    message = (
+        f'Your request to change the registration date of sample '
+        f'"{sample.sample_name}" (Lab# {sample.lab_number}) from '
+        f'{backdate_request.original_date} to {backdate_request.proposed_date} '
+        f'has been {decision} by {decider.full_name}.'
+    )
+    if backdate_request.decision_comments:
+        message += f'\n\nComments: {backdate_request.decision_comments}'
+    link = f'/samples/{sample.id}'
+    create_notification(backdate_request.requested_by, title, message, link)
+
+
 # ---------------------------------------------------------------------------
 # Expected Report Date Reminders
 # ---------------------------------------------------------------------------
