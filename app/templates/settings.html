@@ -36,6 +36,81 @@
         </div>
 
         {% if current_user.has_role(Role.ADMIN) %}
+        <!-- Export / Import card -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header" style="background: var(--dgc-primary, #1a5276); color: #fff;">
+                <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Data Export &amp; Import</h5>
+            </div>
+            <div class="card-body">
+                <!-- Export section -->
+                <h6 class="fw-semibold mb-1"><i class="bi bi-download me-1"></i>Export Data</h6>
+                <p class="text-muted small mb-2">
+                    Download a complete backup of all data (users, samples, assignments, history, settings,
+                    uploaded files) as a ZIP file. Use this to migrate data to a new server or as a backup.
+                </p>
+                <a href="{{ url_for('main.export_data') }}" class="btn btn-primary mb-4">
+                    <i class="bi bi-download me-1"></i>Export All Data
+                </a>
+
+                <hr>
+
+                <!-- Import section -->
+                <h6 class="fw-semibold mb-1"><i class="bi bi-upload me-1"></i>Import Data</h6>
+                <p class="text-muted small mb-2">
+                    Restore data from a previously exported ZIP file. This will <strong>replace</strong>
+                    all existing data in the system (users, samples, settings, uploaded files).
+                </p>
+                <div class="alert alert-warning small py-2 mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong>Warning:</strong> Importing will overwrite ALL current data.
+                    Consider exporting a backup first.
+                </div>
+                <form method="POST" action="{{ url_for('main.import_data') }}" enctype="multipart/form-data"
+                      id="importForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <input class="form-control" type="file" name="import_file" id="import_file"
+                               accept=".zip" required>
+                    </div>
+                    <button type="button" class="btn btn-warning" data-bs-toggle="modal"
+                            data-bs-target="#importConfirmModal">
+                        <i class="bi bi-upload me-1"></i>Import Data
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Import confirmation modal -->
+        <div class="modal fade" id="importConfirmModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title">Confirm Data Import</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>This will <strong>replace all existing data</strong> including:</p>
+                        <ul>
+                            <li>All user accounts &amp; passwords</li>
+                            <li>All samples, assignments &amp; reports</li>
+                            <li>All review history &amp; audit logs</li>
+                            <li>All settings, KPI targets &amp; calendar data</li>
+                            <li>All uploaded files</li>
+                        </ul>
+                        <p class="text-danger fw-bold mb-0">
+                            This action cannot be undone. Make sure you have a backup.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-warning" id="confirmImportBtn">
+                            <i class="bi bi-upload me-1"></i>Yes, Import Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Danger zone card -->
         <div class="card border-danger">
             <div class="card-header" style="background: #dc3545; color: #fff;">
@@ -92,4 +167,24 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.getElementById('confirmImportBtn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                var fileInput = document.getElementById('import_file');
+                if (!fileInput || !fileInput.files.length) {
+                    alert('Please select a file first.');
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('importConfirmModal'));
+                    if (modal) modal.hide();
+                    return;
+                }
+                document.getElementById('importForm').submit();
+            });
+        }
+    });
+</script>
 {% endblock %}
