@@ -1,5 +1,6 @@
 """Security-focused tests for DGC SMS hardening."""
 
+from app import db
 from app.models import User, Role, Branch
 from tests.conftest import _create_user, _login
 
@@ -25,6 +26,61 @@ def test_account_lockout_after_failed_attempts(app, client):
         'password': 'password123',
     }, follow_redirects=True)
     assert b'temporarily locked' in resp.data
+
+
+def test_admin_can_unlock_locked_account(app, client):
+    """An admin should be able to unlock a locked account."""
+    with app.app_context():
+        _create_user(role=Role.ADMIN, username='admin')
+        target = _create_user(role=Role.OFFICER, username='lockeduser')
+        target_id = target.id
+
+    # Lock the account by exhausting failed attempts
+    for _ in range(User.MAX_FAILED_ATTEMPTS):
+        client.post('/auth/login', data={
+            'username': 'lockeduser',
+            'password': 'wrong',
+        })
+
+    # Confirm locked
+    with app.app_context():
+        user = db.session.get(User, target_id)
+        assert user.is_locked
+
+    # Admin unlocks
+    _login(client, username='admin')
+    resp = client.post(f'/auth/users/{target_id}/unlock', follow_redirects=True)
+    assert b'has been unlocked' in resp.data
+
+    # Confirm unlocked
+    with app.app_context():
+        user = db.session.get(User, target_id)
+        assert not user.is_locked
+        assert user.failed_login_attempts == 0
+
+
+def test_non_admin_cannot_unlock_account(app, client):
+    """Non-admin users should not be able to unlock accounts."""
+    with app.app_context():
+        _create_user(role=Role.OFFICER, username='officer')
+        target = _create_user(role=Role.OFFICER, username='lockeduser2')
+        target_id = target.id
+
+    # Lock the account
+    for _ in range(User.MAX_FAILED_ATTEMPTS):
+        client.post('/auth/login', data={
+            'username': 'lockeduser2',
+            'password': 'wrong',
+        })
+
+    _login(client, username='officer')
+    resp = client.post(f'/auth/users/{target_id}/unlock', follow_redirects=True)
+    assert b'Access denied' in resp.data
+
+    # Confirm still locked
+    with app.app_context():
+        user = db.session.get(User, target_id)
+        assert user.is_locked
 
 
 def test_successful_login_resets_failed_counter(app, client):

@@ -32,7 +32,9 @@
                     <td>{% for r in user.roles %}<span class="badge bg-secondary me-1">{{ r.value }}</span>{% else %}&mdash;{% endfor %}</td>
                     <td>{% for b in user.branches %}<span class="badge bg-info text-dark me-1">{{ b.value }}</span>{% else %}&mdash;{% endfor %}</td>
                     <td>
-                        {% if user.is_active_user %}
+                        {% if user.is_locked %}
+                        <span class="badge bg-warning text-dark">Locked</span>
+                        {% elif user.is_active_user %}
                         <span class="badge bg-success">Active</span>
                         {% else %}
                         <span class="badge bg-danger">Inactive</span>
@@ -45,6 +47,16 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             {% if current_user.has_role(Role.ADMIN) and user.id != current_user.id %}
+                            {% if user.is_locked %}
+                            <form action="{{ url_for('auth.user_unlock', user_id=user.id) }}"
+                                  method="POST" class="d-inline"
+                                  onsubmit="return confirm('Unlock account for {{ user.username }}?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Unlock">
+                                    <i class="bi bi-unlock"></i>
+                                </button>
+                            </form>
+                            {% endif %}
                             <form action="{{ url_for('auth.user_delete', user_id=user.id) }}"
                                   method="POST" class="d-inline"
                                   onsubmit="return confirm('Delete {{ user.username }}? This cannot be undone.')">
