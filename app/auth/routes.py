@@ -228,6 +228,27 @@ def user_edit(user_id):
     return render_template('auth/user_form.html', form=form, title='Edit User', user=user)
 
 
+@auth_bp.route('/users/<int:user_id>/unlock', methods=['POST'])
+@login_required
+def user_unlock(user_id):
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+    user = db.get_or_404(User, user_id)
+    if user.is_locked:
+        user.reset_failed_logins()
+        try:
+            _commit_with_retry()
+        except Exception:
+            db.session.rollback()
+            flash('An error occurred while unlocking the account. Please try again.', 'danger')
+            return redirect(url_for('auth.user_list'))
+        flash(f'Account for {user.username} has been unlocked.', 'success')
+    else:
+        flash(f'Account for {user.username} is not locked.', 'info')
+    return redirect(url_for('auth.user_list'))
+
+
 @auth_bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 def user_delete(user_id):
