@@ -84,6 +84,14 @@ MIGRATIONS = [
     # users – account lockout (brute-force protection)
     ('users', 'failed_login_attempts', 'INTEGER DEFAULT 0'),
     ('users', 'locked_until', 'DATETIME'),
+    # sample_assignments – report metadata (test date, spec compliance, comments)
+    ('sample_assignments', 'test_date', 'DATE'),
+    ('sample_assignments', 'meets_specifications', 'VARCHAR(20)'),
+    ('sample_assignments', 'report_comments', 'TEXT'),
+    # sample_assignments – Senior Chemist out-of-spec flag
+    ('sample_assignments', 'out_of_spec', 'BOOLEAN'),
+    # back_date_requests – optional link to a specific assignment
+    ('back_date_requests', 'assignment_id', 'INTEGER REFERENCES sample_assignments(id)'),
 ]
 
 NEW_TABLES = [
