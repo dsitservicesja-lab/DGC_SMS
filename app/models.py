@@ -462,6 +462,12 @@ class SampleAssignment(db.Model):
     report_submitted_at = db.Column(db.DateTime, nullable=True)
     all_samples_returned = db.Column(db.String(10), nullable=True)
     return_quantity = db.Column(db.String(100), nullable=True)
+    test_date = db.Column(db.Date, nullable=True)
+    meets_specifications = db.Column(db.String(20), nullable=True)  # 'Yes', 'No', 'N/A'
+    report_comments = db.Column(db.Text, nullable=True)
+
+    # Senior Chemist review flag
+    out_of_spec = db.Column(db.Boolean, nullable=True, default=None)
 
     # Preliminary review (by Officer / Senior Chemist Technologist)
     preliminary_review_comments = db.Column(db.Text, nullable=True)
@@ -820,6 +826,9 @@ class BackDateRequest(db.Model):
     sample_id = db.Column(
         db.Integer, db.ForeignKey('samples.id'), nullable=False
     )
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey('sample_assignments.id'), nullable=True
+    )
     field_name = db.Column(db.String(100), nullable=False)  # e.g. 'date_received', 'report_date'
     original_date = db.Column(db.String(50), nullable=False)
     proposed_date = db.Column(db.String(50), nullable=False)
@@ -837,6 +846,9 @@ class BackDateRequest(db.Model):
 
     sample = db.relationship('Sample', backref=db.backref(
         'back_date_requests', lazy='dynamic', cascade='all, delete-orphan'
+    ))
+    assignment = db.relationship('SampleAssignment', backref=db.backref(
+        'back_date_requests', lazy='dynamic'
     ))
     requester = db.relationship('User', foreign_keys=[requested_by])
     decider = db.relationship('User', foreign_keys=[decided_by])

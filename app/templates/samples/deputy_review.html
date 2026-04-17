@@ -59,7 +59,7 @@
                 <div class="border rounded p-3 mb-3 {% if not loop.last %}mb-3{% endif %}">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div>
-                            <h6 class="fw-semibold mb-0">{{ a.test_name }} &mdash; {{ a.chemist.full_name }}</h6>
+                            <h6 class="fw-semibold mb-0">{{ a.test_name }} &mdash; {{ a.chemist.full_name if a.chemist else 'Unknown' }}</h6>
                             {% if a.test_reference %}
                             <small class="text-muted">Ref: {{ a.test_reference }}</small>
                             {% endif %}

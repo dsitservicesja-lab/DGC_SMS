@@ -1338,6 +1338,8 @@ def test_backdate_request_notifies_hod_deputy(app, client):
         initial_count = Notification.query.count()
 
     resp = client.post(f'/samples/{sample.id}/request-backdate', data={
+        'field_name': 'date_registered',
+        'assignment_id': '0',
         'proposed_date': '2025-12-01',
         'reason': 'Sample arrived earlier than recorded.',
     }, follow_redirects=True)
@@ -1365,6 +1367,8 @@ def test_backdate_decision_notifies_requester(app, client):
         sample = Sample.query.first()
 
     client.post(f'/samples/{sample.id}/request-backdate', data={
+        'field_name': 'date_registered',
+        'assignment_id': '0',
         'proposed_date': '2025-12-01',
         'reason': 'Earlier arrival.',
     }, follow_redirects=True)

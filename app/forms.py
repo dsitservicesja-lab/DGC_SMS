@@ -621,6 +621,18 @@ class ReportSubmitForm(FlaskForm):
             ),
         ],
     )
+    test_date = DateField('Test Date', validators=[Optional()])
+    meets_specifications = SelectField(
+        'Meets Specifications?',
+        choices=[
+            ('', '-- Select --'),
+            ('Yes', 'Yes'),
+            ('No', 'No'),
+            ('N/A', 'N/A'),
+        ],
+        validators=[Optional()],
+    )
+    report_comments = TextAreaField('Additional Comments', validators=[Optional()])
     all_samples_returned = SelectField(
         'All Samples Returned?',
         choices=[
@@ -772,6 +784,13 @@ class ReportReviewForm(FlaskForm):
         ],
         validators=[DataRequired()],
     )
+    out_of_spec = BooleanField('Mark as Out of Specification')
+    reassign_chemist_id = SelectField(
+        'Reassign to Different Chemist',
+        choices=[],
+        coerce=int,
+        validators=[Optional()],
+    )
     review_comments = TextAreaField('Comments', validators=[Optional()])
     submit = SubmitField('Submit Review')
 
@@ -877,7 +896,26 @@ class NonWorkingDayForm(FlaskForm):
 # ---------------------------------------------------------------------------
 
 class BackDateRequestForm(FlaskForm):
-    """Request to back-date the registration date of a sample."""
+    """Request to back-date any date field on a sample or assignment."""
+    field_name = SelectField(
+        'Date Field',
+        choices=[
+            ('date_registered', 'Date Registered'),
+            ('date_received', 'Date Received'),
+            ('expected_report_date', 'Expected Report Date'),
+            ('assigned_date', 'Assigned Date'),
+            ('expected_completion', 'Expected Completion Date'),
+            ('report_submitted_at', 'Report Submitted Date'),
+            ('test_date', 'Test Date'),
+        ],
+        validators=[DataRequired(message='Please select a date field.')],
+    )
+    assignment_id = SelectField(
+        'Assignment (if applicable)',
+        choices=[],
+        coerce=int,
+        validators=[Optional()],
+    )
     proposed_date = DateField(
         'Proposed Date',
         validators=[DataRequired(message='A proposed date is required.')],

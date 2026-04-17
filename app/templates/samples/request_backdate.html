@@ -16,19 +16,35 @@
     <div class="col-lg-6">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Change Registration Date</h5>
+                <h5 class="mb-0">Request Date Change</h5>
             </div>
             <div class="card-body">
                 <div class="alert alert-info mb-3">
                     <i class="bi bi-info-circle me-1"></i>
-                    <strong>Current Registration Date:</strong>
-                    {{ sample.date_registered.strftime('%d %b %Y %H:%M') if sample.date_registered else '—' }}
+                    <strong>Sample:</strong> {{ sample.lab_number }}
                     <br>
-                    <small class="text-muted">This request will be sent to the HOD / Deputy for approval.</small>
+                    <small class="text-muted">This request will be sent to the HOD / Deputy for approval. All changes are logged.</small>
                 </div>
 
                 <form method="POST" novalidate>
                     {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.field_name.label(class="form-label fw-semibold") }}
+                        {{ form.field_name(class="form-select" + (" is-invalid" if form.field_name.errors else ""), id="field_name") }}
+                        {% for error in form.field_name.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3" id="assignment-group" style="display:none;">
+                        {{ form.assignment_id.label(class="form-label fw-semibold") }}
+                        {{ form.assignment_id(class="form-select" + (" is-invalid" if form.assignment_id.errors else "")) }}
+                        <div class="form-text">Select the assignment this date change applies to.</div>
+                        {% for error in form.assignment_id.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
 
                     <div class="mb-3">
                         {{ form.proposed_date.label(class="form-label fw-semibold") }}
@@ -40,7 +56,7 @@
 
                     <div class="mb-3">
                         {{ form.reason.label(class="form-label fw-semibold") }}
-                        {{ form.reason(class="form-control" + (" is-invalid" if form.reason.errors else ""), rows="4", placeholder="Explain why the registration date needs to be changed…") }}
+                        {{ form.reason(class="form-control" + (" is-invalid" if form.reason.errors else ""), rows="4", placeholder="Explain why the date needs to be changed…") }}
                         {% for error in form.reason.errors %}
                         <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
@@ -55,4 +71,19 @@
         </div>
     </div>
 </div>
+
+<script>
+// Show/hide assignment dropdown based on field selection
+document.getElementById('field_name').addEventListener('change', function() {
+    var assignmentFields = ['assigned_date', 'expected_completion', 'report_submitted_at', 'test_date'];
+    var group = document.getElementById('assignment-group');
+    if (assignmentFields.includes(this.value)) {
+        group.style.display = 'block';
+    } else {
+        group.style.display = 'none';
+    }
+});
+// Trigger on page load
+document.getElementById('field_name').dispatchEvent(new Event('change'));
+</script>
 {% endblock %}
