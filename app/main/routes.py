@@ -1689,8 +1689,6 @@ def _assoc_table_to_dicts(table):
     return rows
 
 
-
-
 @main_bp.route('/export-data')
 @login_required
 def export_data():
@@ -2070,9 +2068,19 @@ def import_data():
             for name in zf.namelist():
                 if name.startswith('uploads/') and not name.endswith('/'):
                     rel_path = name[len('uploads/'):]
-                    dest = os.path.join(upload_folder, rel_path)
-                    os.makedirs(os.path.dirname(dest), exist_ok=True)
-                    with zf.open(name) as src, open(dest, 'wb') as dst:
+                    # Sanitize: prevent directory traversal attacks
+                    if '..' in rel_path or rel_path.startswith('/'):
+                        continue
+                    safe_dest = os.path.normpath(
+                        os.path.join(upload_folder, rel_path)
+                    )
+                    # Ensure the resolved path is within upload_folder
+                    if not safe_dest.startswith(
+                        os.path.normpath(upload_folder) + os.sep
+                    ) and safe_dest != os.path.normpath(upload_folder):
+                        continue
+                    os.makedirs(os.path.dirname(safe_dest), exist_ok=True)
+                    with zf.open(name) as src, open(safe_dest, 'wb') as dst:
                         dst.write(src.read())
 
         zf.close()
