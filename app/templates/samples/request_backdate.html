@@ -77,7 +77,7 @@
 document.getElementById('field_name').addEventListener('change', function() {
     var assignmentFields = ['assigned_date', 'expected_completion', 'report_submitted_at', 'test_date'];
     var group = document.getElementById('assignment-group');
-    if (assignmentFields.indexOf(this.value) >= 0) {
+    if (assignmentFields.includes(this.value)) {
         group.style.display = 'block';
     } else {
         group.style.display = 'none';
