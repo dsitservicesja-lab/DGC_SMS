@@ -105,8 +105,8 @@
                     <dd class="mb-0">
                         <div class="d-flex gap-1 align-items-center">
                             {% set sf_ext = sample.scanned_file_original_name.rsplit('.', 1)[-1].lower() if sample.scanned_file_original_name else '' %}
-                            {% if sf_ext == 'pdf' %}
-                            <a href="{{ url_for('samples.view_file', filename=sample.scanned_file) }}"
+                            {% if sf_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
+                            <a href="{{ url_for('main.preview_file', filename=sample.scanned_file) }}"
                                target="_blank" class="btn btn-sm btn-outline-info">
                                 <i class="bi bi-eye me-1"></i>Preview
                             </a>
@@ -134,13 +134,62 @@
         <div class="border rounded p-3 mb-3" style="background: var(--bs-tertiary-bg); white-space: pre-wrap; font-size:.875rem;">{{ assignment.report_text }}</div>
         {% endif %}
         {% if assignment.report_file %}
-        <a href="{{ url_for('samples.download_file', filename=assignment.report_file) }}"
-           class="btn btn-outline-primary btn-sm me-2">
-            <i class="bi bi-download me-1"></i>{{ assignment.report_file_original_name }}
-        </a>
+        <div class="d-flex gap-2 align-items-center mb-2">
+            {% set rpt_ext = assignment.report_file_original_name.rsplit('.', 1)[-1].lower() if assignment.report_file_original_name else '' %}
+            {% if rpt_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
+            <a href="{{ url_for('main.preview_file', filename=assignment.report_file) }}"
+               target="_blank" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-eye me-1"></i>Preview
+            </a>
+            {% endif %}
+            <a href="{{ url_for('samples.download_file', filename=assignment.report_file) }}"
+               class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-download me-1"></i>{{ assignment.report_file_original_name }}
+            </a>
+        </div>
         {% endif %}
         {% if assignment.report_submitted_at %}
         <small class="text-muted">Submitted: {{ assignment.report_submitted_at.strftime('%d %b %Y %H:%M') }}</small>
+        {% endif %}
+        <div class="row mt-3 g-3">
+            {% if assignment.test_date %}
+            <div class="col-md-4">
+                <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Test Date</dt>
+                <dd>{{ assignment.test_date.strftime('%d %b %Y') }}</dd>
+            </div>
+            {% endif %}
+            {% if assignment.meets_specifications %}
+            <div class="col-md-4">
+                <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Meets Specifications</dt>
+                <dd>
+                    {% if assignment.meets_specifications == 'Yes' %}
+                    <span class="badge bg-success">Yes</span>
+                    {% elif assignment.meets_specifications == 'No' %}
+                    <span class="badge bg-danger">No</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ assignment.meets_specifications }}</span>
+                    {% endif %}
+                </dd>
+            </div>
+            {% endif %}
+            {% if assignment.out_of_spec is not none %}
+            <div class="col-md-4">
+                <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Out of Specification</dt>
+                <dd>
+                    {% if assignment.out_of_spec %}
+                    <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>OUT OF SPEC</span>
+                    {% else %}
+                    <span class="badge bg-success">Within Spec</span>
+                    {% endif %}
+                </dd>
+            </div>
+            {% endif %}
+        </div>
+        {% if assignment.report_comments %}
+        <div class="mt-2">
+            <strong>Additional Comments:</strong>
+            <div class="border rounded p-2 mt-1" style="background: var(--bs-tertiary-bg); font-size:.875rem;">{{ assignment.report_comments }}</div>
+        </div>
         {% endif %}
         {% if assignment.all_samples_returned %}
         <div class="mt-2">

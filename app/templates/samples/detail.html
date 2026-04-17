@@ -406,7 +406,7 @@
         {% if sample.summary_report_file %}
         <div class="d-flex gap-2 mb-2">
             {% set sr_ext = sample.summary_report_file_original_name.rsplit('.', 1)[-1].lower() if sample.summary_report_file_original_name else '' %}
-            {% if sr_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'] %}
+            {% if sr_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
             <a href="{{ url_for('main.preview_file', filename=sample.summary_report_file) }}"
                target="_blank" class="btn btn-outline-info btn-sm">
                 <i class="bi bi-eye me-1"></i>Preview
@@ -439,7 +439,7 @@
         {% if sample.certificate_file %}
         <div class="d-flex gap-2 mb-2">
             {% set ext = sample.certificate_file_original_name.rsplit('.', 1)[-1].lower() if sample.certificate_file_original_name else '' %}
-            {% if ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'] %}
+            {% if ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
             <a href="{{ url_for('main.preview_file', filename=sample.certificate_file) }}"
                target="_blank" class="btn btn-outline-info btn-sm">
                 <i class="bi bi-eye me-1"></i>Preview
@@ -614,7 +614,7 @@
                     <td>{{ dv.uploaded_at.strftime('%d %b %Y %H:%M') if dv.uploaded_at else '—' }}</td>
                     <td>
                         {% set ext = dv.original_name.rsplit('.', 1)[-1].lower() if dv.original_name else '' %}
-                        {% if ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'] %}
+                        {% if ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
                         <a href="{{ url_for('main.preview_file', filename=dv.file_path) }}"
                            target="_blank" class="btn btn-outline-info btn-sm">
                             <i class="bi bi-eye"></i>

@@ -641,7 +641,9 @@ def edit_assignment(assignment_id):
                 flash('Selected chemist not found.', 'danger')
                 return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
             assignment.chemist_id = new_chemist_id
-            changes.append(f'Assignee: {old_chemist} → {new_chemist.full_name}')
+            changes.append(f'Reassigned: {old_chemist} → {new_chemist.full_name}')
+            # Notify the new chemist
+            notify_sample_assigned(assignment)
         if new_test_name and new_test_name != assignment.test_name:
             changes.append(f'Test: {assignment.test_name} → {new_test_name}')
             assignment.test_name = new_test_name
@@ -762,6 +764,9 @@ def submit_report(assignment_id):
         report_text = form.report_text.data
         all_returned = form.all_samples_returned.data or None
         return_qty = form.return_quantity.data or None
+        test_date = form.test_date.data
+        meets_spec = form.meets_specifications.data or None
+        report_comments = form.report_comments.data or None
 
         stored = original = None
         if form.report_file.data:
@@ -793,6 +798,9 @@ def submit_report(assignment_id):
             a.report_submitted_at = now
             a.all_samples_returned = all_returned
             a.return_quantity = return_qty
+            a.test_date = test_date
+            a.meets_specifications = meets_spec
+            a.report_comments = report_comments
 
             if stored:
                 a.report_file = stored
@@ -836,6 +844,12 @@ def submit_report(assignment_id):
     # Pre-fill if resubmitting
     if request.method == 'GET' and assignment.report_text:
         form.report_text.data = assignment.report_text
+    if request.method == 'GET' and assignment.test_date:
+        form.test_date.data = assignment.test_date
+    if request.method == 'GET' and assignment.meets_specifications:
+        form.meets_specifications.data = assignment.meets_specifications
+    if request.method == 'GET' and assignment.report_comments:
+        form.report_comments.data = assignment.report_comments
 
     return render_template(
         'samples/submit_report.html', form=form, assignment=assignment,
@@ -1005,9 +1019,28 @@ def review_report(assignment_id):
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     form = ReportReviewForm()
+
+    # Populate reassignment choices
+    chemists = User.query.filter(
+        User.is_active_user.is_(True),
+    ).join(user_roles).filter(
+        user_roles.c.role == Role.CHEMIST,
+    )
+    if current_user.branches:
+        chemists = chemists.join(user_branches).filter(
+            user_branches.c.branch.in_(current_user.branches)
+        )
+    chemists = chemists.order_by(User.last_name).all()
+    form.reassign_chemist_id.choices = [(0, '-- No Reassignment --')] + [
+        (c.id, c.full_name) for c in chemists
+    ]
+
     if form.validate_on_submit():
         action = form.action.data
         now = jamaica_now()
+
+        # Handle out_of_spec flag
+        assignment.out_of_spec = form.out_of_spec.data
 
         # Log the review in ReviewHistory
         prev_count = ReviewHistory.query.filter_by(
@@ -1039,18 +1072,39 @@ def review_report(assignment_id):
             assignment.status = AssignmentStatus.REJECTED
             assignment.date_completed = now
 
+        chemist_name = assignment.chemist.full_name if assignment.chemist else 'Unknown'
+
+        # Handle reassignment
+        reassign_id = form.reassign_chemist_id.data
+        reassign_msg = ''
+        if reassign_id and reassign_id != 0 and reassign_id != assignment.chemist_id:
+            old_chemist_name = chemist_name
+            new_chemist = db.session.get(User, reassign_id)
+            if new_chemist:
+                assignment.chemist_id = reassign_id
+                assignment.status = AssignmentStatus.ASSIGNED
+                assignment.return_stage = None
+                assignment.date_completed = None
+                reassign_msg = (f' Reassigned from {old_chemist_name} '
+                                f'to {new_chemist.full_name}.')
+                chemist_name = new_chemist.full_name
+                notify_sample_assigned(assignment)
+
+        out_of_spec_msg = ' [OUT OF SPEC]' if form.out_of_spec.data else ''
+
         _add_history(
             assignment.sample,
-            f'Senior Chemist Review – {action.title()}',
+            f'Senior Chemist Review – {action.title()}{out_of_spec_msg}',
             (f'{current_user.full_name} {action} report for test '
              f'"{assignment.test_name}" '
-             f'(Chemist: {assignment.chemist.full_name}). '
+             f'(Chemist: {chemist_name}).{out_of_spec_msg}{reassign_msg} '
              f'Comments: {form.review_comments.data or "N/A"}'),
             action_type='Senior Chemist Review',
             object_affected='Report',
             change_description=(
                 f'Test "{assignment.test_name}" {action} '
-                f'by {current_user.full_name}'),
+                f'by {current_user.full_name}'
+                f'{out_of_spec_msg}{reassign_msg}'),
         )
 
         _update_sample_status(assignment.sample)
@@ -1059,11 +1113,12 @@ def review_report(assignment_id):
         notify_report_reviewed(assignment, action)
         db.session.commit()
 
-        flash(f'Report has been {action}.', 'success')
+        flash(f'Report has been {action}.{reassign_msg}', 'success')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     return render_template(
-        'samples/review_report.html', form=form, assignment=assignment
+        'samples/review_report.html', form=form, assignment=assignment,
+        chemists=chemists,
     )
 
 
@@ -1424,35 +1479,81 @@ def hod_review(sample_id):
 @samples_bp.route('/<int:sample_id>/request-backdate', methods=['GET', 'POST'])
 @login_required
 def request_backdate(sample_id):
-    """Request to back-date the registration date of a sample."""
+    """Request to back-date any date field on a sample or assignment."""
     sample = db.get_or_404(Sample, sample_id)
 
-    # Officers, Senior Chemists, Admin, HOD can request
+    # Officers, Senior Chemists, Admin, HOD, Chemists can request
     if not current_user.has_any_role(
-        Role.OFFICER, Role.SENIOR_CHEMIST, Role.ADMIN, Role.HOD, Role.DEPUTY
+        Role.OFFICER, Role.SENIOR_CHEMIST, Role.ADMIN, Role.HOD, Role.DEPUTY, Role.CHEMIST
     ):
         flash('You do not have permission to request a back-date.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
-    # Check for existing pending request on date_registered
-    pending = BackDateRequest.query.filter_by(
-        sample_id=sample.id,
-        field_name='date_registered',
-        status='pending',
-    ).first()
-    if pending:
-        flash('A back-date request for the registration date is already pending.', 'warning')
-        return redirect(url_for('samples.detail', sample_id=sample.id))
-
     form = BackDateRequestForm()
+
+    # Populate assignment choices
+    assignments = sample.assignments.all()
+    form.assignment_id.choices = [(0, '-- Sample-level (no assignment) --')] + [
+        (a.id, f'{a.test_name} – {a.chemist.full_name if a.chemist else "Unknown"}')
+        for a in assignments
+    ]
+
     if form.validate_on_submit():
+        field_name = form.field_name.data
+        assignment_id_val = form.assignment_id.data if form.assignment_id.data else None
+        if assignment_id_val == 0:
+            assignment_id_val = None
+
+        # Determine the original date value
         date_fmt = '%Y-%m-%d'
-        original = sample.date_registered.strftime(date_fmt) if sample.date_registered else ''
+        # Fields on sample
+        sample_date_fields = {
+            'date_registered': sample.date_registered,
+            'date_received': sample.date_received,
+            'expected_report_date': sample.expected_report_date,
+        }
+        # Fields on assignment
+        assignment_date_fields = {
+            'assigned_date', 'expected_completion', 'report_submitted_at', 'test_date',
+        }
+
+        original = ''
+        if field_name in sample_date_fields:
+            val = sample_date_fields[field_name]
+            if val:
+                original = val.strftime(date_fmt) if hasattr(val, 'strftime') else str(val)
+        elif field_name in assignment_date_fields and assignment_id_val:
+            asgn = db.session.get(SampleAssignment, assignment_id_val)
+            if asgn:
+                val = getattr(asgn, field_name, None)
+                if val:
+                    original = val.strftime(date_fmt) if hasattr(val, 'strftime') else str(val)
+        elif field_name in assignment_date_fields and not assignment_id_val:
+            flash('Please select an assignment for assignment-level date fields.', 'danger')
+            return render_template(
+                'samples/request_backdate.html', form=form, sample=sample,
+                assignments=assignments,
+            )
+
         proposed = form.proposed_date.data.strftime(date_fmt)
+
+        # Check for existing pending request on this field
+        pending_q = BackDateRequest.query.filter_by(
+            sample_id=sample.id,
+            field_name=field_name,
+            status='pending',
+        )
+        if assignment_id_val:
+            pending_q = pending_q.filter_by(assignment_id=assignment_id_val)
+        pending = pending_q.first()
+        if pending:
+            flash(f'A back-date request for "{field_name.replace("_", " ").title()}" is already pending.', 'warning')
+            return redirect(url_for('samples.detail', sample_id=sample.id))
 
         bdr = BackDateRequest(
             sample_id=sample.id,
-            field_name='date_registered',
+            assignment_id=assignment_id_val,
+            field_name=field_name,
             original_date=original,
             proposed_date=proposed,
             reason=form.reason.data,
@@ -1460,14 +1561,15 @@ def request_backdate(sample_id):
         )
         db.session.add(bdr)
 
+        field_label = field_name.replace('_', ' ').title()
         _add_history(
             sample, 'Back-Date Requested',
-            (f'{current_user.full_name} requested to change registration date '
-             f'from {original} to {proposed}. Reason: {form.reason.data}'),
+            (f'{current_user.full_name} requested to change {field_label} '
+             f'from {original or "N/A"} to {proposed}. Reason: {form.reason.data}'),
             action_type='Back-Date Request',
-            object_affected='Sample',
+            object_affected='Sample' if not assignment_id_val else 'Assignment',
             change_description=(
-                f'date_registered: {original} → {proposed} '
+                f'{field_name}: {original or "N/A"} → {proposed} '
                 f'(requested by {current_user.full_name})'),
         )
         db.session.commit()
@@ -1480,6 +1582,7 @@ def request_backdate(sample_id):
 
     return render_template(
         'samples/request_backdate.html', form=form, sample=sample,
+        assignments=assignments,
     )
 
 

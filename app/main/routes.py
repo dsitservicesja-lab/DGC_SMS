@@ -1514,39 +1514,62 @@ def decide_backdate(req_id):
 
     # If approved, apply the back-dated value
     if decision == 'approved':
-        sample = db.session.get(Sample, bdr.sample_id)
-        if sample and hasattr(sample, bdr.field_name):
-            from datetime import datetime as dt
-            try:
-                new_date = dt.strptime(bdr.proposed_date, '%Y-%m-%d').date()
-                # date_registered is a DateTime column – preserve the time
-                if bdr.field_name == 'date_registered' and sample.date_registered:
-                    new_value = dt.combine(new_date, sample.date_registered.time())
-                    setattr(sample, bdr.field_name, new_value)
-                else:
-                    setattr(sample, bdr.field_name, new_date)
-            except (ValueError, AttributeError):
-                current_app.logger.error(
-                    'Failed to apply back-date for request %d: field=%s, proposed=%s',
-                    bdr.id, bdr.field_name, bdr.proposed_date,
-                )
-                flash('Back-date approved but could not be applied automatically. '
-                      'Please update the date manually.', 'warning')
+        from datetime import datetime as dt
+        try:
+            new_date = dt.strptime(bdr.proposed_date, '%Y-%m-%d').date()
+
+            # Assignment-level fields
+            assignment_fields = {
+                'assigned_date', 'expected_completion',
+                'report_submitted_at', 'test_date',
+            }
+
+            if bdr.field_name in assignment_fields and bdr.assignment_id:
+                asgn = db.session.get(SampleAssignment, bdr.assignment_id)
+                if asgn:
+                    if bdr.field_name in ('assigned_date', 'report_submitted_at'):
+                        # DateTime columns – preserve the time
+                        old_val = getattr(asgn, bdr.field_name, None)
+                        if old_val and hasattr(old_val, 'time'):
+                            new_value = dt.combine(new_date, old_val.time())
+                        else:
+                            new_value = dt.combine(new_date, dt.min.time())
+                        setattr(asgn, bdr.field_name, new_value)
+                    else:
+                        setattr(asgn, bdr.field_name, new_date)
+            else:
+                # Sample-level fields
+                sample = db.session.get(Sample, bdr.sample_id)
+                if sample and hasattr(sample, bdr.field_name):
+                    # date_registered is a DateTime column – preserve the time
+                    if bdr.field_name == 'date_registered' and sample.date_registered:
+                        new_value = dt.combine(new_date, sample.date_registered.time())
+                        setattr(sample, bdr.field_name, new_value)
+                    else:
+                        setattr(sample, bdr.field_name, new_date)
+        except (ValueError, AttributeError):
+            current_app.logger.error(
+                'Failed to apply back-date for request %d: field=%s, proposed=%s',
+                bdr.id, bdr.field_name, bdr.proposed_date,
+            )
+            flash('Back-date approved but could not be applied automatically. '
+                  'Please update the date manually.', 'warning')
 
     # Log the decision
+    requester_name = bdr.requester.full_name if bdr.requester else 'Unknown'
     db.session.add(SampleHistory(
         sample_id=bdr.sample_id,
         action=f'Back-date request {decision}',
         details=(f'Field: {bdr.field_name}, Original: {bdr.original_date}, '
                  f'Proposed: {bdr.proposed_date}, Decision: {decision}. '
-                 f'Requested by: {bdr.requester.full_name}'
+                 f'Requested by: {requester_name}'
                  f'{", Comments: " + comments if comments else ""}'),
         performed_by=current_user.id,
         action_type=f'Back-Date {decision.title()}',
-        object_affected='Sample',
+        object_affected='Sample' if not bdr.assignment_id else 'Assignment',
         change_description=(f'{bdr.field_name}: {bdr.original_date} → {bdr.proposed_date} '
                            f'({decision} by {current_user.full_name}, '
-                           f'requested by {bdr.requester.full_name})'),
+                           f'requested by {requester_name})'),
     ))
     db.session.commit()
 

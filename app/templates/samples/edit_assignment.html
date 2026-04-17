@@ -65,8 +65,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Expected Completion</label>
                             <input type="date" name="expected_completion" class="form-control"
-                                   value="{{ assignment.expected_completion.isoformat() if assignment.expected_completion else '' }}"
-                                   min="{{ today }}">
+                                   value="{{ assignment.expected_completion.isoformat() if assignment.expected_completion else '' }}">
                         </div>
 
                         <div class="col-12">

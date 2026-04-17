@@ -28,8 +28,8 @@
                 {% if assignment.report_file %}
                 <div class="d-flex gap-2 align-items-center">
                     {% set rpt_ext = assignment.report_file_original_name.rsplit('.', 1)[-1].lower() if assignment.report_file_original_name else '' %}
-                    {% if rpt_ext == 'pdf' %}
-                    <a href="{{ url_for('samples.view_file', filename=assignment.report_file) }}"
+                    {% if rpt_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
+                    <a href="{{ url_for('main.preview_file', filename=assignment.report_file) }}"
                        target="_blank" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-eye me-1"></i>Preview
                     </a>
@@ -44,6 +44,34 @@
                 <p class="mt-2 text-muted small mb-0">
                     Submitted: {{ assignment.report_submitted_at.strftime('%d %b %Y %H:%M') }}
                 </p>
+                {% endif %}
+                <div class="row mt-3 g-3">
+                    {% if assignment.test_date %}
+                    <div class="col-md-4">
+                        <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Test Date</dt>
+                        <dd>{{ assignment.test_date.strftime('%d %b %Y') }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if assignment.meets_specifications %}
+                    <div class="col-md-4">
+                        <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Meets Specifications</dt>
+                        <dd>
+                            {% if assignment.meets_specifications == 'Yes' %}
+                            <span class="badge bg-success">Yes</span>
+                            {% elif assignment.meets_specifications == 'No' %}
+                            <span class="badge bg-danger">No</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ assignment.meets_specifications }}</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if assignment.report_comments %}
+                <div class="mt-2">
+                    <strong>Additional Comments:</strong>
+                    <div class="border rounded p-2 mt-1" style="background: var(--bs-tertiary-bg); font-size:.875rem;">{{ assignment.report_comments }}</div>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -105,6 +133,20 @@
                             {% for error in form.action.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check mt-2">
+                                {{ form.out_of_spec(class="form-check-input") }}
+                                {{ form.out_of_spec.label(class="form-check-label fw-semibold text-danger") }}
+                            </div>
+                            <div class="form-text">Check this if the test results are out of specification.</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            {{ form.reassign_chemist_id.label(class="form-label fw-semibold") }}
+                            {{ form.reassign_chemist_id(class="form-select") }}
+                            <div class="form-text">Optionally reassign this test to a different chemist.</div>
                         </div>
 
                         <div class="col-12">

@@ -77,6 +77,30 @@
                         </div>
 
                         <div class="col-md-6">
+                            {{ form.test_date.label(class="form-label fw-semibold") }}
+                            {{ form.test_date(class="form-control", type="date") }}
+                            {% for error in form.test_date.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-md-6">
+                            {{ form.meets_specifications.label(class="form-label fw-semibold") }}
+                            {{ form.meets_specifications(class="form-select") }}
+                            {% for error in form.meets_specifications.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-12">
+                            {{ form.report_comments.label(class="form-label fw-semibold") }}
+                            {{ form.report_comments(class="form-control", rows=3, placeholder="Enter any additional comments about the test results…") }}
+                            {% for error in form.report_comments.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-md-6">
                             {{ form.all_samples_returned.label(class="form-label fw-semibold") }}
                             {{ form.all_samples_returned(class="form-select") }}
                         </div>
