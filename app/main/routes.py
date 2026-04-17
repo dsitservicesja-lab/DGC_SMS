@@ -1,10 +1,11 @@
 from flask import (
     render_template, redirect, url_for, flash, jsonify, request,
-    current_app, Response, abort,
+    current_app, Response, abort, send_file,
 )
 from flask_login import login_required, current_user
 from datetime import datetime, timezone, date
 import csv
+import enum
 import io
 
 from app import db
@@ -17,6 +18,8 @@ from app.models import (
     DocumentVersion, BackDateRequest,
     fiscal_year_for_date, fiscal_quarter_for_date,
     fiscal_quarter_months, fiscal_year_date_range,
+    SupportingDocument, ReviewHistory, AuditLog,
+    user_roles, user_branches,
 )
 
 
@@ -1641,3 +1644,460 @@ def preview_file(filename):
         mimetype=mime_type,
         as_attachment=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Data Export / Import  (Admin only)
+# ---------------------------------------------------------------------------
+
+def _serialize_value(val):
+    """Convert a Python value to a JSON-safe representation."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.isoformat()
+    if isinstance(val, date):
+        return val.isoformat()
+    if isinstance(val, enum.Enum):
+        return val.value
+    return val
+
+
+def _table_to_dicts(model_class):
+    """Serialize all rows of a SQLAlchemy model to a list of dicts."""
+    rows = []
+    mapper = db.inspect(model_class)
+    columns = [c.key for c in mapper.columns]
+    for obj in model_class.query.all():
+        row = {}
+        for col in columns:
+            row[col] = _serialize_value(getattr(obj, col))
+        rows.append(row)
+    return rows
+
+
+def _assoc_table_to_dicts(table):
+    """Serialize an association table to a list of dicts."""
+    rows = []
+    result = db.session.execute(table.select()).fetchall()
+    col_names = [c.name for c in table.columns]
+    for r in result:
+        row = {}
+        for i, name in enumerate(col_names):
+            row[name] = _serialize_value(r[i])
+        rows.append(row)
+    return rows
+
+
+@main_bp.route('/export-data')
+@login_required
+def export_data():
+    """Export all application data as a ZIP file (JSON + uploaded files).
+    Admin-only."""
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    import json
+    import zipfile
+    import os
+
+    # Build the JSON payload with all tables
+    data = {
+        'export_version': 1,
+        'exported_at': jamaica_now().isoformat(),
+        'tables': {
+            'users': _table_to_dicts(User),
+            'user_roles': _assoc_table_to_dicts(user_roles),
+            'user_branches': _assoc_table_to_dicts(user_branches),
+            'settings': _table_to_dicts(Setting),
+            'samples': _table_to_dicts(Sample),
+            'sample_assignments': _table_to_dicts(SampleAssignment),
+            'sample_history': _table_to_dicts(SampleHistory),
+            'review_history': _table_to_dicts(ReviewHistory),
+            'notifications': _table_to_dicts(Notification),
+            'kpi_targets': _table_to_dicts(KpiTarget),
+            'non_working_days': _table_to_dicts(NonWorkingDay),
+            'supporting_documents': _table_to_dicts(SupportingDocument),
+            'document_versions': _table_to_dicts(DocumentVersion),
+            'back_date_requests': _table_to_dicts(BackDateRequest),
+            'audit_log': _table_to_dicts(AuditLog),
+        },
+    }
+
+    # Counts for quick verification
+    data['row_counts'] = {k: len(v) for k, v in data['tables'].items()}
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('data.json', json.dumps(data, indent=2, default=str))
+
+        # Bundle uploaded files
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', '')
+        if upload_folder and os.path.isdir(upload_folder):
+            for root, _dirs, files in os.walk(upload_folder):
+                for fname in files:
+                    full_path = os.path.join(root, fname)
+                    arc_name = os.path.relpath(full_path, upload_folder)
+                    zf.write(full_path, f'uploads/{arc_name}')
+
+    buf.seek(0)
+    timestamp = jamaica_now().strftime('%Y%m%d_%H%M%S')
+    return send_file(
+        buf,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'dgc_sms_export_{timestamp}.zip',
+    )
+
+
+def _parse_date(val):
+    """Parse an ISO date string to a date object, or return None."""
+    if not val:
+        return None
+    try:
+        return date.fromisoformat(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_datetime(val):
+    """Parse an ISO datetime string to a datetime object, or return None."""
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_enum(val, enum_class):
+    """Convert a string value to the corresponding enum member, or None."""
+    if val is None:
+        return None
+    for member in enum_class:
+        if member.value == val:
+            return member
+    return None
+
+
+# Column type hints for correct deserialization
+_DATE_COLUMNS = {
+    'date_received', 'expected_report_date', 'expiration_date',
+    'expected_completion', 'test_date', 'date',
+}
+_DATETIME_COLUMNS = {
+    'created_at', 'date_registered', 'summary_report_at',
+    'deputy_reviewed_at', 'certificate_prepared_at',
+    'hod_reviewed_at', 'certified_at', 'assigned_date',
+    'date_completed', 'report_submitted_at',
+    'preliminary_reviewed_at', 'reviewed_at', 'uploaded_at',
+    'reviewed_at', 'requested_at', 'decided_at',
+    'performed_at', 'locked_until',
+}
+
+
+def _coerce_row(table_name, row):
+    """Coerce string values back to proper Python types for a given table."""
+    import copy
+    row = copy.copy(row)
+
+    # Enum columns per table
+    enum_map = {
+        'users': {'role': Role, 'branch': Branch},
+        'user_roles': {'role': Role},
+        'user_branches': {'branch': Branch},
+        'samples': {
+            'sample_type': Branch,
+            'status': SampleStatus,
+        },
+        'sample_assignments': {'status': AssignmentStatus},
+    }
+
+    enums = enum_map.get(table_name, {})
+    for col, val in list(row.items()):
+        if col in enums:
+            row[col] = _parse_enum(val, enums[col])
+        elif col in _DATE_COLUMNS:
+            row[col] = _parse_date(val)
+        elif col in _DATETIME_COLUMNS:
+            row[col] = _parse_datetime(val)
+        elif isinstance(val, str) and val == '':
+            # Keep empty strings as-is for text columns
+            pass
+
+    # Boolean columns
+    bool_cols = {
+        'is_active_user', 'must_change_password', 'is_read',
+        'email_sent', 'out_of_spec',
+    }
+    for col in bool_cols:
+        if col in row and row[col] is not None:
+            row[col] = bool(row[col])
+
+    return row
+
+
+@main_bp.route('/import-data', methods=['POST'])
+@login_required
+def import_data():
+    """Import application data from a previously exported ZIP file.
+    Admin-only. This REPLACES all data in the database."""
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    import json
+    import zipfile
+    import os
+    import shutil
+
+    f = request.files.get('import_file')
+    if not f or not f.filename:
+        flash('No file selected.', 'warning')
+        return redirect(url_for('main.settings'))
+
+    if not f.filename.lower().endswith('.zip'):
+        flash('Please upload a .zip export file.', 'danger')
+        return redirect(url_for('main.settings'))
+
+    try:
+        zf = zipfile.ZipFile(f.stream)
+    except zipfile.BadZipFile:
+        flash('Invalid ZIP file.', 'danger')
+        return redirect(url_for('main.settings'))
+
+    if 'data.json' not in zf.namelist():
+        flash('Invalid export file — missing data.json.', 'danger')
+        return redirect(url_for('main.settings'))
+
+    try:
+        raw = zf.read('data.json')
+        data = json.loads(raw)
+    except (json.JSONDecodeError, KeyError):
+        flash('Corrupt data.json in export file.', 'danger')
+        return redirect(url_for('main.settings'))
+
+    if 'tables' not in data:
+        flash('Invalid export format — missing tables key.', 'danger')
+        return redirect(url_for('main.settings'))
+
+    tables = data['tables']
+
+    # --- Wipe existing data in reverse dependency order ---
+    # Disable FK checks for the duration of the import
+    try:
+        # Delete in FK-safe order (children first)
+        AuditLog.query.delete()
+        BackDateRequest.query.delete()
+        DocumentVersion.query.delete()
+        SupportingDocument.query.delete()
+        ReviewHistory.query.delete()
+        Notification.query.delete()
+        SampleHistory.query.delete()
+        SampleAssignment.query.delete()
+        Sample.query.delete()
+        KpiTarget.query.delete()
+        NonWorkingDay.query.delete()
+        Setting.query.delete()
+        db.session.execute(user_roles.delete())
+        db.session.execute(user_branches.delete())
+        User.query.delete()
+        db.session.flush()
+
+        # --- Insert in FK-safe order (parents first) ---
+
+        # 1. Users (without roles/branches association — those come next)
+        for row in tables.get('users', []):
+            row = _coerce_row('users', row)
+            user = User(
+                id=row.get('id'),
+                email=row['email'],
+                username=row['username'],
+                first_name=row['first_name'],
+                last_name=row['last_name'],
+                password_hash=row['password_hash'],
+                role=row.get('role'),
+                branch=row.get('branch'),
+                is_active_user=row.get('is_active_user', True),
+                must_change_password=row.get('must_change_password', False),
+                created_at=row.get('created_at'),
+                failed_login_attempts=row.get('failed_login_attempts', 0),
+                locked_until=row.get('locked_until'),
+            )
+            db.session.add(user)
+        db.session.flush()
+
+        # 2. User roles & branches
+        for row in tables.get('user_roles', []):
+            row = _coerce_row('user_roles', row)
+            if row.get('role') is not None:
+                db.session.execute(user_roles.insert().values(
+                    user_id=row['user_id'], role=row['role']
+                ))
+
+        for row in tables.get('user_branches', []):
+            row = _coerce_row('user_branches', row)
+            if row.get('branch') is not None:
+                db.session.execute(user_branches.insert().values(
+                    user_id=row['user_id'], branch=row['branch']
+                ))
+        db.session.flush()
+
+        # 3. Settings
+        for row in tables.get('settings', []):
+            db.session.add(Setting(key=row['key'], value=row.get('value', '')))
+        db.session.flush()
+
+        # 4. Samples
+        for row in tables.get('samples', []):
+            row = _coerce_row('samples', row)
+            s = Sample()
+            for col, val in row.items():
+                if hasattr(s, col):
+                    setattr(s, col, val)
+            db.session.add(s)
+        db.session.flush()
+
+        # 5. Sample Assignments
+        for row in tables.get('sample_assignments', []):
+            row = _coerce_row('sample_assignments', row)
+            sa = SampleAssignment()
+            for col, val in row.items():
+                if hasattr(sa, col):
+                    setattr(sa, col, val)
+            db.session.add(sa)
+        db.session.flush()
+
+        # 6. Sample History
+        for row in tables.get('sample_history', []):
+            row = _coerce_row('sample_history', row)
+            sh = SampleHistory()
+            for col, val in row.items():
+                if hasattr(sh, col):
+                    setattr(sh, col, val)
+            db.session.add(sh)
+
+        # 7. Review History
+        for row in tables.get('review_history', []):
+            row = _coerce_row('review_history', row)
+            rh = ReviewHistory()
+            for col, val in row.items():
+                if hasattr(rh, col):
+                    setattr(rh, col, val)
+            db.session.add(rh)
+
+        # 8. Notifications
+        for row in tables.get('notifications', []):
+            row = _coerce_row('notifications', row)
+            n = Notification()
+            for col, val in row.items():
+                if hasattr(n, col):
+                    setattr(n, col, val)
+            db.session.add(n)
+
+        # 9. KPI Targets
+        for row in tables.get('kpi_targets', []):
+            row = _coerce_row('kpi_targets', row)
+            kt = KpiTarget()
+            for col, val in row.items():
+                if hasattr(kt, col):
+                    setattr(kt, col, val)
+            db.session.add(kt)
+
+        # 10. Non-Working Days
+        for row in tables.get('non_working_days', []):
+            row = _coerce_row('non_working_days', row)
+            nwd = NonWorkingDay()
+            for col, val in row.items():
+                if hasattr(nwd, col):
+                    setattr(nwd, col, val)
+            db.session.add(nwd)
+
+        # 11. Supporting Documents
+        for row in tables.get('supporting_documents', []):
+            row = _coerce_row('supporting_documents', row)
+            sd = SupportingDocument()
+            for col, val in row.items():
+                if hasattr(sd, col):
+                    setattr(sd, col, val)
+            db.session.add(sd)
+
+        # 12. Document Versions
+        for row in tables.get('document_versions', []):
+            row = _coerce_row('document_versions', row)
+            dv = DocumentVersion()
+            for col, val in row.items():
+                if hasattr(dv, col):
+                    setattr(dv, col, val)
+            db.session.add(dv)
+
+        # 13. Back-Date Requests
+        for row in tables.get('back_date_requests', []):
+            row = _coerce_row('back_date_requests', row)
+            bdr = BackDateRequest()
+            for col, val in row.items():
+                if hasattr(bdr, col):
+                    setattr(bdr, col, val)
+            db.session.add(bdr)
+
+        # 14. Audit Log
+        for row in tables.get('audit_log', []):
+            row = _coerce_row('audit_log', row)
+            al = AuditLog()
+            for col, val in row.items():
+                if hasattr(al, col):
+                    setattr(al, col, val)
+            db.session.add(al)
+
+        db.session.commit()
+
+        # --- Restore uploaded files ---
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', '')
+        if upload_folder:
+            # Clear existing uploads
+            if os.path.isdir(upload_folder):
+                for entry in os.listdir(upload_folder):
+                    path = os.path.join(upload_folder, entry)
+                    if os.path.isfile(path):
+                        os.remove(path)
+                    elif os.path.isdir(path):
+                        shutil.rmtree(path)
+
+            # Extract uploaded files from ZIP
+            for name in zf.namelist():
+                if name.startswith('uploads/') and not name.endswith('/'):
+                    rel_path = name[len('uploads/'):]
+                    # Sanitize: prevent directory traversal attacks
+                    if '..' in rel_path or rel_path.startswith('/'):
+                        continue
+                    from werkzeug.utils import secure_filename
+                    # Secure each path component individually
+                    parts = rel_path.replace('\\', '/').split('/')
+                    safe_parts = [secure_filename(p) for p in parts]
+                    safe_parts = [p for p in safe_parts if p]  # drop empty
+                    if not safe_parts:
+                        continue
+                    safe_rel = os.path.join(*safe_parts)
+                    safe_dest = os.path.join(upload_folder, safe_rel)
+                    # Final check: resolved path must be inside upload_folder
+                    real_dest = os.path.realpath(safe_dest)
+                    real_upload = os.path.realpath(upload_folder)
+                    if not real_dest.startswith(real_upload + os.sep):
+                        continue
+                    os.makedirs(os.path.dirname(safe_dest), exist_ok=True)
+                    with zf.open(name) as src, open(safe_dest, 'wb') as dst:
+                        dst.write(src.read())
+
+        zf.close()
+
+        row_counts = data.get('row_counts', {})
+        total = sum(row_counts.values()) if row_counts else '?'
+        flash(f'Data imported successfully — {total} records restored.', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Data import failed')
+        flash(f'Import failed: {e}', 'danger')
+
+    return redirect(url_for('main.settings'))
