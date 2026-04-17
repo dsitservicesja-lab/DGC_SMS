@@ -635,9 +635,12 @@ def edit_assignment(assignment_id):
 
         changes = []
         if new_chemist_id and new_chemist_id != assignment.chemist_id:
-            old_chemist = assignment.chemist.full_name
-            assignment.chemist_id = new_chemist_id
+            old_chemist = assignment.chemist.full_name if assignment.chemist else 'Unknown'
             new_chemist = db.session.get(User, new_chemist_id)
+            if not new_chemist:
+                flash('Selected chemist not found.', 'danger')
+                return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+            assignment.chemist_id = new_chemist_id
             changes.append(f'Assignee: {old_chemist} → {new_chemist.full_name}')
         if new_test_name and new_test_name != assignment.test_name:
             changes.append(f'Test: {assignment.test_name} → {new_test_name}')
@@ -652,10 +655,11 @@ def edit_assignment(assignment_id):
             assignment.comments = new_comments
 
         if changes:
+            chemist_name = assignment.chemist.full_name if assignment.chemist else 'Unknown'
             _add_history(
                 sample, 'Assignment Edited',
                 (f'{current_user.full_name} edited assignment for '
-                 f'{assignment.chemist.full_name}: {"; ".join(changes)}'),
+                 f'{chemist_name}: {"; ".join(changes)}'),
                 action_type='Assignment Edit',
                 object_affected='Sample Assignment',
                 change_description='; '.join(changes) + f' (by {current_user.full_name})',

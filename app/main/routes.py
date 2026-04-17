@@ -1236,7 +1236,7 @@ def analyst_report():
         cid = a.chemist_id
         if cid not in analyst_data:
             analyst_data[cid] = {
-                'name': a.chemist.full_name,
+                'name': a.chemist.full_name if a.chemist else 'Unknown',
                 'total': 0,
                 'completed': 0,
                 'in_progress': 0,
@@ -1324,7 +1324,7 @@ def analyst_report_download():
     ])
     for a in assignments:
         writer.writerow([
-            a.chemist.full_name,
+            a.chemist.full_name if a.chemist else 'Unknown',
             a.sample.lab_number,
             a.sample.sample_name,
             a.sample.sample_type.value if a.sample.sample_type else '',

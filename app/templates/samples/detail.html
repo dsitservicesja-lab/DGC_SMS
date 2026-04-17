@@ -176,7 +176,7 @@
                                 {{ sample.date_registered.strftime('%d %b %Y %H:%M') }}
                                 {% if pending_backdate %}
                                 <span class="badge bg-warning text-dark ms-2" style="font-size:.68rem;"
-                                      title="Back-date requested by {{ pending_backdate.requester.full_name }} — proposed: {{ pending_backdate.proposed_date[:10] }}">
+                                      title="Back-date requested by {{ pending_backdate.requester.full_name if pending_backdate.requester else 'Unknown' }} — proposed: {{ pending_backdate.proposed_date[:10] }}">
                                     <i class="bi bi-hourglass-split me-1"></i>Back-date pending
                                 </span>
                                 {% elif current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.ADMIN, Role.HOD, Role.DEPUTY) %}
@@ -212,7 +212,7 @@
                             <dd class="mb-3">{{ sample.patient_name }}</dd>
                             {% endif %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Registered By</dt>
-                            <dd class="mb-0">{{ sample.uploaded_by_user.full_name }}</dd>
+                            <dd class="mb-0">{{ sample.uploaded_by_user.full_name if sample.uploaded_by_user else 'Unknown' }}</dd>
                         </dl>
                     </div>
                     {% if sample.description %}
@@ -284,7 +284,7 @@
                     {% for a in assignments[:3] %}
                     <dt>{{ a.test_name }}</dt>
                     <dd>
-                        Assigned to {{ a.chemist.full_name }}
+                        Assigned to {{ a.chemist.full_name if a.chemist else 'Unknown' }}
                         {% if a.assigned_date %} on {{ a.assigned_date.strftime('%d %b %Y') }}{% endif %}
                         <br>Status: <span class="badge bg-secondary" style="font-size:.7rem;">{{ a.status.value }}</span>
                     </dd>
@@ -365,7 +365,7 @@
                 <tr>
                     <td>{{ doc.original_name }}</td>
                     <td>{{ doc.description or '—' }}</td>
-                    <td>{{ doc.uploader.full_name }}</td>
+                    <td>{{ doc.uploader.full_name if doc.uploader else 'Unknown' }}</td>
                     <td>{{ doc.uploaded_at.strftime('%d %b %Y %H:%M') if doc.uploaded_at else '' }}</td>
                     <td>
                         <div class="d-flex gap-1">
@@ -464,7 +464,7 @@
             {% if sample.certified_at %}
             <p class="text-success small mb-0">
                 <i class="bi bi-patch-check-fill me-1"></i>
-                Signed by {{ sample.certifier.full_name }} on {{ sample.certified_at.strftime('%d %b %Y %H:%M') }}
+                Signed by {{ sample.certifier.full_name if sample.certifier else 'Unknown' }} on {{ sample.certified_at.strftime('%d %b %Y %H:%M') }}
             </p>
             {% endif %}
         </div>
@@ -514,7 +514,7 @@
                         <br><small class="text-muted">Ref: {{ a.test_reference }}</small>
                         {% endif %}
                     </td>
-                    <td>{{ a.chemist.full_name }}</td>
+                    <td>{{ a.chemist.full_name if a.chemist else 'Unknown' }}</td>
                     <td>{{ a.assigned_date.strftime('%d %b %Y') }}</td>
                     <td>
                         <span class="badge bg-{{ a_colors.get(a.status.value, 'secondary') }}">
@@ -655,7 +655,7 @@
                 </div>
                 <small class="text-muted">{{ rh.reviewed_at.strftime('%d %b %Y %H:%M') if rh.reviewed_at else '—' }}</small>
             </div>
-            <p class="mb-1 small"><strong>Reviewer:</strong> {{ rh.reviewer.full_name }}</p>
+            <p class="mb-1 small"><strong>Reviewer:</strong> {{ rh.reviewer.full_name if rh.reviewer else 'Unknown' }}</p>
             {% if rh.comments %}
             <p class="mb-1 small"><strong>Comments:</strong> {{ rh.comments }}</p>
             {% endif %}
@@ -720,7 +720,7 @@
                     <span class="badge bg-secondary me-1" style="font-size:.7rem;">{{ entry.action_type }}</span>
                     {% endif %}
                     {{ entry.action }}
-                    <span class="text-muted fw-normal">— {{ entry.performer.full_name }}</span>
+                    <span class="text-muted fw-normal">— {{ entry.performer.full_name if entry.performer else 'Unknown' }}</span>
                 </div>
                 <small class="text-muted">{{ entry.created_at.strftime('%d %b %Y %H:%M') }}</small>
                 {% if entry.object_affected %}
