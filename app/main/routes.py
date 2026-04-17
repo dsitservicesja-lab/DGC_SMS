@@ -2071,13 +2071,19 @@ def import_data():
                     # Sanitize: prevent directory traversal attacks
                     if '..' in rel_path or rel_path.startswith('/'):
                         continue
-                    safe_dest = os.path.normpath(
-                        os.path.join(upload_folder, rel_path)
-                    )
-                    # Ensure the resolved path is within upload_folder
-                    if not safe_dest.startswith(
-                        os.path.normpath(upload_folder) + os.sep
-                    ) and safe_dest != os.path.normpath(upload_folder):
+                    from werkzeug.utils import secure_filename
+                    # Secure each path component individually
+                    parts = rel_path.replace('\\', '/').split('/')
+                    safe_parts = [secure_filename(p) for p in parts]
+                    safe_parts = [p for p in safe_parts if p]  # drop empty
+                    if not safe_parts:
+                        continue
+                    safe_rel = os.path.join(*safe_parts)
+                    safe_dest = os.path.join(upload_folder, safe_rel)
+                    # Final check: resolved path must be inside upload_folder
+                    real_dest = os.path.realpath(safe_dest)
+                    real_upload = os.path.realpath(upload_folder)
+                    if not real_dest.startswith(real_upload + os.sep):
                         continue
                     os.makedirs(os.path.dirname(safe_dest), exist_ok=True)
                     with zf.open(name) as src, open(safe_dest, 'wb') as dst:
