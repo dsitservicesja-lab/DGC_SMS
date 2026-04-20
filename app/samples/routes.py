@@ -611,7 +611,7 @@ def return_to_analyst(assignment_id):
         flash('Only Senior Chemists, HOD, or Admins can return assignments to the analyst.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
-    # Cannot return an assignment that is already in a terminal or submittable state
+    # Cannot return an assignment that is already with the analyst
     non_returnable = {AssignmentStatus.ASSIGNED, AssignmentStatus.RETURNED}
     if assignment.status in non_returnable:
         flash('Assignment is already assigned to the analyst.', 'warning')
