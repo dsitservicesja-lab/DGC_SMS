@@ -76,6 +76,38 @@
                             {% endif %}
                         </div>
 
+                        {% if sibling_assignments and sibling_assignments|length > 1 %}
+                        {# Per-test date and specifications when multiple tests #}
+                        <div class="col-12">
+                            <hr class="my-2">
+                            <h6 class="fw-semibold mb-3"><i class="bi bi-list-check me-1"></i>Test Date &amp; Specifications (per test)</h6>
+                        </div>
+                        {% for sa in sibling_assignments %}
+                        <div class="col-12 border rounded p-3 mb-2">
+                            <div class="fw-semibold mb-2">
+                                <span class="badge bg-info text-dark me-1">{{ sa.test_name }}</span>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold" for="test_date_{{ sa.id }}">Test Date</label>
+                                    <input type="date" class="form-control" id="test_date_{{ sa.id }}"
+                                           name="test_date_{{ sa.id }}"
+                                           value="{{ sa.test_date.strftime('%Y-%m-%d') if sa.test_date else '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold" for="meets_spec_{{ sa.id }}">Meets Specifications?</label>
+                                    <select class="form-select" id="meets_spec_{{ sa.id }}" name="meets_spec_{{ sa.id }}">
+                                        <option value="">-- Select --</option>
+                                        <option value="Yes" {{ 'selected' if sa.meets_specifications == 'Yes' else '' }}>Yes</option>
+                                        <option value="No" {{ 'selected' if sa.meets_specifications == 'No' else '' }}>No</option>
+                                        <option value="N/A" {{ 'selected' if sa.meets_specifications == 'N/A' else '' }}>N/A</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        {# Single test – use original fields #}
                         <div class="col-md-6">
                             {{ form.test_date.label(class="form-label fw-semibold") }}
                             {{ form.test_date(class="form-control", type="date") }}
@@ -91,6 +123,7 @@
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
+                        {% endif %}
 
                         <div class="col-12">
                             {{ form.report_comments.label(class="form-label fw-semibold") }}

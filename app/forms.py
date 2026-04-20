@@ -610,7 +610,7 @@ class SampleAssignForm(FlaskForm):
 # ---------------------------------------------------------------------------
 
 class ReportSubmitForm(FlaskForm):
-    report_text = TextAreaField('Report / Findings', validators=[DataRequired()])
+    report_text = TextAreaField('Report / Findings', validators=[Optional()])
     report_file = FileField(
         'Attach Report File',
         validators=[
@@ -907,6 +907,8 @@ class BackDateRequestForm(FlaskForm):
             ('expected_completion', 'Expected Completion Date'),
             ('report_submitted_at', 'Report Submitted Date'),
             ('test_date', 'Test Date'),
+            ('certificate_prepared_at', 'Certificate Prepared Date'),
+            ('certified_at', 'Certificate Signed Date'),
         ],
         validators=[DataRequired(message='Please select a date field.')],
     )

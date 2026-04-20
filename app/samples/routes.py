@@ -791,6 +791,9 @@ def submit_report(assignment_id):
                 assignment_id=assignment.id,
             ))
 
+        # Check if per-test fields were submitted (multiple sibling assignments)
+        has_per_test = len(sibling_assignments) > 1
+
         # Apply the report to all sibling assignments that are submittable
         submitted_names = []
         for a in sibling_assignments:
@@ -798,9 +801,24 @@ def submit_report(assignment_id):
             a.report_submitted_at = now
             a.all_samples_returned = all_returned
             a.return_quantity = return_qty
-            a.test_date = test_date
-            a.meets_specifications = meets_spec
             a.report_comments = report_comments
+
+            if has_per_test:
+                # Per-test test_date and meets_specifications from form fields
+                per_test_date_str = request.form.get(f'test_date_{a.id}', '')
+                per_meets_spec = request.form.get(f'meets_spec_{a.id}', '') or None
+                if per_test_date_str:
+                    from datetime import datetime as dt_parse
+                    try:
+                        a.test_date = dt_parse.strptime(per_test_date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        a.test_date = None
+                else:
+                    a.test_date = None
+                a.meets_specifications = per_meets_spec
+            else:
+                a.test_date = test_date
+                a.meets_specifications = meets_spec
 
             if stored:
                 a.report_file = stored
@@ -1511,6 +1529,8 @@ def request_backdate(sample_id):
             'date_registered': sample.date_registered,
             'date_received': sample.date_received,
             'expected_report_date': sample.expected_report_date,
+            'certificate_prepared_at': sample.certificate_prepared_at,
+            'certified_at': sample.certified_at,
         }
         # Fields on assignment
         assignment_date_fields = {
