@@ -532,6 +532,8 @@ def _can_view_assignment(assignment):
         return True
     if current_user.id == assignment.sample.uploaded_by:
         return True
+    if current_user.has_role(Role.OFFICER):
+        return True
     if current_user.is_branch_head():
         if not current_user.branches or assignment.sample.sample_type in current_user.branches:
             return True
@@ -592,6 +594,64 @@ def remove_assignment(assignment_id):
     db.session.commit()
 
     flash(f'Assignment of "{test_name}" to {chemist_name} has been removed.', 'success')
+    return redirect(url_for('samples.detail', sample_id=sample.id))
+
+
+# ---------------------------------------------------------------------------
+# Return assignment to analyst (Senior Chemist / HOD at any stage)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/assignment/<int:assignment_id>/return-to-analyst', methods=['POST'])
+@login_required
+def return_to_analyst(assignment_id):
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
+    sample = assignment.sample
+
+    if not current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.ADMIN):
+        flash('Only Senior Chemists, HOD, or Admins can return assignments to the analyst.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    # Cannot return an assignment that is already with the analyst
+    non_returnable = {AssignmentStatus.ASSIGNED, AssignmentStatus.RETURNED}
+    if assignment.status in non_returnable:
+        flash('Assignment is already assigned to the analyst.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    old_status = assignment.status.value
+    assignment.status = AssignmentStatus.RETURNED
+    assignment.return_stage = 'technical'
+    assignment.date_completed = None
+
+    chemist_name = assignment.chemist.full_name if assignment.chemist else 'Unknown'
+    _add_history(
+        sample,
+        'Returned to Analyst',
+        (f'{current_user.full_name} returned assignment for test '
+         f'"{assignment.test_name}" to analyst {chemist_name} '
+         f'(was: {old_status}).'),
+        action_type='Return to Analyst',
+        object_affected='Sample Assignment',
+        change_description=(
+            f'Test "{assignment.test_name}" returned to {chemist_name} '
+            f'by {current_user.full_name} (from {old_status})'),
+    )
+
+    _update_sample_status(sample)
+    db.session.commit()
+
+    # Notify the analyst
+    from app.notifications import create_notification
+    create_notification(
+        assignment.chemist_id,
+        f'Assignment Returned: {sample.lab_number}',
+        (f'Your assignment for test "{assignment.test_name}" on sample '
+         f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
+         f'returned to you for correction by {current_user.full_name}.'),
+        f'/samples/assignment/{assignment.id}',
+    )
+    db.session.commit()
+
+    flash(f'Assignment returned to analyst {chemist_name}.', 'success')
     return redirect(url_for('samples.detail', sample_id=sample.id))
 
 
