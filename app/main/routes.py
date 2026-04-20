@@ -1527,6 +1527,11 @@ def decide_backdate(req_id):
                 'report_submitted_at', 'test_date',
             }
 
+            # Sample-level DateTime fields (need to preserve the time)
+            sample_datetime_fields = {
+                'date_registered', 'certificate_prepared_at', 'certified_at',
+            }
+
             if bdr.field_name in assignment_fields and bdr.assignment_id:
                 asgn = db.session.get(SampleAssignment, bdr.assignment_id)
                 if asgn:
@@ -1544,9 +1549,13 @@ def decide_backdate(req_id):
                 # Sample-level fields
                 sample = db.session.get(Sample, bdr.sample_id)
                 if sample and hasattr(sample, bdr.field_name):
-                    # date_registered is a DateTime column – preserve the time
-                    if bdr.field_name == 'date_registered' and sample.date_registered:
-                        new_value = dt.combine(new_date, sample.date_registered.time())
+                    if bdr.field_name in sample_datetime_fields:
+                        # DateTime columns – preserve the time
+                        old_val = getattr(sample, bdr.field_name, None)
+                        if old_val and hasattr(old_val, 'time'):
+                            new_value = dt.combine(new_date, old_val.time())
+                        else:
+                            new_value = dt.combine(new_date, dt.min.time())
                         setattr(sample, bdr.field_name, new_value)
                     else:
                         setattr(sample, bdr.field_name, new_date)
