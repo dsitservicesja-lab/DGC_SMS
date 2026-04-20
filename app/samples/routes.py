@@ -806,11 +806,10 @@ def submit_report(assignment_id):
             if has_per_test:
                 # Per-test test_date and meets_specifications from form fields
                 per_test_date_str = request.form.get(f'test_date_{a.id}', '')
-                per_meets_spec = request.form.get(f'meets_spec_{a.id}', '') or None
+                per_meets_spec = request.form.get(f'meets_spec_{a.id}') or None
                 if per_test_date_str:
-                    from datetime import datetime as dt_parse
                     try:
-                        a.test_date = dt_parse.strptime(per_test_date_str, '%Y-%m-%d').date()
+                        a.test_date = datetime.strptime(per_test_date_str, '%Y-%m-%d').date()
                     except ValueError:
                         a.test_date = None
                 else:
