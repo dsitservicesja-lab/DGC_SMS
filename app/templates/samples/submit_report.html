@@ -92,7 +92,8 @@
                                     <label class="form-label fw-semibold" for="test_date_{{ sa.id }}">Test Date</label>
                                     <input type="date" class="form-control" id="test_date_{{ sa.id }}"
                                            name="test_date_{{ sa.id }}"
-                                           value="{{ sa.test_date.strftime('%Y-%m-%d') if sa.test_date else '' }}">
+                                           value="{{ sa.test_date.strftime('%Y-%m-%d') if sa.test_date else '' }}"
+                                           min="{{ sa.assigned_date.strftime('%Y-%m-%d') if sa.assigned_date else '' }}">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold" for="meets_spec_{{ sa.id }}">Meets Specifications?</label>
@@ -110,7 +111,7 @@
                         {# Single test – use original fields #}
                         <div class="col-md-6">
                             {{ form.test_date.label(class="form-label fw-semibold") }}
-                            {{ form.test_date(class="form-control", type="date") }}
+                            {{ form.test_date(class="form-control", type="date", min=assignment.assigned_date.strftime('%Y-%m-%d') if assignment.assigned_date else '') }}
                             {% for error in form.test_date.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}

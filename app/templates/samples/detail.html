@@ -36,7 +36,7 @@
             <i class="bi bi-pencil me-1"></i>Edit
         </a>
         {% endif %}
-        {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and sv in ['Registered', 'Assigned'] %}
+        {% if current_user.is_branch_head() or current_user.has_role(Role.ADMIN) %}
         <a href="{{ url_for('samples.assign', sample_id=sample.id) }}" class="btn btn-primary btn-sm">
             <i class="bi bi-person-plus me-1"></i>Assign
         </a>
@@ -476,7 +476,7 @@
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Test Assignments</h5>
-        {% if (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) and sv in ['Registered', 'Assigned', 'In Progress'] %}
+        {% if current_user.is_branch_head() or current_user.has_role(Role.ADMIN) %}
         <a href="{{ url_for('samples.assign', sample_id=sample.id) }}" class="btn btn-sm btn-primary">
             <i class="bi bi-plus me-1"></i>Add Assignment
         </a>
@@ -501,6 +501,7 @@
                     <th>Test</th>
                     <th>Analyst</th>
                     <th>Assigned</th>
+                    <th>Test Date</th>
                     <th>Status</th>
                     <th></th>
                 </tr>
@@ -516,10 +517,14 @@
                     </td>
                     <td>{{ a.chemist.full_name if a.chemist else 'Unknown' }}</td>
                     <td>{{ a.assigned_date.strftime('%d %b %Y') }}</td>
+                    <td>{{ a.test_date.strftime('%d %b %Y') if a.test_date else '—' }}</td>
                     <td>
                         <span class="badge bg-{{ a_colors.get(a.status.value, 'secondary') }}">
                             {{ a.status.value }}
                         </span>
+                        {% if a.out_of_spec %}
+                        <span class="badge bg-danger ms-1" title="Out of Specification">Out of Spec</span>
+                        {% endif %}
                     </td>
                     <td>
                         <div class="d-flex gap-1 flex-wrap">
@@ -544,6 +549,14 @@
                                class="btn btn-sm btn-outline-warning" title="Senior Chemist Review">
                                 <i class="bi bi-clipboard-check"></i>
                             </a>
+                            {% endif %}
+                            {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.ADMIN) and a.status.value not in ['Assigned', 'Returned for Correction'] %}
+                            <form method="POST" action="{{ url_for('samples.return_to_analyst', assignment_id=a.id) }}" class="d-inline" onsubmit="return confirm('Return this assignment to the analyst?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Return to Analyst">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
                             {% endif %}
                             {% if (current_user.has_any_role(Role.ADMIN, Role.HOD) or current_user.id == a.assigned_by) and a.status.value in ['Assigned', 'In Progress'] %}
                             <form method="POST" action="{{ url_for('samples.remove_assignment', assignment_id=a.id) }}" class="d-inline" onsubmit="return confirm('Remove this assignment?')">
