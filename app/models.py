@@ -563,10 +563,14 @@ class ReviewHistory(db.Model):
 
     # Relationships
     sample = db.relationship('Sample', backref=db.backref(
-        'review_histories', lazy='dynamic', order_by='ReviewHistory.reviewed_at.desc()'
+        'review_histories', lazy='dynamic',
+        order_by='ReviewHistory.reviewed_at.desc()',
+        cascade='all, delete-orphan',
     ))
     assignment = db.relationship('SampleAssignment', backref=db.backref(
-        'review_histories', lazy='dynamic', order_by='ReviewHistory.reviewed_at.desc()'
+        'review_histories', lazy='dynamic',
+        order_by='ReviewHistory.reviewed_at.desc()',
+        cascade='all, delete-orphan',
     ))
     reviewer = db.relationship('User', foreign_keys=[reviewer_id])
 

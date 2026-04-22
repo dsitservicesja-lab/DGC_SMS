@@ -1777,6 +1777,13 @@ def bulk_delete():
         # Remove uploaded files from disk
         _delete_sample_files(sample)
 
+        # Explicitly delete ReviewHistory records (sample_id is NOT NULL so
+        # SQLAlchemy cannot null it out; the cascade on the relationship
+        # handles this, but we also do it explicitly for safety).
+        ReviewHistory.query.filter_by(sample_id=sample.id).delete(
+            synchronize_session=False
+        )
+
         # Delete sample (cascades to assignments, history, supporting docs,
         # document versions, back-date requests via relationship cascades)
         db.session.delete(sample)
