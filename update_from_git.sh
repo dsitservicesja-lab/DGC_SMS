@@ -60,7 +60,14 @@ if [ -f "$APP_DIR/.env" ]; then
     chmod 600 "$APP_DIR/.env"
 fi
 
-echo "[6/6] Restarting application service..."
+echo "[6/6] Updating nginx config and restarting services..."
+NGINX_CONF="$APP_DIR/deployment/nginx_dgc_sms.conf"
+if [ ! -f "$NGINX_CONF" ]; then
+    echo "WARNING: nginx config not found at $NGINX_CONF, skipping nginx update"
+else
+    cp "$NGINX_CONF" /etc/nginx/sites-available/dgc_sms
+    nginx -t && systemctl reload nginx
+fi
 systemctl daemon-reload
 systemctl restart dgc_sms
 systemctl status dgc_sms --no-pager -l || true
