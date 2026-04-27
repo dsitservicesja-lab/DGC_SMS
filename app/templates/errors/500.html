@@ -20,7 +20,6 @@
                 </button>
             </div>
 
-            {% if current_user.is_authenticated and current_user.has_any_role(Role.ADMIN, Role.HOD) %}
             {% if error_details %}
             <div class="card border-danger mt-4">
                 <div class="card-header bg-danger text-white d-flex align-items-center justify-content-between">
@@ -36,7 +35,6 @@
                     </div>
                 </div>
             </div>
-            {% endif %}
             {% endif %}
         </div>
     </div>

@@ -134,9 +134,21 @@ def create_app(config_name=None):
     @app.errorhandler(500)
     def internal_server_error(exc):
         import traceback
+        from flask_login import current_user
         error_details = traceback.format_exc()
         app.logger.error('Internal Server Error: %s', error_details)
-        return render_template('errors/500.html', error_details=error_details), 500
+        # Only expose the traceback to authenticated admin/HOD users
+        visible_details = None
+        try:
+            from app.models import Role
+            if (
+                current_user.is_authenticated
+                and current_user.has_any_role(Role.ADMIN, Role.HOD)
+            ):
+                visible_details = error_details
+        except Exception:
+            pass
+        return render_template('errors/500.html', error_details=visible_details), 500
 
     # CLI command: flask send-reminders
     @app.cli.command('send-reminders')
