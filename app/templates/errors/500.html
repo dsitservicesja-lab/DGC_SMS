@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Server Error - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <div class="text-center mb-4">
+                <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 3rem;"></i>
+                <h2 class="mt-3">500 – Internal Server Error</h2>
+                <p class="text-muted">
+                    The server encountered an error while processing your request.
+                    The error has been logged. Please try again or contact your administrator.
+                </p>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary me-2">
+                    <i class="bi bi-house me-1"></i>Go to Dashboard
+                </a>
+                <button onclick="history.back()" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Go Back
+                </button>
+            </div>
+
+            {% if error_details %}
+            <div class="card border-danger mt-4">
+                <div class="card-header bg-danger text-white d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-bug me-2"></i>Error Details <small class="opacity-75">(visible to admins only)</small></span>
+                    <button class="btn btn-sm btn-outline-light" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#errorTrace">
+                        <i class="bi bi-chevron-down"></i> Toggle
+                    </button>
+                </div>
+                <div id="errorTrace" class="collapse show">
+                    <div class="card-body p-0">
+                        <pre class="mb-0 p-3 text-danger" style="font-size:.8rem; max-height:400px; overflow:auto; white-space:pre-wrap;">{{ error_details }}</pre>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

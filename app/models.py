@@ -55,8 +55,24 @@ class Branch(enum.Enum):
     FOOD_ALCOHOL = 'Food (Alcohol)'
 
 
+class Permission(enum.Enum):
+    """Fine-grained permissions that an admin can grant to individual users.
+    These supplement (not replace) role-based access: a user may perform an
+    action if their role already allows it OR if they have been explicitly
+    granted the corresponding permission by an admin."""
+    REGISTER_SAMPLE    = 'Register Sample'
+    EDIT_SAMPLE        = 'Edit Sample'
+    ASSIGN_SAMPLE      = 'Assign Sample'
+    SUBMIT_REPORT      = 'Submit Report'
+    PRELIMINARY_REVIEW = 'Preliminary Review'
+    TECHNICAL_REVIEW   = 'Technical Review'
+    DEPUTY_REVIEW      = 'Deputy Review'
+    HOD_REVIEW         = 'HOD Review / Sign'
+    MANAGE_USERS       = 'Manage Users'
+
+
 # ---------------------------------------------------------------------------
-# Many-to-many association tables for User ↔ Role / Branch
+# Many-to-many association tables for User ↔ Role / Branch / Permission
 # ---------------------------------------------------------------------------
 
 user_roles = db.Table(
@@ -69,6 +85,12 @@ user_branches = db.Table(
     'user_branches',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('branch', db.Enum(Branch), primary_key=True),
+)
+
+user_permissions = db.Table(
+    'user_permissions',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('permission', db.Enum(Permission), primary_key=True),
 )
 
 
@@ -174,12 +196,14 @@ class User(UserMixin, db.Model):
         self.failed_login_attempts = 0
         self.locked_until = None
 
-    # ----- role / branch helpers (backed by association tables) -----
+    # ----- role / branch / permission helpers (backed by association tables) -----
 
     _roles = None        # in-memory cache / pending value
     _roles_dirty = False  # True only when set via the setter (needs DB write)
     _branches = None
     _branches_dirty = False
+    _permissions = None
+    _permissions_dirty = False
 
     @property
     def roles(self):
@@ -221,6 +245,25 @@ class User(UserMixin, db.Model):
         self._branches = set(value)
         self._branches_dirty = True
 
+    @property
+    def permissions(self):
+        """Return the set of explicitly-granted Permission enums for this user."""
+        if self._permissions is not None:
+            return self._permissions
+        if self.id is None:
+            self._permissions = set()
+            return self._permissions
+        rows = db.session.execute(
+            select(user_permissions).where(user_permissions.c.user_id == self.id)
+        ).fetchall()
+        self._permissions = {row.permission for row in rows}
+        return self._permissions
+
+    @permissions.setter
+    def permissions(self, value):
+        self._permissions = set(value)
+        self._permissions_dirty = True
+
     def has_role(self, role):
         return role in self.roles
 
@@ -233,6 +276,13 @@ class User(UserMixin, db.Model):
     def has_any_branch(self, *branches):
         return bool(self.branches & set(branches))
 
+    def has_permission(self, permission):
+        """Return True if the user has the given permission explicitly granted.
+        Admin users always have all permissions."""
+        if self.has_role(Role.ADMIN):
+            return True
+        return permission in self.permissions
+
     @property
     def role_names(self):
         """Comma-separated display of roles."""
@@ -242,6 +292,11 @@ class User(UserMixin, db.Model):
     def branch_names(self):
         """Comma-separated display of branches."""
         return ', '.join(sorted(b.value for b in self.branches)) or '—'
+
+    @property
+    def permission_names(self):
+        """Comma-separated display of explicitly-granted permissions."""
+        return ', '.join(sorted(p.value for p in self.permissions)) or '—'
 
     @property
     def primary_branch(self):
@@ -279,8 +334,8 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
-# Flush pending roles/branches to the association tables after insert or update.
-# Only fires when roles/branches were explicitly assigned (dirty flag is set).
+# Flush pending roles/branches/permissions to the association tables after
+# insert or update.  Only fires when the dirty flag is set.
 
 @event.listens_for(User, 'after_insert')
 @event.listens_for(User, 'after_update')
@@ -303,6 +358,15 @@ def _flush_user_roles_branches(mapper, connection, target):
                 user_id=target.id, branch=b
             ))
         target._branches_dirty = False
+    if target._permissions_dirty:
+        connection.execute(
+            delete(user_permissions).where(user_permissions.c.user_id == target.id)
+        )
+        for p in target._permissions:
+            connection.execute(insert(user_permissions).values(
+                user_id=target.id, permission=p
+            ))
+        target._permissions_dirty = False
 
 # ---------------------------------------------------------------------------
 # Sample

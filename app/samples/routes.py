@@ -14,7 +14,7 @@ from app import db
 from app.samples import samples_bp
 from app.models import (
     Sample, SampleAssignment, SampleHistory, User, SupportingDocument,
-    Role, Branch, SampleStatus, AssignmentStatus,
+    Role, Branch, SampleStatus, AssignmentStatus, Permission,
     user_roles, user_branches, jamaica_now,
     DocumentVersion, ReviewHistory, BackDateRequest,
     AuditLog, Notification,
@@ -160,7 +160,10 @@ def _generate_lab_number(branch):
 @samples_bp.route('/register', methods=['GET', 'POST'])
 @login_required
 def register():
-    if not current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD):
+    if not (
+        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD)
+        or current_user.has_permission(Permission.REGISTER_SAMPLE)
+    ):
         flash('Only officers can register samples.', 'danger')
         return redirect(url_for('samples.sample_list'))
 
@@ -238,11 +241,16 @@ def register():
             sample.scanned_file_original_name = original
 
         db.session.add(sample)
-        db.session.flush()
+        try:
+            db.session.flush()
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception('Failed to flush new sample %r', lab_number)
+            flash(f'An error occurred while registering the sample: {exc}', 'danger')
+            return render_template('samples/register.html', form=form, is_pharma=is_pharma)
 
         # Create document version for scanned file
         if form.scanned_file.data:
-            from app.models import DocumentVersion
             db.session.add(DocumentVersion(
                 sample_id=sample.id,
                 document_type='scanned_file',
@@ -257,7 +265,13 @@ def register():
                      f'Registered by {current_user.full_name}',
                      action_type='Original Submission',
                      object_affected='Sample')
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception('Failed to commit new sample %r', lab_number)
+            flash(f'An error occurred while registering the sample: {exc}', 'danger')
+            return render_template('samples/register.html', form=form, is_pharma=is_pharma)
 
         notify_sample_uploaded(sample)
         db.session.commit()
@@ -313,8 +327,12 @@ def detail(sample_id):
 @login_required
 def edit(sample_id):
     sample = db.get_or_404(Sample, sample_id)
-    if not current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD) and \
-       current_user.id != sample.uploaded_by:
+    can_edit = (
+        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD)
+        or current_user.has_permission(Permission.EDIT_SAMPLE)
+        or current_user.id == sample.uploaded_by
+    )
+    if not can_edit:
         flash('Access denied.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -349,7 +367,6 @@ def edit(sample_id):
             sample.scanned_file_original_name = original
 
             # Create document version for replaced scanned file
-            from app.models import DocumentVersion
             existing = DocumentVersion.query.filter_by(
                 sample_id=sample.id, document_type='scanned_file'
             ).count()
@@ -365,7 +382,13 @@ def edit(sample_id):
 
         _add_history(sample, 'Sample Updated', f'Updated by {current_user.full_name}',
                      action_type='Edit', object_affected='Sample')
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception('Failed to save edits for sample %r', sample.lab_number)
+            flash(f'An error occurred while saving the sample: {exc}', 'danger')
+            return render_template('samples/edit.html', form=form, sample=sample)
         flash('Sample updated.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -380,7 +403,11 @@ def edit(sample_id):
 @login_required
 def assign(sample_id):
     sample = db.get_or_404(Sample, sample_id)
-    if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
+    if not (
+        current_user.is_branch_head()
+        or current_user.has_role(Role.ADMIN)
+        or current_user.has_permission(Permission.ASSIGN_SAMPLE)
+    ):
         flash('Only Senior Chemists / Branch Heads can assign samples.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -944,11 +971,15 @@ def preliminary_review(assignment_id):
     assignment = db.get_or_404(SampleAssignment, assignment_id)
 
     # Officers, Senior Chemists, Deputy, HOD, Admin, or the sample uploader
-    # can do preliminary review.
+    # can do preliminary review.  Explicit PRELIMINARY_REVIEW permission also grants access.
     sample = assignment.sample
-    allowed = current_user.has_any_role(
-        Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN
-    ) or current_user.id == sample.uploaded_by
+    allowed = (
+        current_user.has_any_role(
+            Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN
+        )
+        or current_user.has_permission(Permission.PRELIMINARY_REVIEW)
+        or current_user.id == sample.uploaded_by
+    )
     if not allowed:
         flash('You do not have permission to perform preliminary reviews.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
@@ -1087,7 +1118,11 @@ def preliminary_review(assignment_id):
 def review_report(assignment_id):
     assignment = db.get_or_404(SampleAssignment, assignment_id)
 
-    if not current_user.is_branch_head() and not current_user.has_role(Role.ADMIN):
+    if not (
+        current_user.is_branch_head()
+        or current_user.has_role(Role.ADMIN)
+        or current_user.has_permission(Permission.TECHNICAL_REVIEW)
+    ):
         flash('Only Senior Chemists / Branch Heads can review reports.', 'danger')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
@@ -1273,7 +1308,10 @@ def submit_to_deputy(sample_id):
 def deputy_review(sample_id):
     sample = db.get_or_404(Sample, sample_id)
 
-    if not current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN):
+    if not (
+        current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN)
+        or current_user.has_permission(Permission.DEPUTY_REVIEW)
+    ):
         flash('Only the Deputy Government Chemist can perform this review.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
@@ -1472,7 +1510,10 @@ def prepare_certificate(sample_id):
 def hod_review(sample_id):
     sample = db.get_or_404(Sample, sample_id)
 
-    if not current_user.has_any_role(Role.HOD, Role.ADMIN):
+    if not (
+        current_user.has_any_role(Role.HOD, Role.ADMIN)
+        or current_user.has_permission(Permission.HOD_REVIEW)
+    ):
         flash('Only the Government Chemist can review and sign certificates.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 

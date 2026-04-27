@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
@@ -49,9 +49,10 @@ def create_app(config_name=None):
     app.register_blueprint(main_bp)
 
     # Make enums available in all templates
-    from app.models import Role, Branch
+    from app.models import Role, Branch, Permission
     app.jinja_env.globals['Role'] = Role
     app.jinja_env.globals['Branch'] = Branch
+    app.jinja_env.globals['Permission'] = Permission
 
     # Custom Jinja2 filter to parse JSON strings in templates
     import json
@@ -117,6 +118,37 @@ def create_app(config_name=None):
             and request.endpoint not in ('auth.change_password', 'auth.logout', 'static')
         ):
             return redirect(url_for('auth.change_password'))
+
+    # ---------------------------------------------------------------------------
+    # Error handlers – show useful details for internal users
+    # ---------------------------------------------------------------------------
+
+    @app.errorhandler(403)
+    def forbidden(exc):
+        return render_template('errors/403.html'), 403
+
+    @app.errorhandler(404)
+    def page_not_found(exc):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(exc):
+        import traceback
+        from flask_login import current_user
+        error_details = traceback.format_exc()
+        app.logger.error('Internal Server Error: %s', error_details)
+        # Only expose the traceback to authenticated admin/HOD users
+        visible_details = None
+        try:
+            from app.models import Role
+            if (
+                current_user.is_authenticated
+                and current_user.has_any_role(Role.ADMIN, Role.HOD)
+            ):
+                visible_details = error_details
+        except Exception:
+            pass
+        return render_template('errors/500.html', error_details=visible_details), 500
 
     # CLI command: flask send-reminders
     @app.cli.command('send-reminders')

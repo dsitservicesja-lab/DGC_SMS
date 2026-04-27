@@ -19,6 +19,7 @@
                     <th>Email</th>
                     <th>Roles</th>
                     <th>Branches</th>
+                    <th>Extra Permissions</th>
                     <th>Status</th>
                     <th></th>
                 </tr>
@@ -31,6 +32,13 @@
                     <td>{{ user.email }}</td>
                     <td>{% for r in user.roles %}<span class="badge bg-secondary me-1">{{ r.value }}</span>{% else %}&mdash;{% endfor %}</td>
                     <td>{% for b in user.branches %}<span class="badge bg-info text-dark me-1">{{ b.value }}</span>{% else %}&mdash;{% endfor %}</td>
+                    <td>
+                        {% if user.has_role(Role.ADMIN) %}
+                        <span class="text-muted small" title="Admins have all permissions">All (Admin)</span>
+                        {% else %}
+                        {% for p in user.permissions %}<span class="badge bg-warning text-dark me-1">{{ p.value }}</span>{% else %}&mdash;{% endfor %}
+                        {% endif %}
+                    </td>
                     <td>
                         {% if user.is_locked %}
                         <span class="badge bg-warning text-dark">Locked</span>
