@@ -73,8 +73,7 @@
                         <input class="form-control" type="file" name="import_file" id="import_file"
                                accept=".zip" required>
                     </div>
-                    <button type="button" class="btn btn-warning" data-bs-toggle="modal"
-                            data-bs-target="#importConfirmModal">
+                    <button type="button" class="btn btn-warning" id="importDataBtn">
                         <i class="bi bi-upload me-1"></i>Import Data
                     </button>
                 </form>
@@ -191,26 +190,35 @@
         iframe.src = e.currentTarget.href;
         document.body.appendChild(iframe);
 
-        // Hide overlay once the window regains focus (download dialog appeared)
+        // Hide overlay when the iframe receives a response (download started)
         var fallbackTimer = setTimeout(function () {
             hideOverlay();
-            document.body.removeChild(iframe);
-        }, 60000);
+            if (iframe.parentNode) document.body.removeChild(iframe);
+        }, 30000);
 
-        window.addEventListener('focus', function onFocus() {
-            window.removeEventListener('focus', onFocus);
+        iframe.addEventListener('load', function () {
             clearTimeout(fallbackTimer);
             setTimeout(function () {
                 hideOverlay();
-                document.body.removeChild(iframe);
+                if (iframe.parentNode) document.body.removeChild(iframe);
             }, 400);
         });
 
         e.preventDefault();
     }
 
-    /* ── Import progress ───────────────────────────────── */
+    /* ── Import Data button ────────────────────────────── */
     document.addEventListener('DOMContentLoaded', function () {
+        var importDataBtn = document.getElementById('importDataBtn');
+        if (importDataBtn) {
+            importDataBtn.addEventListener('click', function () {
+                var modal = bootstrap.Modal.getOrCreateInstance(
+                    document.getElementById('importConfirmModal')
+                );
+                modal.show();
+            });
+        }
+
         var confirmBtn = document.getElementById('confirmImportBtn');
         if (confirmBtn) {
             confirmBtn.addEventListener('click', function () {
