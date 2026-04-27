@@ -97,6 +97,36 @@
                             {% endfor %}
                         </div>
 
+                        {% if current_user.has_role(Role.ADMIN) %}
+                        <div class="col-12">
+                            <hr class="my-1">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                {{ form.permissions.label(class="form-label fw-semibold mb-0") }}
+                                <span class="badge bg-info text-dark">Admin only</span>
+                            </div>
+                            <p class="text-muted small mb-2">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Grant extra capabilities to this user beyond what their role allows.
+                                Admins always have all permissions regardless of this setting.
+                            </p>
+                            <div class="border rounded p-2" style="background: var(--bs-body-bg);">
+                                <div class="row g-0">
+                                {% for subfield in form.permissions %}
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        {{ subfield(class="form-check-input") }}
+                                        {{ subfield.label(class="form-check-label") }}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                </div>
+                            </div>
+                            {% for error in form.permissions.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
                         {% if form.is_active_user is defined and form.is_active_user %}
                         <div class="col-12">
                             <div class="form-check">

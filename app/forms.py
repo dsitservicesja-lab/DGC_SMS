@@ -14,7 +14,7 @@ from wtforms.validators import (
     Regexp,
 )
 
-from app.models import Role, Branch, User
+from app.models import Role, Branch, Permission, User
 
 
 def _strong_password(form, field):
@@ -250,6 +250,10 @@ class UserCreateForm(FlaskForm):
         'Branches / Labs',
         choices=[(b.name, b.value) for b in Branch],
     )
+    permissions = MultiCheckboxField(
+        'Extra Permissions',
+        choices=[(p.name, p.value) for p in Permission],
+    )
     submit = SubmitField('Create User')
 
     def validate_roles(self, field):
@@ -273,6 +277,10 @@ class UserEditForm(FlaskForm):
     branches = MultiCheckboxField(
         'Branches / Labs',
         choices=[(b.name, b.value) for b in Branch],
+    )
+    permissions = MultiCheckboxField(
+        'Extra Permissions',
+        choices=[(p.name, p.value) for p in Permission],
     )
     is_active_user = BooleanField('Active')
 

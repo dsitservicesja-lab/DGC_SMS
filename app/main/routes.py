@@ -12,7 +12,7 @@ from app import db
 from app.main import main_bp
 from app.models import (
     Sample, SampleAssignment, SampleHistory, Notification, User,
-    Role, SampleStatus, AssignmentStatus, Setting, Branch,
+    Role, SampleStatus, AssignmentStatus, Setting, Branch, Permission,
     KpiTarget, KPI_METRICS, AUTO_ACTUAL_KEYS,
     NonWorkingDay, calculate_working_days, jamaica_now,
     DocumentVersion, BackDateRequest,

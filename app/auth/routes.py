@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 from app import db
 from app.auth import auth_bp
 from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
-from app.models import User, Role, Branch, Notification, SampleHistory, SampleAssignment, Sample
+from app.models import User, Role, Branch, Permission, Notification, SampleHistory, SampleAssignment, Sample
 from app.notifications import send_email
 
 
@@ -162,8 +162,10 @@ def user_create():
         user.must_change_password = True
         roles_set = {Role[r] for r in form.roles.data}
         branches_set = {Branch[b] for b in (form.branches.data or [])}
+        permissions_set = {Permission[p] for p in (form.permissions.data or [])}
         user.roles = roles_set
         user.branches = branches_set
+        user.permissions = permissions_set
         # Populate legacy single-value columns (production DB may have NOT NULL)
         user.role = next(iter(roles_set), None)
         user.branch = next(iter(branches_set), None)
@@ -173,9 +175,7 @@ def user_create():
         except Exception as exc:
             db.session.rollback()
             current_app.logger.exception('Failed to create user %r', form.username.data)
-            if current_app.debug or current_app.testing:
-                flash(f'Create user error: {exc}', 'warning')
-            flash('An error occurred while creating the user. Please try again.', 'danger')
+            flash(f'An error occurred while creating the user: {exc}', 'danger')
             return render_template('auth/user_form.html', form=form, title='Create User')
         flash(f'User {user.username} created successfully.', 'success')
         return redirect(url_for('auth.user_list'))
@@ -193,6 +193,7 @@ def user_edit(user_id):
     if request.method == 'GET':
         form.roles.data = [r.name for r in user.roles]
         form.branches.data = [b.name for b in user.branches]
+        form.permissions.data = [p.name for p in user.permissions]
     if form.validate_on_submit():
         # Check email uniqueness
         existing = User.query.filter(
@@ -206,8 +207,10 @@ def user_edit(user_id):
             user.email = form.email.data
             roles_set = {Role[r] for r in form.roles.data}
             branches_set = {Branch[b] for b in form.branches.data}
+            permissions_set = {Permission[p] for p in (form.permissions.data or [])}
             user.roles = roles_set
             user.branches = branches_set
+            user.permissions = permissions_set
             # Keep legacy single-value columns in sync
             user.role = next(iter(roles_set), None)
             user.branch = next(iter(branches_set), None)
@@ -219,9 +222,7 @@ def user_edit(user_id):
             except Exception as exc:
                 db.session.rollback()
                 current_app.logger.exception('Failed to update user %r', user.username)
-                if current_app.debug or current_app.testing:
-                    flash(f'Update user error: {exc}', 'warning')
-                flash('An error occurred while updating the user. Please try again.', 'danger')
+                flash(f'An error occurred while updating the user: {exc}', 'danger')
                 return render_template('auth/user_form.html', form=form, title='Edit User', user=user)
             flash(f'User {user.username} updated.', 'success')
             return redirect(url_for('auth.user_list'))
@@ -288,13 +289,16 @@ def user_delete(user_id):
         )
         return redirect(url_for('auth.user_list'))
 
-    # Safe to delete — clean up notifications and role/branch associations first
+    # Safe to delete — clean up notifications and role/branch/permission associations first
     Notification.query.filter_by(user_id=user.id).delete()
     db.session.execute(
         db.text('DELETE FROM user_roles WHERE user_id = :uid'), {'uid': user.id}
     )
     db.session.execute(
         db.text('DELETE FROM user_branches WHERE user_id = :uid'), {'uid': user.id}
+    )
+    db.session.execute(
+        db.text('DELETE FROM user_permissions WHERE user_id = :uid'), {'uid': user.id}
     )
     db.session.delete(user)
     db.session.commit()
