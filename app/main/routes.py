@@ -1847,7 +1847,7 @@ def _coerce_row(table_name, row):
     return row
 
 
-@main_bp.route('/import-data', methods=['POST'])
+@main_bp.route('/import-data', methods=['GET', 'POST'])
 @login_required
 def import_data():
     """Import application data from a previously exported ZIP file.
@@ -1855,6 +1855,9 @@ def import_data():
     if not current_user.has_role(Role.ADMIN):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
+
+    if request.method == 'GET':
+        return redirect(url_for('main.settings'))
 
     import json
     import zipfile
