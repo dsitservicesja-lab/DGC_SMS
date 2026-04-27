@@ -10,6 +10,7 @@ EnvironmentFile=/opt/dgc_sms/.env
 ExecStart=/opt/dgc_sms/venv/bin/gunicorn \
     --workers 3 \
     --bind 127.0.0.1:8000 \
+    --timeout 300 \
     --access-logfile /opt/dgc_sms/access.log \
     --error-logfile /opt/dgc_sms/error.log \
     run:app
