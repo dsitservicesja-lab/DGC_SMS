@@ -19,7 +19,7 @@ from app.models import (
     fiscal_year_for_date, fiscal_quarter_for_date,
     fiscal_quarter_months, fiscal_year_date_range,
     SupportingDocument, ReviewHistory, AuditLog,
-    user_roles, user_branches,
+    user_roles, user_branches, user_permissions,
 )
 
 
@@ -1713,12 +1713,13 @@ def export_data():
 
     # Build the JSON payload with all tables
     data = {
-        'export_version': 1,
+        'export_version': 2,
         'exported_at': jamaica_now().isoformat(),
         'tables': {
             'users': _table_to_dicts(User),
             'user_roles': _assoc_table_to_dicts(user_roles),
             'user_branches': _assoc_table_to_dicts(user_branches),
+            'user_permissions': _assoc_table_to_dicts(user_permissions),
             'settings': _table_to_dicts(Setting),
             'samples': _table_to_dicts(Sample),
             'sample_assignments': _table_to_dicts(SampleAssignment),
@@ -1914,6 +1915,7 @@ def import_data():
         Setting.query.delete()
         db.session.execute(user_roles.delete())
         db.session.execute(user_branches.delete())
+        db.session.execute(user_permissions.delete())
         User.query.delete()
         db.session.flush()
 
@@ -1953,6 +1955,13 @@ def import_data():
             if row.get('branch') is not None:
                 db.session.execute(user_branches.insert().values(
                     user_id=row['user_id'], branch=row['branch']
+                ))
+
+        for row in tables.get('user_permissions', []):
+            row = _coerce_row('user_permissions', row)
+            if row.get('permission') is not None:
+                db.session.execute(user_permissions.insert().values(
+                    user_id=row['user_id'], permission=row['permission']
                 ))
         db.session.flush()
 

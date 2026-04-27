@@ -224,9 +224,8 @@
             confirmBtn.addEventListener('click', function () {
                 var fileInput = document.getElementById('import_file');
                 if (!fileInput || !fileInput.files.length) {
-                    alert('Please select a file first.');
-                    var modal = bootstrap.Modal.getInstance(document.getElementById('importConfirmModal'));
-                    if (modal) modal.hide();
+                    fileInput.classList.add('is-invalid');
+                    fileInput.focus();
                     return;
                 }
 
