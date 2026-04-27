@@ -119,6 +119,14 @@ NEW_TABLES = [
         ')',
     ),
     (
+        'user_permissions',
+        'CREATE TABLE IF NOT EXISTS user_permissions ('
+        '  user_id INTEGER NOT NULL REFERENCES users(id),'
+        '  permission VARCHAR(50) NOT NULL,'
+        '  PRIMARY KEY (user_id, permission)'
+        ')',
+    ),
+    (
         'notifications',
         'CREATE TABLE IF NOT EXISTS notifications ('
         '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
