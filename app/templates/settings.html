@@ -48,7 +48,8 @@
                     Download a complete backup of all data (users, samples, assignments, history, settings,
                     uploaded files) as a ZIP file. Use this to migrate data to a new server or as a backup.
                 </p>
-                <a href="{{ url_for('main.export_data') }}" class="btn btn-primary mb-4">
+                <a href="{{ url_for('main.export_data') }}" class="btn btn-primary mb-4" id="exportBtn"
+                   onclick="startExportProgress(event)">
                     <i class="bi bi-download me-1"></i>Export All Data
                 </a>
 
@@ -72,10 +73,41 @@
                         <input class="form-control" type="file" name="import_file" id="import_file"
                                accept=".zip" required>
                     </div>
-                    <button type="button" class="btn btn-warning" id="importTriggerBtn">
+                    <button type="button" class="btn btn-warning" id="importDataBtn">
                         <i class="bi bi-upload me-1"></i>Import Data
                     </button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Import confirmation modal -->
+        <div class="modal fade" id="importConfirmModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title">Confirm Data Import</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>This will <strong>replace all existing data</strong> including:</p>
+                        <ul>
+                            <li>All user accounts &amp; passwords</li>
+                            <li>All samples, assignments &amp; reports</li>
+                            <li>All review history &amp; audit logs</li>
+                            <li>All settings, KPI targets &amp; calendar data</li>
+                            <li>All uploaded files</li>
+                        </ul>
+                        <p class="text-danger fw-bold mb-0">
+                            This action cannot be undone. Make sure you have a backup.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="importCancelBtn">Cancel</button>
+                        <button type="button" class="btn btn-warning" id="confirmImportBtn">
+                            <i class="bi bi-upload me-1"></i>Yes, Import Data
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -137,97 +169,101 @@
 </div>
 {% endblock %}
 
-{% block modals %}
-{% if current_user.has_role(Role.ADMIN) %}
-<!-- Import confirmation modal -->
-<div class="modal fade" id="importConfirmModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title">Confirm Data Import</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>This will <strong>replace all existing data</strong> including:</p>
-                <ul>
-                    <li>All user accounts &amp; passwords</li>
-                    <li>All samples, assignments &amp; reports</li>
-                    <li>All review history &amp; audit logs</li>
-                    <li>All settings, KPI targets &amp; calendar data</li>
-                    <li>All uploaded files</li>
-                </ul>
-                <p class="text-danger fw-bold mb-0">
-                    This action cannot be undone. Make sure you have a backup.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning" id="confirmImportBtn">
-                    <i class="bi bi-upload me-1"></i>Yes, Import Data
-                </button>
-            </div>
-        </div>
+{% block extra_js %}
+<!-- Full-page progress overlay -->
+<div id="progressOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55);
+     z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:1rem;">
+    <div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
     </div>
+    <p id="progressMsg" class="text-white fw-semibold fs-5 mb-0">Please wait...</p>
 </div>
 
-<!-- Clear data confirmation modal -->
-<div class="modal fade" id="clearDataModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header" style="background: #dc3545; color: #fff;">
-                <h5 class="modal-title">Confirm Clear Sample Data</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>This will <strong>permanently delete</strong> all:</p>
-                <ul>
-                    <li>Samples ({{ sample_count }})</li>
-                    <li>Assignments &amp; reports</li>
-                    <li>Review history</li>
-                    <li>Sample-related notifications</li>
-                </ul>
-                <p class="text-danger fw-bold mb-0">This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="POST" action="{{ url_for('main.clear_sample_data') }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-trash3 me-1"></i>Yes, Clear All Data
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endblock %}
-
-{% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var triggerBtn = document.getElementById('importTriggerBtn');
-        var confirmBtn = document.getElementById('confirmImportBtn');
-        var modalEl    = document.getElementById('importConfirmModal');
+    /* ── Export progress ───────────────────────────────── */
+    function startExportProgress(e) {
+        showOverlay('Preparing export... this may take a moment.');
 
-        if (triggerBtn && modalEl) {
-            triggerBtn.addEventListener('click', function() {
+        // Trigger the download via a hidden iframe so the page stays open
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = e.currentTarget.href;
+        document.body.appendChild(iframe);
+
+        // Hide overlay when the iframe receives a response (download started)
+        var fallbackTimer = setTimeout(function () {
+            hideOverlay();
+            if (iframe.parentNode) document.body.removeChild(iframe);
+        }, 30000);
+
+        iframe.addEventListener('load', function () {
+            clearTimeout(fallbackTimer);
+            setTimeout(function () {
+                hideOverlay();
+                if (iframe.parentNode) document.body.removeChild(iframe);
+            }, 400);
+        });
+
+        e.preventDefault();
+    }
+
+    /* ── Import Data button ────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', function () {
+        var importDataBtn = document.getElementById('importDataBtn');
+        if (importDataBtn) {
+            importDataBtn.addEventListener('click', function () {
+                var modal = bootstrap.Modal.getOrCreateInstance(
+                    document.getElementById('importConfirmModal')
+                );
+                modal.show();
+            });
+        }
+
+        var confirmBtn = document.getElementById('confirmImportBtn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function () {
                 var fileInput = document.getElementById('import_file');
                 if (!fileInput || !fileInput.files.length) {
                     fileInput.classList.add('is-invalid');
                     fileInput.focus();
                     return;
                 }
-                fileInput.classList.remove('is-invalid');
-                bootstrap.Modal.getOrCreateInstance(modalEl).show();
-            });
-        }
 
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', function() {
-                document.getElementById('importForm').submit();
+                // Disable buttons to prevent double-submit
+                confirmBtn.disabled = true;
+                var cancelBtn = document.getElementById('importCancelBtn');
+                if (cancelBtn) cancelBtn.disabled = true;
+
+                // Re-enable buttons if something goes wrong before submission
+                var reEnableTimer = setTimeout(function () {
+                    confirmBtn.disabled = false;
+                    if (cancelBtn) cancelBtn.disabled = false;
+                }, 15000);
+
+                // Close modal then show overlay so the overlay is on top
+                var modalEl = document.getElementById('importConfirmModal');
+                var bsModal = bootstrap.Modal.getInstance(modalEl);
+                if (bsModal) bsModal.hide();
+
+                modalEl.addEventListener('hidden.bs.modal', function () {
+                    clearTimeout(reEnableTimer);
+                    showOverlay('Importing data... please do not close this page.');
+                    document.getElementById('importForm').submit();
+                }, { once: true });
             });
         }
     });
+
+    /* ── Helpers ───────────────────────────────────────── */
+    function showOverlay(msg) {
+        var overlay = document.getElementById('progressOverlay');
+        document.getElementById('progressMsg').textContent = msg;
+        overlay.style.display = 'flex';
+    }
+
+    function hideOverlay() {
+        var overlay = document.getElementById('progressOverlay');
+        overlay.style.display = 'none';
+    }
 </script>
 {% endblock %}

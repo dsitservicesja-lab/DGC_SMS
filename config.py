@@ -20,7 +20,7 @@ class Config:
     UPLOAD_FOLDER = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), 'uploads'
     )
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
+    MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB – allows full-database import ZIPs
     ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'}
 
     # Mail – Gmail SMTP defaults
