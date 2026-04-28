@@ -156,7 +156,7 @@ class TestExport:
 
         data = json.loads(zf.read('data.json'))
         assert 'export_version' in data
-        assert data['export_version'] == 1
+        assert data['export_version'] == 2
         assert 'tables' in data
         assert 'row_counts' in data
 
@@ -167,8 +167,8 @@ class TestExport:
 
         data = json.loads(zipfile.ZipFile(io.BytesIO(resp.data)).read('data.json'))
         expected_tables = {
-            'users', 'user_roles', 'user_branches', 'settings',
-            'samples', 'sample_assignments', 'sample_history',
+            'users', 'user_roles', 'user_branches', 'user_permissions',
+            'settings', 'samples', 'sample_assignments', 'sample_history',
             'review_history', 'notifications', 'kpi_targets',
             'non_working_days', 'supporting_documents',
             'document_versions', 'back_date_requests', 'audit_log',

@@ -1817,6 +1817,7 @@ def _coerce_row(table_name, row):
         'users': {'role': Role, 'branch': Branch},
         'user_roles': {'role': Role},
         'user_branches': {'branch': Branch},
+        'user_permissions': {'permission': Permission},
         'samples': {
             'sample_type': Branch,
             'status': SampleStatus,
