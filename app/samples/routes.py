@@ -113,7 +113,26 @@ def sample_list():
         # Senior Chemists see samples in their branch(es)
         query = query.filter(Sample.sample_type.in_(current_user.branches))
 
-    samples = query.order_by(Sample.date_registered.desc()).all()
+    # Sorting
+    _sort_columns = {
+        'lab_number':           Sample.lab_number,
+        'sample_name':          Sample.sample_name,
+        'date_received':        Sample.date_received,
+        'expected_report_date': Sample.expected_report_date,
+        'status':               Sample.status,
+    }
+    sort_by = request.args.get('sort', 'date_registered')
+    sort_dir = request.args.get('dir', 'desc')
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+
+    sort_col = _sort_columns.get(sort_by, Sample.date_registered)
+    if sort_dir == 'asc':
+        query = query.order_by(sort_col.asc())
+    else:
+        query = query.order_by(sort_col.desc())
+
+    samples = query.all()
     result_count = len(samples)
     return render_template(
         'samples/sample_list.html',
@@ -126,6 +145,8 @@ def sample_list():
         result_count=result_count,
         is_filtered=bool(status_filter or type_filter or search),
         today_date=date.today(),
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 
