@@ -132,11 +132,13 @@ def sample_list():
     else:
         query = query.order_by(sort_col.desc())
 
-    samples = query.all()
-    result_count = len(samples)
+    page = request.args.get('page', 1, type=int)
+    pagination = query.paginate(page=page, per_page=25, error_out=False)
+    result_count = pagination.total
     return render_template(
         'samples/sample_list.html',
-        samples=samples,
+        samples=pagination.items,
+        pagination=pagination,
         SampleStatus=SampleStatus,
         Branch=Branch,
         status_filter=status_filter,

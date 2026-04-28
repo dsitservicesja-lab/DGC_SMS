@@ -79,9 +79,9 @@
 {% block content %}
 <div class="page-header">
     <h2><i class="bi bi-bell"></i> Notifications</h2>
-    {% if notifications %}
+    {% if pagination.total %}
     <span class="text-muted" style="font-size:.82rem;">
-        {{ notifications | length }} notification{{ 's' if notifications | length != 1 else '' }}
+        {{ pagination.total }} notification{{ 's' if pagination.total != 1 else '' }}
     </span>
     {% endif %}
 </div>
@@ -93,12 +93,17 @@
     <div class="notif-summary">
         <div class="stat-item">
             <i class="bi bi-envelope-fill text-primary"></i>
-            <span>Total: <span class="stat-count">{{ notifications | length }}</span></span>
+            <span>Total: <span class="stat-count">{{ pagination.total }}</span></span>
         </div>
         {% if unread_count %}
         <div class="stat-item">
             <i class="bi bi-circle-fill text-info" style="font-size:.5rem;"></i>
             <span>Unread: <span class="stat-count text-primary">{{ unread_count }}</span></span>
+        </div>
+        {% endif %}
+        {% if pagination.pages > 1 %}
+        <div class="stat-item ms-auto">
+            <span class="text-muted" style="font-size:.78rem;">Page {{ pagination.page }} of {{ pagination.pages }}</span>
         </div>
         {% endif %}
     </div>
@@ -159,6 +164,28 @@
         {% endfor %}
     </div>
 </div>
+
+{% if pagination.pages > 1 %}
+<nav aria-label="Notifications pagination" class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.notifications', page=pagination.prev_num) }}">&laquo;</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('main.notifications', page=p) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.notifications', page=pagination.next_num) }}">&raquo;</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
 {% else %}
 <div class="card">
     <div class="notif-empty">
