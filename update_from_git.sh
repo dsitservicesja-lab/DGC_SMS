@@ -78,7 +78,13 @@ else
     fi
     sed "s/YOUR_DOMAIN_OR_IP/${CURRENT_SERVER_NAME}/g" "$NGINX_CONF" \
         > /etc/nginx/sites-available/dgc_sms
-    nginx -t && systemctl reload nginx
+    if nginx -t; then
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx
+        else
+            systemctl start nginx
+        fi
+    fi
 fi
 systemctl daemon-reload
 systemctl restart dgc_sms
