@@ -63,6 +63,9 @@
 <div class="mb-2 text-muted small">
     <i class="bi bi-collection me-1"></i>
     Total: <strong>{{ result_count }}</strong> sample{% if result_count != 1 %}s{% endif %}
+    {% if pagination.pages > 1 %}
+    &mdash; page {{ pagination.page }} of {{ pagination.pages }}
+    {% endif %}
 </div>
 {% endif %}
 
@@ -88,6 +91,11 @@
 {% macro sort_url(col) -%}
     {{ url_for('samples.sample_list', q=search, status=status_filter, type=type_filter,
                sort=col, dir=('asc' if (sort_by == col and sort_dir == 'desc') else 'desc')) }}
+{%- endmacro %}
+
+{% macro page_url(p) -%}
+    {{ url_for('samples.sample_list', q=search, status=status_filter, type=type_filter,
+               sort=sort_by, dir=sort_dir, page=p) }}
 {%- endmacro %}
 
 {% macro sort_icon(col) %}
@@ -193,6 +201,28 @@
         </table>
     </div>
 </div>
+
+{% if pagination.pages > 1 %}
+<nav aria-label="Samples pagination" class="mt-3 d-flex justify-content-center">
+    <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ page_url(pagination.prev_num) }}">&laquo;</a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ page_url(p) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ page_url(pagination.next_num) }}">&raquo;</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
 
 {% if current_user.has_role(Role.ADMIN) and samples %}
 <!-- Bulk-delete floating action bar (visible when ≥1 checkbox checked) -->

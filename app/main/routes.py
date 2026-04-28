@@ -223,10 +223,11 @@ def dashboard():
 @main_bp.route('/notifications')
 @login_required
 def notifications():
-    notifs = Notification.query.filter_by(
+    page = request.args.get('page', 1, type=int)
+    pagination = Notification.query.filter_by(
         user_id=current_user.id
-    ).order_by(Notification.created_at.desc()).all()
-    return render_template('notifications.html', notifications=notifs)
+    ).order_by(Notification.created_at.desc()).paginate(page=page, per_page=25, error_out=False)
+    return render_template('notifications.html', notifications=pagination.items, pagination=pagination)
 
 
 @main_bp.route('/notifications/<int:notif_id>/read', methods=['POST'])
