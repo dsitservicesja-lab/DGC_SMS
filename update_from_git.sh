@@ -72,7 +72,7 @@ else
     # placeholder is replaced with whatever was set during the initial deploy.
     CURRENT_SERVER_NAME="_"
     if [ -f /etc/nginx/sites-available/dgc_sms ]; then
-        CURRENT_SERVER_NAME=$(grep -oP 'server_name\s+\K\S+' /etc/nginx/sites-available/dgc_sms \
+        CURRENT_SERVER_NAME=$(grep -oP 'server_name\s+\K[^;[:space:]]+' /etc/nginx/sites-available/dgc_sms \
             | head -1 | xargs)
         : "${CURRENT_SERVER_NAME:=_}"
     fi
