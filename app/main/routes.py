@@ -121,6 +121,7 @@ def dashboard():
         stats['preliminary_review'] = my_samples.filter(
             Sample.status.in_([
                 SampleStatus.REPORT_SUBMITTED,
+                SampleStatus.UNDER_PRELIMINARY_REVIEW,
             ])
         ).count()
         stats['in_progress'] = my_samples.filter(
