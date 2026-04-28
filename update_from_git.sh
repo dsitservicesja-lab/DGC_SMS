@@ -23,7 +23,10 @@ if [ -d "$APP_DIR/.git" ]; then
     git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
     git -C "$APP_DIR" fetch origin "$BRANCH"
     git -C "$APP_DIR" checkout "$BRANCH"
-    git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
+    # Reset hard so that any locally-modified tracked files (e.g. deployment/nginx_dgc_sms.conf)
+    # do not block the update.  Runtime/state files (.env, instance/, uploads/, venv/) are
+    # already excluded from git tracking so they are unaffected.
+    git -C "$APP_DIR" reset --hard origin/"$BRANCH"
 else
     echo "[1/5] No git repository in $APP_DIR. Syncing code from remote..."
     TMP_DIR="$(mktemp -d)"
