@@ -78,6 +78,7 @@ else
     fi
     sed "s/YOUR_DOMAIN_OR_IP/${CURRENT_SERVER_NAME}/g" "$NGINX_CONF" \
         > /etc/nginx/sites-available/dgc_sms
+    # Allow non-root nginx to bind to port 8080 (no special capabilities needed for >1024)
     if nginx -t; then
         if systemctl is-active --quiet nginx; then
             systemctl reload nginx

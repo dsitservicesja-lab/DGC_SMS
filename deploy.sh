@@ -92,7 +92,7 @@ nginx -t && systemctl restart nginx
 
 echo ""
 echo "=== Deployment Complete ==="
-echo "App running at: http://$DOMAIN"
+echo "App running at: http://$DOMAIN:8080"
 echo ""
 echo "Useful commands:"
 echo "  sudo systemctl status dgc_sms    # Check app status"
