@@ -85,6 +85,19 @@
     'Completed': 'success',
 } %}
 
+{% macro sort_url(col) -%}
+    {{ url_for('samples.sample_list', q=search, status=status_filter, type=type_filter,
+               sort=col, dir=('asc' if (sort_by == col and sort_dir == 'desc') else 'desc')) }}
+{%- endmacro %}
+
+{% macro sort_icon(col) %}
+    {% if sort_by == col %}
+        <i class="bi bi-arrow-{{ 'up' if sort_dir == 'asc' else 'down' }} ms-1" style="font-size:.75rem;"></i>
+    {% else %}
+        <i class="bi bi-arrow-down-up ms-1 text-muted" style="font-size:.7rem;opacity:.45;"></i>
+    {% endif %}
+{% endmacro %}
+
 <div class="card">
     <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -95,12 +108,12 @@
                         <input type="checkbox" class="form-check-input" id="select-all-samples" title="Select all">
                     </th>
                     {% endif %}
-                    <th>Lab #</th>
-                    <th>Sample Name</th>
+                    <th><a href="{{ sort_url('lab_number') }}" class="text-decoration-none text-reset">Lab #{{ sort_icon('lab_number') }}</a></th>
+                    <th><a href="{{ sort_url('sample_name') }}" class="text-decoration-none text-reset">Sample Name{{ sort_icon('sample_name') }}</a></th>
                     <th>Type</th>
-                    <th>Date Received</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
+                    <th><a href="{{ sort_url('date_received') }}" class="text-decoration-none text-reset">Date Received{{ sort_icon('date_received') }}</a></th>
+                    <th><a href="{{ sort_url('expected_report_date') }}" class="text-decoration-none text-reset">Due Date{{ sort_icon('expected_report_date') }}</a></th>
+                    <th><a href="{{ sort_url('status') }}" class="text-decoration-none text-reset">Status{{ sort_icon('status') }}</a></th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
