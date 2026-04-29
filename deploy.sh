@@ -61,6 +61,19 @@ echo "[5/8] Initializing database..."
 mkdir -p "$APP_DIR/instance" "$APP_DIR/uploads"
 cd "$APP_DIR"
 "$VENV_DIR/bin/python" -c "
+import warnings
+# python-dotenv emits UserWarnings for lines it cannot parse (e.g. shell-style
+# 'export' statements or multi-line values in a user-edited .env).  These are
+# non-fatal — the variables we need are still loaded from the lines it *can*
+# parse and, at runtime, from the systemd EnvironmentFile directive.
+# Target only the specific 'could not parse' message so genuine configuration
+# warnings (e.g. encoding errors, duplicate keys) remain visible.
+warnings.filterwarnings(
+    'ignore',
+    message=r'.*could not parse statement.*',
+    category=UserWarning,
+    module='dotenv',
+)
 from dotenv import load_dotenv
 load_dotenv()
 from app import create_app, db
@@ -115,8 +128,31 @@ rm -f /etc/nginx/sites-enabled/default
 # Start services
 systemctl daemon-reload
 systemctl enable dgc_sms
-systemctl start dgc_sms
-nginx -t && systemctl restart nginx
+# Use restart so re-runs pick up updated code/config; start if not yet running.
+systemctl restart dgc_sms 2>/dev/null || systemctl start dgc_sms
+
+# Validate nginx config, then do a clean stop → start cycle.
+# Using stop+start (rather than restart) guarantees the old process is fully
+# gone before we attempt to bind ports 80/443, which prevents "address already
+# in use" failures when re-running the script or when a previous nginx.service
+# attempt left the unit in a failed state.
+nginx -t || { echo "ERROR: nginx configuration test failed — check the config above."; exit 1; }
+systemctl stop nginx 2>/dev/null || true
+systemctl reset-failed nginx 2>/dev/null || true
+systemctl start nginx || {
+    echo ""
+    echo "ERROR: nginx failed to start. Diagnostics:"
+    journalctl -u nginx --no-pager -n 30 2>/dev/null || true
+    echo ""
+    echo "Common causes:"
+    echo "  1. Another process (e.g. Apache) is already using port 80 or 443."
+    echo '     Check with: ss -tlnp | grep -E '"'"':80\b|:443\b'"'"
+    echo "  2. The TLS certificate files at $CERT_DIR are unreadable."
+    echo "     Check with: ls -la $CERT_DIR"
+    echo "  3. An nginx module required by the config is not installed."
+    echo "     Check with: journalctl -xeu nginx.service"
+    exit 1
+}
 
 echo ""
 echo "=== Deployment Complete ==="
