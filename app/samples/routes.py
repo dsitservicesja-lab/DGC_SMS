@@ -18,6 +18,7 @@ from app.models import (
     user_roles, user_branches, jamaica_now,
     DocumentVersion, ReviewHistory, BackDateRequest,
     AuditLog, Notification, Setting,
+    KpiTarget, fiscal_year_for_date, fiscal_quarter_for_date,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -142,6 +143,44 @@ def sample_list():
     page = request.args.get('page', 1, type=int)
     pagination = query.paginate(page=page, per_page=25, error_out=False)
     result_count = pagination.total
+
+    # Build a dict of avg TAT targets per branch (from the most recent KPI targets)
+    # Fall back to the current fiscal year/quarter if no specific targets are set.
+    current_date = date.today()
+    fy = fiscal_year_for_date(current_date)
+    fq = fiscal_quarter_for_date(current_date)
+    _tat_key_for_branch = {
+        Branch.PHARMACEUTICAL:    'avg_days_pharma_coa',
+        Branch.PHARMACEUTICAL_NR: 'avg_days_pharma_coa',
+        Branch.FOOD_MILK:         'avg_days_milk_coa',
+        Branch.TOXICOLOGY:        'avg_days_toxicology_roa',
+        Branch.FOOD_ALCOHOL:      'avg_days_alcohol_coa',
+    }
+    _tat_key_for_alcohol_type = {
+        'Alcohol Determination':              'avg_days_alcohol_determination',
+        'Denatured Alcohol (bitrex)':         'avg_days_alcohol_denatured',
+        'Alcohol Determination and Denatured': 'avg_days_alcohol_det_denatured',
+    }
+    # Load relevant KPI targets for the current quarter
+    _kpi_keys = set(_tat_key_for_branch.values()) | set(_tat_key_for_alcohol_type.values())
+    _targets = {
+        t.kpi_key: t.target_value
+        for t in KpiTarget.query.filter(
+            KpiTarget.year == fy,
+            KpiTarget.quarter == fq,
+            KpiTarget.kpi_key.in_(list(_kpi_keys)),
+        ).all()
+        if t.target_value is not None
+    }
+    avg_tat_by_branch = {
+        branch: _targets.get(key)
+        for branch, key in _tat_key_for_branch.items()
+    }
+    avg_tat_by_alcohol_type = {
+        alc_type: _targets.get(key)
+        for alc_type, key in _tat_key_for_alcohol_type.items()
+    }
+
     return render_template(
         'samples/sample_list.html',
         samples=pagination.items,
@@ -156,6 +195,8 @@ def sample_list():
         today_date=date.today(),
         sort_by=sort_by,
         sort_dir=sort_dir,
+        avg_tat_by_branch=avg_tat_by_branch,
+        avg_tat_by_alcohol_type=avg_tat_by_alcohol_type,
     )
 
 

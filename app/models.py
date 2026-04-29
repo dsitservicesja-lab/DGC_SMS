@@ -734,12 +734,33 @@ KPI_METRICS = [
      'Average days taken to generate milk COA\'s'),
     ('avg_days_toxicology_roa',
      'Average days taken to generate toxicology ROA\'s'),
+    ('avg_days_alcohol_coa',
+     'Average days taken to generate Alcohol COA\'s'),
+    ('avg_days_alcohol_determination',
+     'Average days taken to generate Alcohol Determination COA\'s (target: 5 days)'),
+    ('avg_days_alcohol_denatured',
+     'Average days taken to generate Denatured Alcohol COA\'s (target: 1 day)'),
+    ('avg_days_alcohol_det_denatured',
+     'Average days taken to generate Alcohol Determination & Denatured COA\'s (target: 5 days)'),
+    ('out_of_spec_pharma',
+     '# Pharmaceutical samples out of specification'),
+    ('out_of_spec_milk',
+     '# Milk samples out of specification'),
+    ('out_of_spec_toxicology',
+     '# Toxicology samples out of specification'),
+    ('out_of_spec_alcohol',
+     '# Alcohol samples out of specification'),
 ]
 
 # Keys whose "Actual" value is auto-computed from Sample data.
 AUTO_ACTUAL_KEYS = {
     'pharma_coas', 'milk_coas', 'toxicology_roas', 'alcohol_coas',
     'avg_days_pharma_coa', 'avg_days_milk_coa', 'avg_days_toxicology_roa',
+    'avg_days_alcohol_coa',
+    'avg_days_alcohol_determination', 'avg_days_alcohol_denatured',
+    'avg_days_alcohol_det_denatured',
+    'out_of_spec_pharma', 'out_of_spec_milk',
+    'out_of_spec_toxicology', 'out_of_spec_alcohol',
 }
 
 

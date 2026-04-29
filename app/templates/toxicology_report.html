@@ -53,28 +53,34 @@
 
 <!-- Summary Cards -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <div class="card text-center"><div class="card-body py-3">
             <div class="text-muted small fw-semibold text-uppercase">Total</div>
             <div class="fs-4 fw-bold">{{ total }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <div class="card text-center"><div class="card-body py-3">
             <div class="text-muted small fw-semibold text-uppercase">Certified</div>
             <div class="fs-4 fw-bold text-success">{{ certified }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <div class="card text-center"><div class="card-body py-3">
             <div class="text-muted small fw-semibold text-uppercase">In Progress</div>
             <div class="fs-4 fw-bold text-info">{{ in_progress }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <div class="card text-center"><div class="card-body py-3">
             <div class="text-muted small fw-semibold text-uppercase">Avg TAT (working days)</div>
             <div class="fs-4 fw-bold">{{ avg_tat if avg_tat is not none else '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="card text-center"><div class="card-body py-3">
+            <div class="text-muted small fw-semibold text-uppercase">Out of Spec</div>
+            <div class="fs-4 fw-bold {% if out_of_spec_count > 0 %}text-danger{% endif %}">{{ out_of_spec_count }}</div>
         </div></div>
     </div>
 </div>

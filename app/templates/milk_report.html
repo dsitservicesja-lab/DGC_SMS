@@ -47,7 +47,7 @@
 
 <!-- Summary Cards -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md">
         <div class="card text-center">
             <div class="card-body py-3">
                 <div class="fs-3 fw-bold text-primary">{{ total }}</div>
@@ -55,7 +55,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md">
         <div class="card text-center">
             <div class="card-body py-3">
                 <div class="fs-3 fw-bold text-success">{{ certified }}</div>
@@ -63,7 +63,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md">
         <div class="card text-center">
             <div class="card-body py-3">
                 <div class="fs-3 fw-bold text-warning">{{ in_progress }}</div>
@@ -71,13 +71,23 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md">
         <div class="card text-center">
             <div class="card-body py-3">
                 <div class="fs-3 fw-bold {% if avg_tat %}text-info{% else %}text-muted{% endif %}">
                     {{ avg_tat if avg_tat else '—' }}
                 </div>
                 <small class="text-muted">Avg. Turnaround (days)</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold {% if out_of_spec_count > 0 %}text-danger{% else %}text-muted{% endif %}">
+                    {{ out_of_spec_count }}
+                </div>
+                <small class="text-muted">Out of Spec</small>
             </div>
         </div>
     </div>

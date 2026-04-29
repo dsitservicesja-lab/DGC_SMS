@@ -120,7 +120,7 @@
                     <th><a href="{{ sort_url('sample_name') }}" class="text-decoration-none text-reset">Sample Name{{ sort_icon('sample_name') }}</a></th>
                     <th>Type</th>
                     <th><a href="{{ sort_url('date_received') }}" class="text-decoration-none text-reset">Date Received{{ sort_icon('date_received') }}</a></th>
-                    <th><a href="{{ sort_url('expected_report_date') }}" class="text-decoration-none text-reset">Due Date{{ sort_icon('expected_report_date') }}</a></th>
+                    <th>Avg TAT (days)</th>
                     <th><a href="{{ sort_url('status') }}" class="text-decoration-none text-reset">Status{{ sort_icon('status') }}</a></th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -144,20 +144,14 @@
                     </td>
                     <td class="text-muted" style="font-size:.85rem;">{{ sample.date_received.strftime('%d %b %Y') }}</td>
                     <td style="font-size:.85rem;">
-                        {% if sample.expected_report_date %}
-                            {{ sample.expected_report_date.strftime('%d %b %Y') }}
-                            {% if sample.status.value not in ['Certified', 'Completed', 'Rejected'] %}
-                                {% set days_left = (sample.expected_report_date - today_date).days %}
-                                {% if days_left <= 0 %}
-                                <br><span class="badge bg-danger" style="font-size:.62rem;"><i class="bi bi-exclamation-circle"></i> Overdue</span>
-                                {% elif days_left == 1 %}
-                                <br><span class="badge bg-warning text-dark" style="font-size:.62rem;"><i class="bi bi-clock"></i> Tomorrow</span>
-                                {% elif days_left <= 3 %}
-                                <br><span class="badge bg-info" style="font-size:.62rem;"><i class="bi bi-calendar-event"></i> {{ days_left }}d</span>
-                                {% endif %}
-                            {% endif %}
+                        {% set _alc_tat = avg_tat_by_alcohol_type.get(sample.alcohol_type) if sample.alcohol_type else none %}
+                        {% set _branch_tat = avg_tat_by_branch.get(sample.sample_type) %}
+                        {% if sample.sample_type == Branch.FOOD_ALCOHOL and _alc_tat is not none %}
+                            <span class="text-info fw-semibold">{{ _alc_tat }} d</span>
+                        {% elif _branch_tat is not none %}
+                            <span class="text-info fw-semibold">{{ _branch_tat }} d</span>
                         {% else %}
-                        <span class="text-muted">—</span>
+                            <span class="text-muted">—</span>
                         {% endif %}
                     </td>
                     <td>

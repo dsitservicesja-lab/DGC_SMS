@@ -398,28 +398,68 @@ def _auto_actuals(year, quarter):
             Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED])
         ).count()
 
-    def _avg_tat(branch_filter):
-        samples = _base(branch_filter).filter(
+    def _avg_tat(branch_filter, alcohol_type_filter=None):
+        q = _base(branch_filter).filter(
             Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED]),
             Sample.certified_at.isnot(None),
-        ).all()
+        )
+        if alcohol_type_filter is not None:
+            q = q.filter(Sample.alcohol_type == alcohol_type_filter)
+        samples = q.all()
         days = [
             calculate_working_days(s.date_registered, s.certified_at, non_working)
             for s in samples
             if s.certified_at and s.date_registered
         ]
+        days = [d for d in days if d is not None]
         return round(sum(days) / len(days), 1) if days else None
+
+    def _count_out_of_spec(branch_filter):
+        """Count samples that have at least one out-of-spec assignment."""
+        from sqlalchemy import exists as sa_exists
+        q = _base(branch_filter).filter(
+            sa_exists().where(
+                SampleAssignment.sample_id == Sample.id,
+                SampleAssignment.out_of_spec.is_(True),
+            )
+        )
+        return q.count()
 
     pharma_branches = [Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]
     return {
-        'pharma_coas':           _count(pharma_branches),
-        'milk_coas':             _count(Branch.FOOD_MILK),
-        'toxicology_roas':       _count(Branch.TOXICOLOGY),
-        'alcohol_coas':          _count(Branch.FOOD_ALCOHOL),
-        'avg_days_pharma_coa':   _avg_tat(pharma_branches),
-        'avg_days_milk_coa':     _avg_tat(Branch.FOOD_MILK),
-        'avg_days_toxicology_roa': _avg_tat(Branch.TOXICOLOGY),
+        'pharma_coas':                    _count(pharma_branches),
+        'milk_coas':                      _count(Branch.FOOD_MILK),
+        'toxicology_roas':                _count(Branch.TOXICOLOGY),
+        'alcohol_coas':                   _count(Branch.FOOD_ALCOHOL),
+        'avg_days_pharma_coa':            _avg_tat(pharma_branches),
+        'avg_days_milk_coa':              _avg_tat(Branch.FOOD_MILK),
+        'avg_days_toxicology_roa':        _avg_tat(Branch.TOXICOLOGY),
+        'avg_days_alcohol_coa':           _avg_tat(Branch.FOOD_ALCOHOL),
+        'avg_days_alcohol_determination': _avg_tat(Branch.FOOD_ALCOHOL,
+                                                   'Alcohol Determination'),
+        'avg_days_alcohol_denatured':     _avg_tat(Branch.FOOD_ALCOHOL,
+                                                   'Denatured Alcohol (bitrex)'),
+        'avg_days_alcohol_det_denatured': _avg_tat(Branch.FOOD_ALCOHOL,
+                                                   'Alcohol Determination and Denatured'),
+        'out_of_spec_pharma':             _count_out_of_spec(pharma_branches),
+        'out_of_spec_milk':               _count_out_of_spec(Branch.FOOD_MILK),
+        'out_of_spec_toxicology':         _count_out_of_spec(Branch.TOXICOLOGY),
+        'out_of_spec_alcohol':            _count_out_of_spec(Branch.FOOD_ALCOHOL),
     }
+
+
+def _out_of_spec_count_for_samples(sample_ids):
+    """Return the number of distinct samples (from *sample_ids*) that have at
+    least one out-of-spec assignment."""
+    if not sample_ids:
+        return 0
+    from sqlalchemy import distinct as sa_distinct
+    return db.session.query(
+        sa_distinct(SampleAssignment.sample_id)
+    ).filter(
+        SampleAssignment.sample_id.in_(sample_ids),
+        SampleAssignment.out_of_spec.is_(True),
+    ).count()
 
 
 @main_bp.route('/kpi/report')
@@ -668,6 +708,10 @@ def pharma_report():
     ]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
+    # Out-of-spec count
+    sample_ids = [s.id for s in samples]
+    out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
+
     # Available years (fiscal)
     available_years = _available_fiscal_years()
 
@@ -683,6 +727,7 @@ def pharma_report():
         in_progress=in_progress,
         rejected=rejected,
         avg_tat=avg_tat,
+        out_of_spec_count=out_of_spec_count,
         SampleStatus=SampleStatus,
     )
 
@@ -802,6 +847,10 @@ def milk_report():
     ]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
+    # Out-of-spec count
+    sample_ids = [s.id for s in samples]
+    out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
+
     # Available years (fiscal)
     available_years = _available_fiscal_years()
 
@@ -817,6 +866,7 @@ def milk_report():
         in_progress=in_progress,
         rejected=rejected,
         avg_tat=avg_tat,
+        out_of_spec_count=out_of_spec_count,
         SampleStatus=SampleStatus,
     )
 
@@ -940,6 +990,10 @@ def toxicology_report():
     tat_days = [d for d in tat_days if d is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
+    # Out-of-spec count
+    sample_ids = [s.id for s in samples]
+    out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
+
     available_years = _available_fiscal_years()
 
     return render_template(
@@ -954,6 +1008,7 @@ def toxicology_report():
         in_progress=in_progress,
         rejected=rejected,
         avg_tat=avg_tat,
+        out_of_spec_count=out_of_spec_count,
         SampleStatus=SampleStatus,
     )
 
@@ -1072,6 +1127,30 @@ def alcohol_report():
     tat_days = [d for d in tat_days if d is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
+    # Out-of-spec count
+    sample_ids = [s.id for s in samples]
+    out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
+
+    # Avg TAT breakdown by alcohol type
+    alcohol_type_tat = {}
+    alcohol_type_labels = [
+        'Alcohol Determination',
+        'Denatured Alcohol (bitrex)',
+        'Alcohol Determination and Denatured',
+    ]
+    for alc_type in alcohol_type_labels:
+        type_days = [
+            calculate_working_days(s.date_registered, s.certified_at, non_working)
+            for s in samples
+            if s.alcohol_type == alc_type
+            and s.certified_at and s.date_registered
+            and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+        ]
+        type_days = [d for d in type_days if d is not None]
+        alcohol_type_tat[alc_type] = (
+            round(sum(type_days) / len(type_days), 1) if type_days else None
+        )
+
     available_years = _available_fiscal_years()
 
     return render_template(
@@ -1086,6 +1165,8 @@ def alcohol_report():
         in_progress=in_progress,
         rejected=rejected,
         avg_tat=avg_tat,
+        out_of_spec_count=out_of_spec_count,
+        alcohol_type_tat=alcohol_type_tat,
         SampleStatus=SampleStatus,
     )
 
