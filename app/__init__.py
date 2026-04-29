@@ -24,6 +24,16 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
+    if config_name == 'production' and not app.config.get('SECRET_KEY'):
+        import warnings
+        warnings.warn(
+            "SECRET_KEY environment variable is not set. A randomly-generated key "
+            "is in use, which will invalidate all user sessions on every application "
+            "restart. Set SECRET_KEY in production.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
     db.init_app(app)
     login_manager.init_app(app)
     mail.init_app(app)

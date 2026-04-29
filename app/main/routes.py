@@ -14,7 +14,7 @@ from app.models import (
     Sample, SampleAssignment, SampleHistory, Notification, User,
     Role, SampleStatus, AssignmentStatus, Setting, Branch, Permission,
     KpiTarget, KPI_METRICS, AUTO_ACTUAL_KEYS,
-    NonWorkingDay, calculate_working_days, jamaica_now,
+    NonWorkingDay, calculate_working_days, fetch_non_working_days, jamaica_now,
     DocumentVersion, BackDateRequest,
     fiscal_year_for_date, fiscal_quarter_for_date,
     fiscal_quarter_months, fiscal_year_date_range,
@@ -328,10 +328,11 @@ def kpi():
             Sample.certified_at.isnot(None),
         ).all()
         if certified_samples:
+            non_working = fetch_non_working_days(start, end)
             days_list = []
             for s in certified_samples:
                 if s.certified_at and s.date_registered:
-                    delta_days = calculate_working_days(s.date_registered, s.certified_at)
+                    delta_days = calculate_working_days(s.date_registered, s.certified_at, non_working)
                     days_list.append(delta_days) if delta_days is not None else None
             avg_tat = round(sum(days_list) / len(days_list), 1) if days_list else None
 
@@ -378,6 +379,9 @@ def _auto_actuals(year, quarter):
     Uses fiscal year quarters (Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar)."""
     start, end = fiscal_year_date_range(year, quarter)
 
+    # Pre-fetch non-working days for the whole quarter once to avoid N+1 queries.
+    non_working = fetch_non_working_days(start, end)
+
     def _base(branch_filter):
         q = Sample.query.filter(
             Sample.date_registered >= start,
@@ -400,7 +404,7 @@ def _auto_actuals(year, quarter):
             Sample.certified_at.isnot(None),
         ).all()
         days = [
-            calculate_working_days(s.date_registered, s.certified_at)
+            calculate_working_days(s.date_registered, s.certified_at, non_working)
             for s in samples
             if s.certified_at and s.date_registered
         ]
@@ -654,8 +658,10 @@ def pharma_report():
     )
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at, non_working)
         for s in samples
         if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
@@ -702,6 +708,8 @@ def pharma_report_download():
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
@@ -713,7 +721,7 @@ def pharma_report_download():
         tat = ''
         if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at)
+            tat = calculate_working_days(s.date_registered, s.certified_at, non_working)
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -784,8 +792,10 @@ def milk_report():
     )
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at, non_working)
         for s in samples
         if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
@@ -832,6 +842,8 @@ def milk_report_download():
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
@@ -843,7 +855,7 @@ def milk_report_download():
         tat = ''
         if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at)
+            tat = calculate_working_days(s.date_registered, s.certified_at, non_working)
         milk_type_label = ''
         if s.milk_type == 'R':
             milk_type_label = 'Raw Milk'
@@ -917,8 +929,10 @@ def toxicology_report():
     )
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at, non_working)
         for s in samples
         if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
@@ -965,6 +979,8 @@ def toxicology_report_download():
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
@@ -976,7 +992,7 @@ def toxicology_report_download():
         tat = ''
         if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at) or ''
+            tat = calculate_working_days(s.date_registered, s.certified_at, non_working) or ''
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -1045,8 +1061,10 @@ def alcohol_report():
     )
     rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at)
+        calculate_working_days(s.date_registered, s.certified_at, non_working)
         for s in samples
         if s.certified_at and s.date_registered
         and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
@@ -1093,6 +1111,8 @@ def alcohol_report_download():
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
@@ -1104,7 +1124,7 @@ def alcohol_report_download():
         tat = ''
         if (s.certified_at and s.date_registered
                 and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
-            tat = calculate_working_days(s.date_registered, s.certified_at) or ''
+            tat = calculate_working_days(s.date_registered, s.certified_at, non_working) or ''
         writer.writerow([
             s.lab_number,
             s.sample_name,
@@ -1173,8 +1193,9 @@ def kpi_toxicology():
             Sample.certified_at.isnot(None),
         ).all()
         if cert_samples:
+            non_working = fetch_non_working_days(start, end)
             days_list = [
-                calculate_working_days(s.date_registered, s.certified_at)
+                calculate_working_days(s.date_registered, s.certified_at, non_working)
                 for s in cert_samples
                 if s.certified_at and s.date_registered
             ]

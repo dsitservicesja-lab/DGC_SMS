@@ -37,9 +37,16 @@ from app.notifications import (
 
 
 def _save_file(file_storage):
-    """Save an uploaded file and return (stored_name, original_name)."""
+    """Save an uploaded file and return (stored_name, original_name).
+
+    Aborts with 400 if the file extension is not in ALLOWED_EXTENSIONS.
+    """
     original = secure_filename(file_storage.filename)
     ext = original.rsplit('.', 1)[-1].lower() if '.' in original else ''
+    if not ext:
+        abort(400, description='Files without an extension are not permitted.')
+    if ext not in current_app.config['ALLOWED_EXTENSIONS']:
+        abort(400, description=f'File type ".{ext}" is not permitted.')
     stored = f'{uuid.uuid4().hex}.{ext}'
     file_storage.save(
         os.path.join(current_app.config['UPLOAD_FOLDER'], stored)

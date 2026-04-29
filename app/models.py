@@ -385,7 +385,8 @@ class Sample(db.Model):
     patient_name = db.Column(db.String(255), nullable=True)  # Toxicology
     source = db.Column(db.String(255), nullable=True)
     status = db.Column(
-        db.Enum(SampleStatus), nullable=False, default=SampleStatus.REGISTERED
+        db.Enum(SampleStatus), nullable=False, default=SampleStatus.REGISTERED,
+        index=True
     )
 
     # Food (Milk) specific
@@ -421,7 +422,7 @@ class Sample(db.Model):
     date_registered = db.Column(
         db.DateTime, default=jamaica_now
     )
-    expected_report_date = db.Column(db.Date, nullable=True)
+    expected_report_date = db.Column(db.Date, nullable=True, index=True)
 
     # Summary report (pharmaceutical samples – prepared by Senior Chemist)
     summary_report = db.Column(db.Text, nullable=True)
@@ -501,7 +502,7 @@ class SampleAssignment(db.Model):
         db.Integer, db.ForeignKey('samples.id'), nullable=False
     )
     chemist_id = db.Column(
-        db.Integer, db.ForeignKey('users.id'), nullable=False
+        db.Integer, db.ForeignKey('users.id'), nullable=False, index=True
     )
     assigned_by = db.Column(
         db.Integer, db.ForeignKey('users.id'), nullable=False
@@ -656,7 +657,7 @@ class Notification(db.Model):
     title = db.Column(db.String(255), nullable=False)
     message = db.Column(db.Text, nullable=False)
     link = db.Column(db.String(500), nullable=True)
-    is_read = db.Column(db.Boolean, default=False)
+    is_read = db.Column(db.Boolean, default=False, index=True)
     email_sent = db.Column(db.Boolean, default=False)
     created_at = db.Column(
         db.DateTime, default=jamaica_now
@@ -786,9 +787,30 @@ class NonWorkingDay(db.Model):
         return f'<NonWorkingDay {self.date} - {self.description}>'
 
 
-def calculate_working_days(start_date, end_date):
+def fetch_non_working_days(start_date, end_date):
+    """Return the set of non-working dates (holidays/emergency closures) between
+    *start_date* and *end_date* (inclusive).  Use this to pre-fetch the holiday
+    set once before calling :func:`calculate_working_days` in a loop."""
+    if isinstance(start_date, datetime):
+        start_date = start_date.date()
+    if isinstance(end_date, datetime):
+        end_date = end_date.date()
+    return {
+        row.date for row in NonWorkingDay.query.filter(
+            NonWorkingDay.date >= start_date,
+            NonWorkingDay.date <= end_date,
+        ).all()
+    }
+
+
+def calculate_working_days(start_date, end_date, non_working_dates=None):
     """Calculate working days between two dates, excluding weekends and
-    non-working days (public holidays, emergency closures)."""
+    non-working days (public holidays, emergency closures).
+
+    Pass a pre-fetched set of non-working dates as *non_working_dates* to avoid
+    a database query on each call when processing multiple samples.  If
+    *non_working_dates* is ``None`` the function queries the database itself.
+    """
     if not start_date or not end_date:
         return None
     if isinstance(start_date, datetime):
@@ -796,19 +818,15 @@ def calculate_working_days(start_date, end_date):
     if isinstance(end_date, datetime):
         end_date = end_date.date()
 
-    # Get all non-working dates in the range
-    non_working = {
-        row.date for row in NonWorkingDay.query.filter(
-            NonWorkingDay.date >= start_date,
-            NonWorkingDay.date <= end_date,
-        ).all()
-    }
+    if non_working_dates is None:
+        # Fall back to a single DB query when no pre-fetched set is supplied.
+        non_working_dates = fetch_non_working_days(start_date, end_date)
 
     count = 0
     current = start_date
     while current <= end_date:
         # Exclude weekends (Mon-Fri are 0-4; Sat=5, Sun=6) and non-working days
-        if current.weekday() < 5 and current not in non_working:
+        if current.weekday() < 5 and current not in non_working_dates:
             count += 1
         current += timedelta(days=1)
     return count
