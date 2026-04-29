@@ -61,19 +61,13 @@ echo "[5/8] Initializing database..."
 mkdir -p "$APP_DIR/instance" "$APP_DIR/uploads"
 cd "$APP_DIR"
 "$VENV_DIR/bin/python" -c "
-import warnings
-# python-dotenv emits UserWarnings for lines it cannot parse (e.g. shell-style
-# 'export' statements or multi-line values in a user-edited .env).  These are
-# non-fatal — the variables we need are still loaded from the lines it *can*
-# parse and, at runtime, from the systemd EnvironmentFile directive.
-# Target only the specific 'could not parse' message so genuine configuration
-# warnings (e.g. encoding errors, duplicate keys) remain visible.
-warnings.filterwarnings(
-    'ignore',
-    message=r'.*could not parse statement.*',
-    category=UserWarning,
-    module='dotenv',
-)
+import logging
+# python-dotenv 1.0.x emits 'could not parse statement' messages via
+# logger.warning() in dotenv.main — NOT via the warnings module.
+# Raise the dotenv logger threshold to ERROR so these non-fatal parse
+# notices are silenced while genuine errors (encoding failures, etc.)
+# remain visible.
+logging.getLogger('dotenv.main').setLevel(logging.ERROR)
 from dotenv import load_dotenv
 load_dotenv()
 from app import create_app, db
