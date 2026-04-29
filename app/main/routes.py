@@ -1420,15 +1420,33 @@ def settings():
         return redirect(url_for('main.dashboard'))
 
     if request.method == 'POST':
-        email_enabled = 'email_enabled' in request.form
+        # email_enabled: present as checkbox OR preserved via hidden field
+        if 'email_enabled' in request.form:
+            email_enabled = True
+        elif 'email_enabled_hidden' in request.form:
+            email_enabled = request.form['email_enabled_hidden'] == 'true'
+        else:
+            email_enabled = False
         Setting.set('email_enabled', str(email_enabled).lower())
+
+        # preliminary_review_grouped: present as checkbox OR preserved via hidden field
+        if 'preliminary_review_grouped' in request.form:
+            prelim_grouped = True
+        elif 'preliminary_review_grouped_hidden' in request.form:
+            prelim_grouped = request.form['preliminary_review_grouped_hidden'] == 'true'
+        else:
+            prelim_grouped = False
+        Setting.set('preliminary_review_grouped', str(prelim_grouped).lower())
+
         db.session.commit()
         flash('Settings updated.', 'success')
         return redirect(url_for('main.settings'))
 
     email_enabled = Setting.get_bool('email_enabled', default=True)
+    preliminary_review_grouped = Setting.get_bool('preliminary_review_grouped', default=False)
     sample_count = Sample.query.count()
     return render_template('settings.html', email_enabled=email_enabled,
+                           preliminary_review_grouped=preliminary_review_grouped,
                            sample_count=sample_count)
 
 

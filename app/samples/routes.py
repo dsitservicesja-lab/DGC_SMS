@@ -17,7 +17,7 @@ from app.models import (
     Role, Branch, SampleStatus, AssignmentStatus, Permission,
     user_roles, user_branches, jamaica_now,
     DocumentVersion, ReviewHistory, BackDateRequest,
-    AuditLog, Notification,
+    AuditLog, Notification, Setting,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -1011,12 +1011,20 @@ def preliminary_review(assignment_id):
         flash('This report is not awaiting preliminary review.', 'warning')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
-    # Find all sibling assignments for the same sample that are also
-    # awaiting preliminary review (REPORT_SUBMITTED).
-    sibling_assignments = SampleAssignment.query.filter(
-        SampleAssignment.sample_id == assignment.sample_id,
-        SampleAssignment.status == AssignmentStatus.REPORT_SUBMITTED,
-    ).all()
+    # Determine whether grouped review mode is enabled
+    grouped_mode = Setting.get_bool('preliminary_review_grouped', default=False)
+
+    # Find sibling assignments for the same sample that are also awaiting
+    # preliminary review (REPORT_SUBMITTED).
+    # In grouped mode: include ALL sibling assignments for the sample.
+    # In per-test mode: only include this specific assignment.
+    if grouped_mode:
+        sibling_assignments = SampleAssignment.query.filter(
+            SampleAssignment.sample_id == assignment.sample_id,
+            SampleAssignment.status == AssignmentStatus.REPORT_SUBMITTED,
+        ).all()
+    else:
+        sibling_assignments = [assignment]
 
     form = PreliminaryReviewForm()
     if form.validate_on_submit():
@@ -1030,6 +1038,7 @@ def preliminary_review(assignment_id):
                 'samples/preliminary_review.html', form=form,
                 assignment=assignment,
                 sibling_assignments=sibling_assignments,
+                grouped_mode=grouped_mode,
             )
 
         now = jamaica_now()
@@ -1129,6 +1138,7 @@ def preliminary_review(assignment_id):
     return render_template(
         'samples/preliminary_review.html', form=form,
         assignment=assignment, sibling_assignments=sibling_assignments,
+        grouped_mode=grouped_mode,
     )
 
 

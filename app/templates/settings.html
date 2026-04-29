@@ -28,6 +28,39 @@
                         When disabled, in-app notifications are still created but no emails are sent.
                         Useful when the mail server is not configured.
                     </p>
+                    <input type="hidden" name="preliminary_review_grouped_hidden" value="{{ 'true' if preliminary_review_grouped else 'false' }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>Save Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Preliminary Review Mode card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-check2-circle me-2"></i>Preliminary Review</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="email_enabled_hidden" value="{{ 'true' if email_enabled else 'false' }}">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="preliminary_review_grouped" name="preliminary_review_grouped"
+                               {% if preliminary_review_grouped %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold" for="preliminary_review_grouped">
+                            Group preliminary review (one review covers all pending tests)
+                        </label>
+                    </div>
+                    <p class="text-muted small mb-4">
+                        When <strong>enabled</strong>, submitting a preliminary review for one test will
+                        automatically apply the same decision to <em>all</em> other tests on the same sample
+                        that are currently awaiting review. Useful when a single review decision applies
+                        to every test at once.<br>
+                        When <strong>disabled</strong> (default), each test assignment must be reviewed
+                        individually.
+                    </p>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save me-1"></i>Save Settings
                     </button>

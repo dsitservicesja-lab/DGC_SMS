@@ -31,13 +31,19 @@
                 {% if sibling_assignments|length > 1 %}
                 <div class="mt-2">
                     <span class="badge bg-info text-dark">
-                        <i class="bi bi-layers me-1"></i>This review will apply to {{ sibling_assignments|length }} test(s):
+                        <i class="bi bi-layers me-1"></i>Grouped review — applies to {{ sibling_assignments|length }} test(s):
                     </span>
                     <ul class="mb-0 mt-1 small">
                         {% for sa in sibling_assignments %}
                         <li>{{ sa.test_name }}{% if sa.chemist %} — {{ sa.chemist.full_name }}{% endif %}</li>
                         {% endfor %}
                     </ul>
+                </div>
+                {% elif not grouped_mode %}
+                <div class="mt-2">
+                    <span class="badge bg-secondary">
+                        <i class="bi bi-file-earmark-text me-1"></i>Per-test review — reviewing this test only
+                    </span>
                 </div>
                 {% endif %}
             </div>
