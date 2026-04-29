@@ -87,6 +87,11 @@ else
         fi
     fi
 fi
+# Deploy the updated systemd service file so changes (e.g. gunicorn flags)
+# take effect without requiring a full re-deploy.
+if [ -f "$APP_DIR/deployment/dgc_sms.service" ]; then
+    cp "$APP_DIR/deployment/dgc_sms.service" /etc/systemd/system/dgc_sms.service
+fi
 systemctl daemon-reload
 systemctl restart dgc_sms
 systemctl status dgc_sms --no-pager -l || true
