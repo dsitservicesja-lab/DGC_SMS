@@ -43,6 +43,8 @@ def _save_file(file_storage):
     """
     original = secure_filename(file_storage.filename)
     ext = original.rsplit('.', 1)[-1].lower() if '.' in original else ''
+    if not ext:
+        abort(400, description='Files without an extension are not permitted.')
     if ext not in current_app.config['ALLOWED_EXTENSIONS']:
         abort(400, description=f'File type ".{ext}" is not permitted.')
     stored = f'{uuid.uuid4().hex}.{ext}'

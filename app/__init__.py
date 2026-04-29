@@ -21,7 +21,10 @@ def create_app(config_name=None):
         import os
         config_name = os.environ.get('FLASK_CONFIG', 'default')
 
-    if config_name == 'production' and not os.environ.get('SECRET_KEY'):
+    app = Flask(__name__)
+    app.config.from_object(config[config_name])
+
+    if config_name == 'production' and not app.config.get('SECRET_KEY'):
         import warnings
         warnings.warn(
             "SECRET_KEY environment variable is not set. A randomly-generated key "
@@ -30,9 +33,6 @@ def create_app(config_name=None):
             RuntimeWarning,
             stacklevel=2,
         )
-
-    app = Flask(__name__)
-    app.config.from_object(config[config_name])
 
     db.init_app(app)
     login_manager.init_app(app)
