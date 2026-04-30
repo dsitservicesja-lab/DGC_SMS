@@ -239,8 +239,8 @@
                        target="_blank" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-eye me-1"></i>Preview
                     </a>
-                    {% elif ext in ['doc', 'docx', 'xls', 'xlsx'] %}
-                    <a href="{{ url_for('main.preview_file', filename=sample.scanned_file) }}"
+                    {% elif ext in ['doc', 'docx'] %}
+                    <a href="{{ url_for('main.preview_docx_as_pdf', filename=sample.scanned_file) }}"
                        target="_blank" class="btn btn-outline-info btn-sm">
                         <i class="bi bi-eye me-1"></i>Preview
                     </a>
@@ -371,10 +371,17 @@
                         <div class="d-flex gap-1">
                             {% set doc_ext = doc.original_name.rsplit('.', 1)[-1].lower() if doc.original_name else '' %}
                             {% if doc_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx', 'xls', 'xlsx'] %}
+                            {% if doc_ext in ['doc', 'docx'] %}
+                            <a href="{{ url_for('main.preview_docx_as_pdf', filename=doc.file_path) }}"
+                               target="_blank" class="btn btn-sm btn-outline-info" title="Preview">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% else %}
                             <a href="{{ url_for('main.preview_file', filename=doc.file_path) }}"
                                target="_blank" class="btn btn-sm btn-outline-info" title="Preview">
                                 <i class="bi bi-eye"></i>
                             </a>
+                            {% endif %}
                             {% endif %}
                             <a href="{{ url_for('samples.download_file', filename=doc.file_path) }}"
                                class="btn btn-sm btn-outline-primary" title="Download">
@@ -407,10 +414,17 @@
         <div class="d-flex gap-2 mb-2">
             {% set sr_ext = sample.summary_report_file_original_name.rsplit('.', 1)[-1].lower() if sample.summary_report_file_original_name else '' %}
             {% if sr_ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
+            {% if sr_ext in ['doc', 'docx'] %}
+            <a href="{{ url_for('main.preview_docx_as_pdf', filename=sample.summary_report_file) }}"
+               target="_blank" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-eye me-1"></i>Preview
+            </a>
+            {% else %}
             <a href="{{ url_for('main.preview_file', filename=sample.summary_report_file) }}"
                target="_blank" class="btn btn-outline-info btn-sm">
                 <i class="bi bi-eye me-1"></i>Preview
             </a>
+            {% endif %}
             {% endif %}
             <a href="{{ url_for('samples.download_file', filename=sample.summary_report_file) }}"
                class="btn btn-outline-primary btn-sm">
@@ -440,10 +454,17 @@
         <div class="d-flex gap-2 mb-2">
             {% set ext = sample.certificate_file_original_name.rsplit('.', 1)[-1].lower() if sample.certificate_file_original_name else '' %}
             {% if ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
+            {% if ext in ['doc', 'docx'] %}
+            <a href="{{ url_for('main.preview_docx_as_pdf', filename=sample.certificate_file) }}"
+               target="_blank" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-eye me-1"></i>Preview
+            </a>
+            {% else %}
             <a href="{{ url_for('main.preview_file', filename=sample.certificate_file) }}"
                target="_blank" class="btn btn-outline-info btn-sm">
                 <i class="bi bi-eye me-1"></i>Preview
             </a>
+            {% endif %}
             {% endif %}
             <a href="{{ url_for('samples.download_file', filename=sample.certificate_file) }}"
                class="btn btn-outline-primary btn-sm">
@@ -628,10 +649,17 @@
                     <td>
                         {% set ext = dv.original_name.rsplit('.', 1)[-1].lower() if dv.original_name else '' %}
                         {% if ext in ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx'] %}
+                        {% if ext in ['doc', 'docx'] %}
+                        <a href="{{ url_for('main.preview_docx_as_pdf', filename=dv.file_path) }}"
+                           target="_blank" class="btn btn-outline-info btn-sm">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        {% else %}
                         <a href="{{ url_for('main.preview_file', filename=dv.file_path) }}"
                            target="_blank" class="btn btn-outline-info btn-sm">
                             <i class="bi bi-eye"></i>
                         </a>
+                        {% endif %}
                         {% endif %}
                         <a href="{{ url_for('samples.download_file', filename=dv.file_path) }}"
                            class="btn btn-outline-primary btn-sm">

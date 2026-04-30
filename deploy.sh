@@ -15,7 +15,7 @@ echo "=== DGC SMS Deployment ==="
 # 1. System packages
 echo "[1/8] Installing system packages..."
 apt update
-apt install -y python3 python3-venv python3-pip nginx git openssl
+apt install -y python3 python3-venv python3-pip nginx git openssl libreoffice-writer
 
 # 2. Create app user
 echo "[2/8] Creating application user..."

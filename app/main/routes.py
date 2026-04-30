@@ -1782,6 +1782,96 @@ def preview_file(filename):
     )
 
 
+@main_bp.route('/preview-docx/<path:filename>')
+@login_required
+def preview_docx_as_pdf(filename):
+    """Convert a DOC/DOCX file to PDF using LibreOffice and serve it inline.
+
+    The converted PDF is cached in ``<UPLOAD_FOLDER>/pdf_cache/`` so that
+    subsequent previews are served instantly without re-running LibreOffice.
+    If LibreOffice is not installed the user is redirected to download the
+    original file instead.
+    """
+    import os
+    import shutil
+    import subprocess
+    from flask import send_from_directory
+    from werkzeug.utils import secure_filename
+
+    # Reject any path that would escape the uploads directory
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        abort(404)
+
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    filepath = os.path.join(upload_folder, safe_name)
+    if not os.path.isfile(filepath):
+        abort(404)
+
+    ext = safe_name.rsplit('.', 1)[-1].lower() if '.' in safe_name else ''
+    if ext not in ('doc', 'docx'):
+        abort(400)
+
+    # Cache directory lives inside the uploads folder so it shares the same
+    # permissions and backup strategy as the originals.
+    cache_dir = os.path.join(upload_folder, 'pdf_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+
+    base_name = os.path.splitext(safe_name)[0]
+    cached_pdf_name = base_name + '.pdf'
+    cached_pdf_path = os.path.join(cache_dir, cached_pdf_name)
+
+    if not os.path.isfile(cached_pdf_path):
+        lo_cmd = shutil.which('libreoffice') or shutil.which('soffice')
+        if not lo_cmd:
+            current_app.logger.warning(
+                'LibreOffice not found; cannot convert %s to PDF', safe_name
+            )
+            flash(
+                'Document preview is not available on this server. '
+                'Please download the file to view it.',
+                'warning',
+            )
+            return redirect(url_for('samples.download_file', filename=safe_name))
+
+        try:
+            subprocess.run(
+                [
+                    lo_cmd,
+                    '--headless',
+                    '--convert-to', 'pdf',
+                    '--outdir', cache_dir,
+                    filepath,
+                ],
+                check=True,
+                timeout=30,
+                capture_output=True,
+            )
+        except subprocess.TimeoutExpired:
+            current_app.logger.error(
+                'LibreOffice conversion timed out for %s', safe_name
+            )
+            flash('Document conversion timed out. Please download the file instead.', 'warning')
+            return redirect(url_for('samples.download_file', filename=safe_name))
+        except subprocess.CalledProcessError as exc:
+            current_app.logger.error(
+                'LibreOffice conversion failed for %s: %s', safe_name, exc.stderr
+            )
+            flash('Document conversion failed. Please download the file instead.', 'warning')
+            return redirect(url_for('samples.download_file', filename=safe_name))
+
+    if not os.path.isfile(cached_pdf_path):
+        flash('Document conversion produced no output. Please download the file instead.', 'warning')
+        return redirect(url_for('samples.download_file', filename=safe_name))
+
+    return send_from_directory(
+        cache_dir,
+        cached_pdf_name,
+        mimetype='application/pdf',
+        as_attachment=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Data Export / Import  (Admin only)
 # ---------------------------------------------------------------------------

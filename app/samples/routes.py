@@ -2055,3 +2055,15 @@ def _delete_sample_files(sample):
                 current_app.logger.warning(
                     'Could not remove file %s during sample deletion', full_path
                 )
+        # Remove cached PDF conversion if this was a Word document
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        if ext in ('doc', 'docx'):
+            base = os.path.splitext(filename)[0]
+            cached_pdf = os.path.join(upload_folder, 'pdf_cache', base + '.pdf')
+            if os.path.isfile(cached_pdf):
+                try:
+                    os.remove(cached_pdf)
+                except OSError:
+                    current_app.logger.warning(
+                        'Could not remove cached PDF %s during sample deletion', cached_pdf
+                    )
