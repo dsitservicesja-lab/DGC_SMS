@@ -399,7 +399,7 @@ def detail(sample_id):
 def edit(sample_id):
     sample = db.get_or_404(Sample, sample_id)
     can_edit = (
-        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD)
+        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD, Role.SENIOR_CHEMIST)
         or current_user.has_permission(Permission.EDIT_SAMPLE)
         or current_user.id == sample.uploaded_by
     )
