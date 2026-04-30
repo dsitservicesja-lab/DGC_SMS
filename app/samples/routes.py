@@ -172,10 +172,10 @@ def sample_list():
                 calculate_working_days(today, sample.expected_report_date, holidays) - 1
             )
         else:
-            # Overdue: negative number of working days past the deadline
+            # Overdue: count working days from the deadline up to (but not including)
+            # today, then negate to produce a negative "days remaining" value.
             tat_remaining[sample.id] = -(
                 calculate_working_days(sample.expected_report_date, today - timedelta(days=1), holidays)
-                if today > sample.expected_report_date else 0
             )
 
     return render_template(
