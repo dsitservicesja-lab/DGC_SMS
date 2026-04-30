@@ -129,6 +129,35 @@
         </div>
     </div>
 
+    {% elif current_user.has_role(Role.GOVT_CHEMIST_ASSISTANT) and not current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) %}
+    <div class="col-sm-6 col-xl-4">
+        <div class="card stat-card stat-blue h-100">
+            <div class="card-body">
+                <div class="stat-label">Total Samples</div>
+                <div class="stat-value" data-count="{{ stats.total_samples }}">{{ stats.total_samples }}</div>
+            </div>
+            <i class="bi bi-collection stat-icon"></i>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card stat-card stat-purple h-100">
+            <div class="card-body">
+                <div class="stat-label">Documents Uploaded (by me)</div>
+                <div class="stat-value" data-count="{{ stats.documents_uploaded }}">{{ stats.documents_uploaded }}</div>
+            </div>
+            <i class="bi bi-paperclip stat-icon"></i>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card stat-card stat-green h-100">
+            <div class="card-body">
+                <div class="stat-label">Certified</div>
+                <div class="stat-value" data-count="{{ stats.completed }}">{{ stats.completed }}</div>
+            </div>
+            <i class="bi bi-patch-check stat-icon"></i>
+        </div>
+    </div>
+
     {% else %}
     <div class="col-sm-6 col-xl-3">
         <div class="card stat-card stat-blue h-100">

@@ -1,5 +1,13 @@
+import logging
 import os
 from dotenv import load_dotenv
+
+# python-dotenv 1.0.x emits 'could not parse statement' messages via
+# logger.warning() in dotenv.main — NOT via the warnings module.
+# Raise the dotenv logger threshold to ERROR so these non-fatal parse
+# notices are silenced while genuine errors (encoding failures, etc.)
+# remain visible.
+logging.getLogger('dotenv.main').setLevel(logging.ERROR)
 
 # Load .env before any config or app code reads os.environ, so SECRET_KEY
 # and other settings are always available even when started outside systemd.

@@ -855,9 +855,9 @@ def edit_assignment(assignment_id):
 def upload_supporting_document(sample_id):
     sample = db.get_or_404(Sample, sample_id)
 
-    # Only Officers, Admin, HOD, or the sample uploader may add documents
+    # Only Officers, Admin, HOD, GC Assistants, or the sample uploader may add documents
     if not (
-        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD)
+        current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD, Role.GOVT_CHEMIST_ASSISTANT)
         or current_user.id == sample.uploaded_by
     ):
         flash('Access denied.', 'danger')
@@ -1216,9 +1216,25 @@ def review_report(assignment_id):
         flash('This report is not awaiting technical review.', 'warning')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
+    # Determine whether grouped review mode is enabled
+    grouped_mode = Setting.get_bool('technical_review_grouped', default=False)
+
+    # Find sibling assignments for the same sample that are also awaiting
+    # technical review (UNDER_TECHNICAL_REVIEW).
+    # In grouped mode: include ALL sibling assignments for the sample.
+    # In per-test mode: only include this specific assignment.
+    sample = assignment.sample
+    if grouped_mode:
+        sibling_assignments = SampleAssignment.query.filter(
+            SampleAssignment.sample_id == sample.id,
+            SampleAssignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW,
+        ).all()
+    else:
+        sibling_assignments = [assignment]
+
     form = ReportReviewForm()
 
-    # Populate reassignment choices
+    # Populate reassignment choices (only used in per-test mode)
     chemists = User.query.filter(
         User.is_active_user.is_(True),
     ).join(user_roles).filter(
@@ -1236,87 +1252,107 @@ def review_report(assignment_id):
     if form.validate_on_submit():
         action = form.action.data
         now = jamaica_now()
+        comments = form.review_comments.data
+        out_of_spec_flag = form.out_of_spec.data
 
-        # Handle out_of_spec flag
-        assignment.out_of_spec = form.out_of_spec.data
+        # Pre-fetch existing review counts to avoid N+1 queries
+        sibling_ids = [a.id for a in sibling_assignments]
+        existing_counts = dict(
+            db.session.query(
+                ReviewHistory.assignment_id,
+                db.func.count(ReviewHistory.id)
+            ).filter(
+                ReviewHistory.assignment_id.in_(sibling_ids),
+                ReviewHistory.review_type == 'technical'
+            ).group_by(ReviewHistory.assignment_id).all()
+        )
 
-        # Log the review in ReviewHistory
-        prev_count = ReviewHistory.query.filter_by(
-            assignment_id=assignment.id, review_type='technical'
-        ).count()
-        db.session.add(ReviewHistory(
-            sample_id=assignment.sample_id,
-            assignment_id=assignment.id,
-            review_type='technical',
-            review_number=prev_count + 1,
-            action=action,
-            reviewer_id=current_user.id,
-            reviewed_at=now,
-            comments=form.review_comments.data,
-        ))
+        reviewed_names = []
+        for a in sibling_assignments:
+            prev_count = existing_counts.get(a.id, 0)
+            db.session.add(ReviewHistory(
+                sample_id=sample.id,
+                assignment_id=a.id,
+                review_type='technical',
+                review_number=prev_count + 1,
+                action=action,
+                reviewer_id=current_user.id,
+                reviewed_at=now,
+                comments=comments,
+            ))
 
-        assignment.review_comments = form.review_comments.data
-        assignment.reviewed_by = current_user.id
-        assignment.reviewed_at = now
+            a.out_of_spec = out_of_spec_flag
+            a.review_comments = comments
+            a.reviewed_by = current_user.id
+            a.reviewed_at = now
 
-        if action == 'accepted':
-            assignment.status = AssignmentStatus.ACCEPTED
-            assignment.date_completed = now
-        elif action == 'returned':
-            assignment.status = AssignmentStatus.RETURNED
-            assignment.return_stage = 'technical'
-            assignment.date_completed = None
-        elif action == 'rejected':
-            assignment.status = AssignmentStatus.REJECTED
-            assignment.date_completed = now
+            if action == 'accepted':
+                a.status = AssignmentStatus.ACCEPTED
+                a.date_completed = now
+            elif action == 'returned':
+                a.status = AssignmentStatus.RETURNED
+                a.return_stage = 'technical'
+                a.date_completed = None
+            elif action == 'rejected':
+                a.status = AssignmentStatus.REJECTED
+                a.date_completed = now
 
-        chemist_name = assignment.chemist.full_name if assignment.chemist else 'Unknown'
+            reviewed_names.append(a.test_name)
 
-        # Handle reassignment
-        reassign_id = form.reassign_chemist_id.data
+        # Handle reassignment (per-test mode only — first/only sibling)
         reassign_msg = ''
-        if reassign_id and reassign_id != 0 and reassign_id != assignment.chemist_id:
-            old_chemist_name = chemist_name
-            new_chemist = db.session.get(User, reassign_id)
-            if new_chemist:
-                assignment.chemist_id = reassign_id
-                assignment.status = AssignmentStatus.ASSIGNED
-                assignment.return_stage = None
-                assignment.date_completed = None
-                reassign_msg = (f' Reassigned from {old_chemist_name} '
-                                f'to {new_chemist.full_name}.')
-                chemist_name = new_chemist.full_name
-                notify_sample_assigned(assignment)
+        if not grouped_mode:
+            single_assignment = sibling_assignments[0]
+            chemist_name = single_assignment.chemist.full_name if single_assignment.chemist else 'Unknown'
+            reassign_id = form.reassign_chemist_id.data
+            if reassign_id and reassign_id != 0 and reassign_id != single_assignment.chemist_id:
+                old_chemist_name = chemist_name
+                new_chemist = db.session.get(User, reassign_id)
+                if new_chemist:
+                    single_assignment.chemist_id = reassign_id
+                    single_assignment.status = AssignmentStatus.ASSIGNED
+                    single_assignment.return_stage = None
+                    single_assignment.date_completed = None
+                    reassign_msg = (f' Reassigned from {old_chemist_name} '
+                                    f'to {new_chemist.full_name}.')
+                    notify_sample_assigned(single_assignment)
 
-        out_of_spec_msg = ' [OUT OF SPEC]' if form.out_of_spec.data else ''
+        out_of_spec_msg = ' [OUT OF SPEC]' if out_of_spec_flag else ''
+        test_list = ', '.join(reviewed_names)
 
         _add_history(
-            assignment.sample,
+            sample,
             f'Senior Chemist Review – {action.title()}{out_of_spec_msg}',
-            (f'{current_user.full_name} {action} report for test '
-             f'"{assignment.test_name}" '
-             f'(Chemist: {chemist_name}).{out_of_spec_msg}{reassign_msg} '
-             f'Comments: {form.review_comments.data or "N/A"}'),
+            (f'{current_user.full_name} {action} report for test(s): '
+             f'{test_list}.{out_of_spec_msg}{reassign_msg} '
+             f'Comments: {comments or "N/A"}'),
             action_type='Senior Chemist Review',
             object_affected='Report',
             change_description=(
-                f'Test "{assignment.test_name}" {action} '
+                f'Test(s): {test_list} — {action} '
                 f'by {current_user.full_name}'
                 f'{out_of_spec_msg}{reassign_msg}'),
         )
 
-        _update_sample_status(assignment.sample)
+        _update_sample_status(sample)
         db.session.commit()
 
-        notify_report_reviewed(assignment, action)
+        for a in sibling_assignments:
+            notify_report_reviewed(a, action)
         db.session.commit()
 
-        flash(f'Report has been {action}.{reassign_msg}', 'success')
+        test_count = len(reviewed_names)
+        if test_count > 1:
+            flash(f'{test_count} reports have been {action}.{reassign_msg}', 'success')
+        else:
+            flash(f'Report has been {action}.{reassign_msg}', 'success')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     return render_template(
         'samples/review_report.html', form=form, assignment=assignment,
         chemists=chemists,
+        sibling_assignments=sibling_assignments,
+        grouped_mode=grouped_mode,
     )
 
 

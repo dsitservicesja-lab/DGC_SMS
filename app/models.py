@@ -45,6 +45,7 @@ class Role(enum.Enum):
     DEPUTY = 'Deputy'
     HOD = 'HOD'
     ADMIN = 'Admin'
+    GOVT_CHEMIST_ASSISTANT = 'GC Assistant'
 
 
 class Branch(enum.Enum):

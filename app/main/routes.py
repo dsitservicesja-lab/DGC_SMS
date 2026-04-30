@@ -157,6 +157,21 @@ def dashboard():
             ])
         ).count()
 
+    elif current_user.has_role(Role.GOVT_CHEMIST_ASSISTANT) and not current_user.has_any_role(
+            Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
+        query = Sample.query
+        stats['total_samples'] = query.count()
+        stats['documents_uploaded'] = SampleHistory.query.filter(
+            SampleHistory.action == 'Supporting Document Uploaded',
+            SampleHistory.performed_by == current_user.id,
+        ).count()
+        stats['completed'] = query.filter(
+            Sample.status.in_([
+                SampleStatus.CERTIFIED,
+                SampleStatus.COMPLETED,
+            ])
+        ).count()
+
     else:
         # Branch heads, HOD, Admin
         query = Sample.query
@@ -1526,15 +1541,19 @@ def settings():
         Setting.set('email_enabled', str(email_enabled).lower())
         prelim_grouped = 'preliminary_review_grouped' in request.form
         Setting.set('preliminary_review_grouped', str(prelim_grouped).lower())
+        technical_grouped = 'technical_review_grouped' in request.form
+        Setting.set('technical_review_grouped', str(technical_grouped).lower())
         db.session.commit()
         flash('Settings updated.', 'success')
         return redirect(url_for('main.settings'))
 
     email_enabled = Setting.get_bool('email_enabled', default=True)
     preliminary_review_grouped = Setting.get_bool('preliminary_review_grouped', default=False)
+    technical_review_grouped = Setting.get_bool('technical_review_grouped', default=False)
     sample_count = Sample.query.count()
     return render_template('settings.html', email_enabled=email_enabled,
                            preliminary_review_grouped=preliminary_review_grouped,
+                           technical_review_grouped=technical_review_grouped,
                            sample_count=sample_count)
 
 
