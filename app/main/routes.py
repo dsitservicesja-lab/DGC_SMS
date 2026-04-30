@@ -20,6 +20,7 @@ from app.models import (
     fiscal_quarter_months, fiscal_year_date_range,
     SupportingDocument, ReviewHistory, AuditLog,
     user_roles, user_branches, user_permissions,
+    DeleteRequest,
 )
 
 
@@ -1718,6 +1719,223 @@ def decide_backdate(req_id):
 
     flash(f'Back-date request {decision}.', 'success')
     return redirect(url_for('main.backdate_requests'))
+
+
+# ---------------------------------------------------------------------------
+# Delete Request Management  (HOD / Admin)
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/delete-requests')
+@login_required
+def delete_requests():
+    """View deletion requests – HOD and Admin only."""
+    if not current_user.has_any_role(Role.HOD, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    status_filter = request.args.get('status', 'pending')
+    q = DeleteRequest.query
+    if status_filter in ('pending', 'approved', 'denied'):
+        q = q.filter_by(status=status_filter)
+    requests_list = q.order_by(DeleteRequest.requested_at.desc()).all()
+
+    return render_template(
+        'delete_requests.html',
+        requests=requests_list,
+        status_filter=status_filter,
+    )
+
+
+@main_bp.route('/delete-requests/<int:req_id>/decide', methods=['POST'])
+@login_required
+def decide_delete_request(req_id):
+    """Approve or deny a deletion request.  Approval immediately performs the deletion."""
+    if not current_user.has_any_role(Role.HOD, Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    dr = db.get_or_404(DeleteRequest, req_id)
+    if dr.status != 'pending':
+        flash('This request has already been decided.', 'warning')
+        return redirect(url_for('main.delete_requests'))
+
+    decision = request.form.get('decision')
+    comments = request.form.get('comments', '')
+
+    if decision not in ('approved', 'denied'):
+        flash('Invalid decision.', 'danger')
+        return redirect(url_for('main.delete_requests'))
+
+    now = jamaica_now()
+    dr.status = decision
+    dr.decided_by = current_user.id
+    dr.decided_at = now
+    dr.decision_comments = comments
+
+    if decision == 'approved':
+        import json as _json
+        if dr.request_type == 'sample' and dr.sample_id:
+            sample = db.session.get(Sample, dr.sample_id)
+            if sample:
+                # Build audit snapshot
+                uploader = db.session.get(User, sample.uploaded_by)
+                snapshot = _json.dumps({
+                    'lab_number': sample.lab_number,
+                    'sample_name': sample.sample_name,
+                    'sample_type': sample.sample_type.value,
+                    'status': sample.status.value,
+                    'date_received': sample.date_received.isoformat() if sample.date_received else None,
+                    'date_registered': sample.date_registered.isoformat() if sample.date_registered else None,
+                    'uploaded_by': sample.uploaded_by,
+                    'uploaded_by_name': uploader.full_name if uploader else None,
+                    'assignment_count': sample.assignments.count(),
+                    'delete_request_id': dr.id,
+                    'delete_requested_by': dr.requester.full_name if dr.requester else None,
+                    'delete_request_reason': dr.reason,
+                    'delete_approved_by': current_user.full_name,
+                })
+                db.session.add(AuditLog(
+                    action='SAMPLE_DELETED',
+                    entity_type='Sample',
+                    entity_id=sample.id,
+                    entity_label=sample.lab_number,
+                    details=snapshot,
+                    performed_by=current_user.id,
+                    performed_at=now,
+                ))
+                # Remove files
+                _delete_sample_files_main(sample)
+                # Explicitly delete ReviewHistory records
+                ReviewHistory.query.filter_by(sample_id=sample.id).delete(
+                    synchronize_session=False
+                )
+                # Save sample_id for notification cleanup before nulling the FK
+                sample_id_for_cleanup = sample.id
+                # Null-out the FK on this delete request before deleting the sample
+                dr.sample_id = None
+                dr.assignment_id = None
+                db.session.flush()
+                db.session.delete(sample)
+                # Remove related notifications using the numeric ID (avoids substring matching)
+                Notification.query.filter(
+                    Notification.link.like(f'%/samples/{sample_id_for_cleanup}%')
+                ).delete(synchronize_session=False)
+
+        elif dr.request_type == 'assignment' and dr.assignment_id:
+            assignment = db.session.get(SampleAssignment, dr.assignment_id)
+            if assignment:
+                sample = assignment.sample
+                chemist_name = assignment.chemist.full_name if assignment.chemist else 'Unknown'
+                test_name = assignment.test_name
+                chemist_id = assignment.chemist_id
+                sample_ref = sample.lab_number
+                # Audit the assignment deletion
+                snapshot = _json.dumps({
+                    'assignment_id': assignment.id,
+                    'sample_lab_number': sample_ref,
+                    'test_name': test_name,
+                    'chemist_name': chemist_name,
+                    'status': assignment.status.value,
+                    'delete_request_id': dr.id,
+                    'delete_requested_by': dr.requester.full_name if dr.requester else None,
+                    'delete_request_reason': dr.reason,
+                    'delete_approved_by': current_user.full_name,
+                })
+                db.session.add(AuditLog(
+                    action='ASSIGNMENT_DELETED',
+                    entity_type='SampleAssignment',
+                    entity_id=assignment.id,
+                    entity_label=dr.entity_label,
+                    details=snapshot,
+                    performed_by=current_user.id,
+                    performed_at=now,
+                ))
+                # Log in sample history before deleting
+                db.session.add(SampleHistory(
+                    sample_id=sample.id,
+                    action='Assignment Deleted',
+                    details=(
+                        f'{current_user.full_name} deleted assignment of test '
+                        f'"{test_name}" from {chemist_name} '
+                        f'(approved delete request by {dr.requester.full_name if dr.requester else "Unknown"}).'),
+                    performed_by=current_user.id,
+                    action_type='Assignment Deleted',
+                    object_affected='Sample Assignment',
+                    change_description=(
+                        f'Test "{test_name}" removed from {chemist_name} '
+                        f'by {current_user.full_name}'),
+                ))
+                # Null-out FK on this request so the cascade doesn't cascade-delete it
+                dr.assignment_id = None
+                db.session.flush()
+                # Update sample status before deleting the assignment
+                remaining = sample.assignments.filter(
+                    SampleAssignment.id != assignment.id
+                ).all()
+                db.session.delete(assignment)
+                db.session.flush()
+                if not remaining:
+                    sample.status = SampleStatus.REGISTERED
+                # Notify the removed chemist
+                from app.notifications import notify_assignment_removed
+                notify_assignment_removed(
+                    chemist_id, sample_ref, test_name, current_user.full_name, sample.id
+                )
+
+    # Log the decision in AuditLog regardless of outcome
+    db.session.add(AuditLog(
+        action=f'DELETE_REQUEST_{decision.upper()}',
+        entity_type='DeleteRequest',
+        entity_id=dr.id,
+        entity_label=dr.entity_label,
+        details=(f'Request type: {dr.request_type}; '
+                 f'Requested by: {dr.requester.full_name if dr.requester else "Unknown"}; '
+                 f'Decision: {decision}; '
+                 f'Comments: {comments or "N/A"}'),
+        performed_by=current_user.id,
+        performed_at=now,
+    ))
+
+    db.session.commit()
+
+    from app.notifications import notify_delete_request_decided
+    notify_delete_request_decided(dr)
+    db.session.commit()
+
+    flash(f'Deletion request {decision}.', 'success')
+    return redirect(url_for('main.delete_requests'))
+
+
+def _delete_sample_files_main(sample):
+    """Remove all uploaded files associated with a sample from disk (used in main routes)."""
+    from flask import current_app as _app
+    import os as _os
+    upload_folder = _app.config.get('UPLOAD_FOLDER')
+    if not upload_folder:
+        return
+    paths_to_remove = set()
+    if sample.scanned_file:
+        paths_to_remove.add(sample.scanned_file)
+    if sample.summary_report_file:
+        paths_to_remove.add(sample.summary_report_file)
+    if sample.certificate_file:
+        paths_to_remove.add(sample.certificate_file)
+    for assignment in sample.assignments.all():
+        if assignment.report_file:
+            paths_to_remove.add(assignment.report_file)
+    for doc in sample.supporting_documents.all():
+        if doc.file_path:
+            paths_to_remove.add(doc.file_path)
+    for dv in sample.document_versions.all():
+        if dv.file_path:
+            paths_to_remove.add(dv.file_path)
+    for filename in paths_to_remove:
+        full_path = _os.path.join(upload_folder, filename)
+        if _os.path.isfile(full_path):
+            try:
+                _os.remove(full_path)
+            except OSError:
+                _app.logger.warning('Could not remove file %s', full_path)
 
 
 # ---------------------------------------------------------------------------

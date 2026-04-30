@@ -591,6 +591,14 @@
                     </a>
                 </li>
                 {% endif %}
+                {% if current_user.has_any_role(Role.HOD, Role.ADMIN) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.delete_requests' %}active{% endif %}"
+                       href="{{ url_for('main.delete_requests') }}">
+                        <i class="bi bi-trash3"></i> Deletion Requests
+                    </a>
+                </li>
+                {% endif %}
                 {% if current_user.has_any_role(Role.ADMIN, Role.HOD) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.endpoint and 'auth.user' in request.endpoint %}active{% endif %}"

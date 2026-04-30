@@ -17,7 +17,7 @@ from app.models import (
     Role, Branch, SampleStatus, AssignmentStatus, Permission,
     user_roles, user_branches, jamaica_now,
     DocumentVersion, ReviewHistory, BackDateRequest,
-    AuditLog, Notification, Setting,
+    AuditLog, Notification, Setting, DeleteRequest,
     KpiTarget, fiscal_year_for_date, fiscal_quarter_for_date,
     calculate_working_days, fetch_non_working_days, add_working_days,
 )
@@ -26,6 +26,7 @@ from app.forms import (
     ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
     SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
     get_sample_register_form, SupportingDocumentForm, BackDateRequestForm,
+    DeleteRequestForm,
     BRANCH_TEST_NAMES, BRANCH_TEST_REFERENCES,
 )
 from app.notifications import (
@@ -35,6 +36,7 @@ from app.notifications import (
     notify_deputy_review_completed, notify_certificate_prepared,
     notify_certificate_signed, notify_assignment_removed,
     notify_backdate_request_submitted,
+    notify_delete_request_submitted,
 )
 
 
@@ -1962,6 +1964,147 @@ def request_backdate(sample_id):
     return render_template(
         'samples/request_backdate.html', form=form, sample=sample,
         assignments=assignments,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Request deletion of a sample (Senior Chemist, Deputy, Officer, GC Assistant)
+# ---------------------------------------------------------------------------
+
+# Roles that may submit a deletion request (HOD and Admin can delete directly)
+_DELETE_REQUEST_ROLES = (
+    Role.SENIOR_CHEMIST, Role.DEPUTY, Role.OFFICER, Role.GOVT_CHEMIST_ASSISTANT,
+)
+
+
+@samples_bp.route('/<int:sample_id>/request-delete', methods=['GET', 'POST'])
+@login_required
+def request_sample_delete(sample_id):
+    """Let authorised staff submit a deletion request for a sample."""
+    sample = db.get_or_404(Sample, sample_id)
+
+    if not current_user.has_any_role(*_DELETE_REQUEST_ROLES):
+        flash('You do not have permission to request sample deletion.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    # Block if a pending request already exists
+    existing = DeleteRequest.query.filter_by(
+        request_type='sample', sample_id=sample.id, status='pending'
+    ).first()
+    if existing:
+        flash('A deletion request for this sample is already pending approval.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    form = DeleteRequestForm()
+    if form.validate_on_submit():
+        uploader = db.session.get(User, sample.uploaded_by)
+        snapshot = json.dumps({
+            'lab_number': sample.lab_number,
+            'sample_name': sample.sample_name,
+            'sample_type': sample.sample_type.value,
+            'status': sample.status.value,
+            'date_received': sample.date_received.isoformat() if sample.date_received else None,
+            'date_registered': sample.date_registered.isoformat() if sample.date_registered else None,
+            'uploaded_by': sample.uploaded_by,
+            'uploaded_by_name': uploader.full_name if uploader else None,
+            'assignment_count': sample.assignments.count(),
+        })
+        dr = DeleteRequest(
+            request_type='sample',
+            sample_id=sample.id,
+            reason=form.reason.data,
+            entity_snapshot=snapshot,
+            entity_label=sample.lab_number,
+            requested_by=current_user.id,
+        )
+        db.session.add(dr)
+
+        _add_history(
+            sample, 'Deletion Requested',
+            (f'{current_user.full_name} requested deletion of this sample. '
+             f'Reason: {form.reason.data}'),
+            action_type='Delete Request',
+            object_affected='Sample',
+            change_description=f'Deletion requested by {current_user.full_name}',
+        )
+        db.session.commit()
+
+        notify_delete_request_submitted(dr)
+        db.session.commit()
+
+        flash('Deletion request submitted for HOD approval.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample.id))
+
+    return render_template(
+        'samples/request_delete.html', form=form, sample=sample, assignment=None,
+    )
+
+
+@samples_bp.route('/assignment/<int:assignment_id>/request-delete', methods=['GET', 'POST'])
+@login_required
+def request_assignment_delete(assignment_id):
+    """Let authorised staff submit a deletion request for a test assignment."""
+    assignment = db.get_or_404(SampleAssignment, assignment_id)
+    sample = assignment.sample
+
+    if not current_user.has_any_role(*_DELETE_REQUEST_ROLES):
+        flash('You do not have permission to request assignment deletion.', 'danger')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    # Block if a pending request already exists
+    existing = DeleteRequest.query.filter_by(
+        request_type='assignment', assignment_id=assignment.id, status='pending'
+    ).first()
+    if existing:
+        flash('A deletion request for this assignment is already pending approval.', 'warning')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    form = DeleteRequestForm()
+    if form.validate_on_submit():
+        chemist = db.session.get(User, assignment.chemist_id)
+        snapshot = json.dumps({
+            'assignment_id': assignment.id,
+            'sample_lab_number': sample.lab_number,
+            'sample_name': sample.sample_name,
+            'test_name': assignment.test_name,
+            'test_reference': assignment.test_reference,
+            'chemist_id': assignment.chemist_id,
+            'chemist_name': chemist.full_name if chemist else None,
+            'status': assignment.status.value,
+            'assigned_date': assignment.assigned_date.isoformat() if assignment.assigned_date else None,
+        })
+        label = f'{sample.lab_number} – {assignment.test_name}'
+        dr = DeleteRequest(
+            request_type='assignment',
+            sample_id=sample.id,
+            assignment_id=assignment.id,
+            reason=form.reason.data,
+            entity_snapshot=snapshot,
+            entity_label=label,
+            requested_by=current_user.id,
+        )
+        db.session.add(dr)
+
+        _add_history(
+            sample, 'Assignment Deletion Requested',
+            (f'{current_user.full_name} requested deletion of assignment '
+             f'"{assignment.test_name}". Reason: {form.reason.data}'),
+            action_type='Delete Request',
+            object_affected='Sample Assignment',
+            change_description=(
+                f'Deletion of assignment "{assignment.test_name}" requested '
+                f'by {current_user.full_name}'),
+        )
+        db.session.commit()
+
+        notify_delete_request_submitted(dr)
+        db.session.commit()
+
+        flash('Deletion request submitted for HOD approval.', 'success')
+        return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
+
+    return render_template(
+        'samples/request_delete.html', form=form, sample=sample, assignment=assignment,
     )
 
 

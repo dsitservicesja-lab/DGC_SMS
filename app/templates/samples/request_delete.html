@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Request Deletion - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-trash3 me-2 text-danger"></i>Request Deletion</h2>
+        <p class="text-muted mb-0 mt-1">
+            {% if assignment %}
+                Assignment: <strong>{{ assignment.test_name }}</strong> on
+                <a href="{{ url_for('samples.detail', sample_id=sample.id) }}">{{ sample.lab_number }}</a>
+            {% else %}
+                Sample: <strong>{{ sample.lab_number }}</strong> &mdash; {{ sample.sample_name }}
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger bg-opacity-10">
+                <h5 class="mb-0 text-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Deletion Request
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle me-1"></i>
+                    This request will be sent to the Head of Department for review and approval.
+                    The deletion will only be carried out if approved.
+                </div>
+
+                <dl class="row mb-3">
+                    {% if assignment %}
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Type</dt>
+                    <dd class="col-sm-8">Test Assignment</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Test Name</dt>
+                    <dd class="col-sm-8">{{ assignment.test_name }}</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Sample</dt>
+                    <dd class="col-sm-8">{{ sample.lab_number }} &mdash; {{ sample.sample_name }}</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Assigned To</dt>
+                    <dd class="col-sm-8">{{ assignment.chemist.full_name if assignment.chemist else '—' }}</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Status</dt>
+                    <dd class="col-sm-8">{{ assignment.status.value }}</dd>
+                    {% else %}
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Type</dt>
+                    <dd class="col-sm-8">Sample</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Lab Number</dt>
+                    <dd class="col-sm-8">{{ sample.lab_number }}</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Sample Name</dt>
+                    <dd class="col-sm-8">{{ sample.sample_name }}</dd>
+                    <dt class="col-sm-4 text-muted small fw-semibold text-uppercase" style="font-size:.7rem;">Status</dt>
+                    <dd class="col-sm-8">{{ sample.status.value }}</dd>
+                    {% endif %}
+                </dl>
+
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        {{ form.reason.label(class='form-label fw-semibold') }}
+                        {{ form.reason(class='form-control' + (' is-invalid' if form.reason.errors else ''), rows=4,
+                                       placeholder='Describe why this record needs to be deleted…') }}
+                        {% for err in form.reason.errors %}
+                        <div class="invalid-feedback">{{ err }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class='btn btn-danger') }}
+                        {% if assignment %}
+                        <a href="{{ url_for('samples.assignment_detail', assignment_id=assignment.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                        {% else %}
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

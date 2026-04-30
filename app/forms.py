@@ -937,3 +937,17 @@ class BackDateRequestForm(FlaskForm):
                     Length(max=1000)],
     )
     submit = SubmitField('Submit Back-Date Request')
+
+
+# ---------------------------------------------------------------------------
+# Delete Request
+# ---------------------------------------------------------------------------
+
+class DeleteRequestForm(FlaskForm):
+    """Request to delete a sample or assignment (requires HOD approval)."""
+    reason = TextAreaField(
+        'Reason for Deletion',
+        validators=[DataRequired(message='Please provide a reason for the deletion request.'),
+                    Length(max=1000)],
+    )
+    submit = SubmitField('Submit Deletion Request')

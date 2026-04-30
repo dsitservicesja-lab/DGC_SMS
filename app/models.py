@@ -1003,6 +1003,60 @@ class BackDateRequest(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# Delete Request  (HOD-approval workflow for sample / assignment deletion)
+# ---------------------------------------------------------------------------
+
+class DeleteRequest(db.Model):
+    """A request by an authorised user to delete a sample or assignment.
+
+    The record is submitted by a Senior Chemist, Deputy, Officer, or
+    GC Assistant and must be approved by the HOD before the deletion is
+    actually performed.  The deletion snapshot is stored here so the audit
+    trail survives even after the entity is gone.
+    """
+    __tablename__ = 'delete_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # 'sample' or 'assignment'
+    request_type = db.Column(db.String(20), nullable=False)
+    sample_id = db.Column(
+        db.Integer, db.ForeignKey('samples.id'), nullable=True
+    )
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey('sample_assignments.id'), nullable=True
+    )
+    reason = db.Column(db.Text, nullable=True)
+    # JSON snapshot of the entity at request time (kept even after deletion)
+    entity_snapshot = db.Column(db.Text, nullable=True)
+    requested_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    requested_at = db.Column(db.DateTime, default=jamaica_now)
+    # 'pending', 'approved', 'denied'
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    decided_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    decided_at = db.Column(db.DateTime, nullable=True)
+    decision_comments = db.Column(db.Text, nullable=True)
+    # Human-readable label kept for display after the entity is deleted
+    entity_label = db.Column(db.String(255), nullable=True)
+
+    # Relationships
+    sample = db.relationship('Sample', foreign_keys=[sample_id], backref=db.backref(
+        'delete_requests', lazy='dynamic'
+    ))
+    assignment = db.relationship('SampleAssignment', foreign_keys=[assignment_id], backref=db.backref(
+        'delete_requests', lazy='dynamic'
+    ))
+    requester = db.relationship('User', foreign_keys=[requested_by])
+    decider = db.relationship('User', foreign_keys=[decided_by])
+
+    def __repr__(self):
+        return f'<DeleteRequest {self.request_type} {self.entity_label} ({self.status})>'
+
+
+# ---------------------------------------------------------------------------
 # Audit Log  (permanent, survives sample deletion)
 # ---------------------------------------------------------------------------
 

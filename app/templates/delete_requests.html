@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Deletion Requests - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h2><i class="bi bi-trash3"></i> Deletion Requests</h2>
+</div>
+
+<!-- Status filter -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('main.delete_requests', status='pending') }}"
+               class="btn btn-sm {% if status_filter == 'pending' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                Pending
+            </a>
+            <a href="{{ url_for('main.delete_requests', status='approved') }}"
+               class="btn btn-sm {% if status_filter == 'approved' %}btn-success{% else %}btn-outline-success{% endif %}">
+                Approved
+            </a>
+            <a href="{{ url_for('main.delete_requests', status='denied') }}"
+               class="btn btn-sm {% if status_filter == 'denied' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                Denied
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Entity</th>
+                    <th>Requested By</th>
+                    <th>Requested At</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    {% if status_filter == 'pending' %}
+                    <th>Action</th>
+                    {% else %}
+                    <th>Decided By</th>
+                    <th>Decision Comments</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in requests %}
+                <tr>
+                    <td>
+                        {% if req.request_type == 'sample' %}
+                        <span class="badge bg-info text-dark">Sample</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Assignment</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if req.request_type == 'sample' and req.sample %}
+                        <a href="{{ url_for('samples.detail', sample_id=req.sample.id) }}"
+                           class="fw-semibold text-decoration-none">
+                            {{ req.entity_label }}
+                        </a>
+                        {% elif req.request_type == 'assignment' and req.assignment and req.sample %}
+                        <a href="{{ url_for('samples.assignment_detail', assignment_id=req.assignment.id) }}"
+                           class="text-decoration-none">
+                            {{ req.entity_label }}
+                        </a>
+                        {% else %}
+                        <span class="text-muted">{{ req.entity_label or '—' }}</span>
+                        <span class="badge bg-secondary ms-1" title="Record has been deleted">deleted</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ req.requester.full_name if req.requester else '—' }}</td>
+                    <td>{{ req.requested_at.strftime('%d %b %Y %H:%M') if req.requested_at else '—' }}</td>
+                    <td style="max-width:220px;">
+                        <span class="text-truncate d-inline-block" style="max-width:200px;"
+                              title="{{ req.reason or '' }}">
+                            {{ req.reason or '—' }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if req.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% elif req.status == 'approved' %}
+                        <span class="badge bg-success">Approved</span>
+                        {% else %}
+                        <span class="badge bg-danger">Denied</span>
+                        {% endif %}
+                    </td>
+                    {% if status_filter == 'pending' %}
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('main.decide_delete_request', req_id=req.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm(
+                                  this.querySelector('[name=decision]').value === 'approved'
+                                      ? 'Approve this deletion request? The record will be permanently deleted.'
+                                      : 'Deny this deletion request?'
+                              );">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-1">
+                                <input type="text" name="comments" placeholder="Comments (optional)"
+                                       class="form-control form-control-sm" style="width:200px">
+                            </div>
+                            <button type="submit" name="decision" value="approved"
+                                    class="btn btn-success btn-sm me-1">
+                                <i class="bi bi-check-lg"></i> Approve
+                            </button>
+                            <button type="submit" name="decision" value="denied"
+                                    class="btn btn-danger btn-sm">
+                                <i class="bi bi-x-lg"></i> Deny
+                            </button>
+                        </form>
+                    </td>
+                    {% else %}
+                    <td>{{ req.decider.full_name if req.decider else '—' }}</td>
+                    <td>{{ req.decision_comments or '—' }}</td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="{% if status_filter == 'pending' %}7{% else %}8{% endif %}" class="text-center text-muted py-4">
+                        No {{ status_filter }} deletion requests.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

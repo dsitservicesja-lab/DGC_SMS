@@ -42,6 +42,19 @@
             <i class="bi bi-clipboard-check me-1"></i>Senior Chemist Review
         </a>
         {% endif %}
+        {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.OFFICER, Role.GOVT_CHEMIST_ASSISTANT) %}
+            {% set pending_del = assignment.delete_requests.filter_by(status='pending').first() %}
+            {% if pending_del %}
+            <span class="badge bg-warning text-dark" title="Deletion request pending HOD approval">
+                <i class="bi bi-hourglass-split me-1"></i>Deletion Pending
+            </span>
+            {% else %}
+            <a href="{{ url_for('samples.request_assignment_delete', assignment_id=assignment.id) }}"
+               class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash3 me-1"></i>Request Deletion
+            </a>
+            {% endif %}
+        {% endif %}
     </div>
 </div>
 

@@ -423,6 +423,65 @@ def notify_backdate_request_decided(backdate_request):
     create_notification(backdate_request.requested_by, title, message, link)
 
 
+def notify_delete_request_submitted(delete_request):
+    """Notify HOD users when a deletion request is submitted."""
+    label = delete_request.entity_label or 'Unknown'
+    requester = delete_request.requester
+    if delete_request.request_type == 'sample':
+        subject = f'Deletion Request (Sample): {label}'
+        body = (
+            f'{requester.full_name} has requested deletion of sample '
+            f'"{label}".\n\n'
+            f'Reason: {delete_request.reason or "N/A"}\n\n'
+            f'Please review and approve or deny this request.'
+        )
+    else:
+        subject = f'Deletion Request (Assignment): {label}'
+        body = (
+            f'{requester.full_name} has requested deletion of test assignment '
+            f'"{label}".\n\n'
+            f'Reason: {delete_request.reason or "N/A"}\n\n'
+            f'Please review and approve or deny this request.'
+        )
+    link = '/delete-requests'
+    hods = User.query.join(user_roles).filter(
+        user_roles.c.role.in_([Role.HOD, Role.ADMIN]),
+        User.is_active_user.is_(True),
+    ).distinct().all()
+    for user in hods:
+        if user.id != requester.id:
+            create_notification(user.id, subject, body, link)
+
+
+def notify_delete_request_decided(delete_request):
+    """Notify the requester when their deletion request is decided."""
+    decision = delete_request.status  # 'approved' or 'denied'
+    decider = delete_request.decider
+    label = delete_request.entity_label or 'Unknown'
+    decider_name = decider.full_name if decider else 'Administrator'
+    title = f'Deletion Request {decision.title()}: {label}'
+    if delete_request.request_type == 'sample':
+        message = (
+            f'Your request to delete sample "{label}" has been '
+            f'{decision} by {decider_name}.'
+        )
+    else:
+        message = (
+            f'Your request to delete test assignment "{label}" has been '
+            f'{decision} by {decider_name}.'
+        )
+    if delete_request.decision_comments:
+        message += f'\n\nComments: {delete_request.decision_comments}'
+    # If approved the entity may no longer exist, link to sample list instead
+    if delete_request.request_type == 'sample' and delete_request.sample_id:
+        link = f'/samples/{delete_request.sample_id}'
+    elif delete_request.request_type == 'assignment' and delete_request.sample:
+        link = f'/samples/{delete_request.sample.id}'
+    else:
+        link = '/samples/'
+    create_notification(delete_request.requested_by, title, message, link)
+
+
 # ---------------------------------------------------------------------------
 # Expected Report Date Reminders
 # ---------------------------------------------------------------------------

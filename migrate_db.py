@@ -236,6 +236,24 @@ NEW_TABLES = [
         '  performed_at DATETIME'
         ')',
     ),
+    (
+        'delete_requests',
+        'CREATE TABLE IF NOT EXISTS delete_requests ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  request_type VARCHAR(20) NOT NULL,'
+        '  sample_id INTEGER REFERENCES samples(id),'
+        '  assignment_id INTEGER REFERENCES sample_assignments(id),'
+        '  reason TEXT,'
+        '  entity_snapshot TEXT,'
+        '  requested_by INTEGER NOT NULL REFERENCES users(id),'
+        '  requested_at DATETIME,'
+        '  status VARCHAR(20) NOT NULL DEFAULT "pending",'
+        '  decided_by INTEGER REFERENCES users(id),'
+        '  decided_at DATETIME,'
+        '  decision_comments TEXT,'
+        '  entity_label VARCHAR(255)'
+        ')',
+    ),
 ]
 
 # ------------------------------------------------------------------------------
