@@ -1025,6 +1025,7 @@ def submit_report(assignment_id):
                 today=today.isoformat(), min_test_date=min_test_date.isoformat(),
             )
 
+        for a in sibling_assignments:
             if stored:
                 a.report_file = stored
                 a.report_file_original_name = original
