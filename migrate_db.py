@@ -75,6 +75,8 @@ MIGRATIONS = [
     ('samples', 'lot_number', 'VARCHAR(100)'),
     ('samples', 'expiration_date', 'DATE'),
     ('samples', 'toxicology_sample_type_name', 'VARCHAR(100)'),
+    # samples - scanned file original name
+    ('samples', 'scanned_file_original_name', 'VARCHAR(255)'),
     # samples – COA reference
     ('samples', 'coa_reference', 'VARCHAR(255)'),
     # sample_history – enhanced audit fields

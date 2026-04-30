@@ -432,8 +432,13 @@ def edit(sample_id):
         sample.toxicology_sample_type_name = form.toxicology_sample_type_name.data or None
         sample.expected_report_date = form.expected_report_date.data
 
-        if form.scanned_file.data:
-            stored, original = _save_file(form.scanned_file.data)
+        scanned_upload = form.scanned_file.data
+        if (
+            scanned_upload
+            and hasattr(scanned_upload, 'filename')
+            and scanned_upload.filename
+        ):
+            stored, original = _save_file(scanned_upload)
             sample.scanned_file = stored
             sample.scanned_file_original_name = original
 
