@@ -1809,14 +1809,16 @@ def decide_delete_request(req_id):
                 ReviewHistory.query.filter_by(sample_id=sample.id).delete(
                     synchronize_session=False
                 )
+                # Save sample_id for notification cleanup before nulling the FK
+                sample_id_for_cleanup = sample.id
                 # Null-out the FK on this delete request before deleting the sample
                 dr.sample_id = None
                 dr.assignment_id = None
                 db.session.flush()
                 db.session.delete(sample)
-                # Remove related notifications
+                # Remove related notifications using the numeric ID (avoids substring matching)
                 Notification.query.filter(
-                    Notification.link.like(f'%/samples/{dr.entity_label}%')
+                    Notification.link.like(f'%/samples/{sample_id_for_cleanup}%')
                 ).delete(synchronize_session=False)
 
         elif dr.request_type == 'assignment' and dr.assignment_id:
