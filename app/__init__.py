@@ -24,12 +24,13 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    if config_name == 'production' and not app.config.get('SECRET_KEY'):
+    import os as _os
+    if config_name == 'production' and not _os.environ.get('SECRET_KEY'):
         import warnings
         warnings.warn(
-            "SECRET_KEY environment variable is not set. A randomly-generated key "
-            "is in use, which will invalidate all user sessions on every application "
-            "restart. Set SECRET_KEY in production.",
+            "SECRET_KEY environment variable is not set. A file-based fallback key "
+            "is in use (.secret_key). For hardened production deployments set "
+            "SECRET_KEY explicitly in your .env or environment.",
             RuntimeWarning,
             stacklevel=2,
         )

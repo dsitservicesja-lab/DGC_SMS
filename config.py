@@ -1,13 +1,71 @@
 import os
+import secrets
 from datetime import timedelta, timezone
 
 
 # Jamaica timezone (GMT-05:00) – used throughout the application
 JAMAICA_TZ = timezone(timedelta(hours=-5))
 
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_or_create_secret_key() -> str:
+    """Return a stable SECRET_KEY shared by all worker processes.
+
+    Resolution order:
+    1. ``SECRET_KEY`` environment variable (recommended for production).
+    2. A ``.secret_key`` file in the project root (created automatically on
+       first run so that all gunicorn workers read the same value).
+
+    Without a shared key every worker generates its own random secret,
+    which causes Flask session cookies — and therefore CSRF tokens — to be
+    unreadable by any worker other than the one that created them.
+    """
+    key = os.environ.get('SECRET_KEY')
+    if key:
+        return key
+
+    key_file = os.path.join(_BASE_DIR, '.secret_key')
+    try:
+        with open(key_file, encoding='utf-8') as fh:
+            key = fh.read().strip()
+        if key:
+            return key
+    except FileNotFoundError:
+        pass
+
+    # Generate once and persist so subsequent processes (workers/restarts)
+    # all share the same secret.  Use os.open() with O_CREAT|O_EXCL so the
+    # file is created with restricted permissions (0o600) atomically, avoiding
+    # a window where another process could read a world-readable file.
+    key = secrets.token_hex(32)
+    try:
+        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+            fh.write(key)
+    except FileExistsError:
+        # Another worker beat us to it; read the key it wrote.
+        try:
+            with open(key_file, encoding='utf-8') as fh:
+                existing = fh.read().strip()
+            if existing:
+                return existing
+        except OSError:
+            pass
+    except OSError as exc:
+        import warnings
+        warnings.warn(
+            f"Could not persist SECRET_KEY to {key_file}: {exc}. "
+            "All workers will use an in-memory key for this run only; "
+            "sessions will be invalidated on restart.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return key
+
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', os.urandom(32).hex())
+    SECRET_KEY = _load_or_create_secret_key()
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL', 'sqlite:///dgc_sms.db'
     )
