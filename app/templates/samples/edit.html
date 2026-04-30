@@ -18,6 +18,13 @@
 
                     <div class="row g-3">
                         <div class="col-md-6">
+                            {{ form.lab_number.label(class="form-label fw-semibold") }}
+                            {{ form.lab_number(class="form-control") }}
+                            {% for error in form.lab_number.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6">
                             {{ form.sample_name.label(class="form-label fw-semibold") }}
                             {{ form.sample_name(class="form-control") }}
                             {% for error in form.sample_name.errors %}

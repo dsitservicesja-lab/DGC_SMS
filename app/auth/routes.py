@@ -152,13 +152,14 @@ def user_create():
         return redirect(url_for('main.dashboard'))
     form = UserCreateForm()
     if form.validate_on_submit():
+        plain_password = form.password.data
         user = User(
             first_name=form.first_name.data,
             last_name=form.last_name.data,
             username=form.username.data,
             email=form.email.data,
         )
-        user.set_password(form.password.data)
+        user.set_password(plain_password)
         user.must_change_password = True
         roles_set = {Role[r] for r in form.roles.data}
         branches_set = {Branch[b] for b in (form.branches.data or [])}
@@ -177,6 +178,27 @@ def user_create():
             current_app.logger.exception('Failed to create user %r', form.username.data)
             flash(f'An error occurred while creating the user: {exc}', 'danger')
             return render_template('auth/user_form.html', form=form, title='Create User')
+        # Send welcome email with login credentials
+        try:
+            login_url = url_for('auth.login', _external=True)
+            send_email(
+                subject='[DGC SMS] Your Account Has Been Created',
+                recipients=[user.email],
+                body_text=(
+                    f'Hello {user.first_name},\n\n'
+                    f'An account has been created for you in the DGC Sample Management System.\n\n'
+                    f'Your login details are:\n'
+                    f'  Username: {user.username}\n'
+                    f'  Password: {plain_password}\n\n'
+                    f'Please log in at: {login_url}\n\n'
+                    f'You will be required to change your password on first login.\n\n'
+                    f'If you did not expect this email, please contact your system administrator.'
+                ),
+            )
+        except Exception:
+            current_app.logger.exception(
+                'Failed to send welcome email to %r', user.email
+            )
         flash(f'User {user.username} created successfully.', 'success')
         return redirect(url_for('auth.user_list'))
     return render_template('auth/user_form.html', form=form, title='Create User')

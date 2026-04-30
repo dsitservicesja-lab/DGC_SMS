@@ -428,10 +428,11 @@ def notify_backdate_request_decided(backdate_request):
 # ---------------------------------------------------------------------------
 
 def send_report_date_reminders():
-    """Check samples with approaching expected report dates and notify
+    """Check samples with approaching or past expected report dates and notify
     the assigned chemist(s), the uploading officer, and branch heads.
 
     Sends reminders at 3 days before, 1 day before, and on the due date.
+    Also sends a daily overdue notification for samples past their due date.
     Skips samples that are already certified/completed/rejected.
     Avoids duplicate notifications by checking existing reminders for the
     same sample and reminder tier on the same day.
@@ -474,7 +475,6 @@ def send_report_date_reminders():
             continue
 
         days_val, label = matched
-        reminder_tag = f'reminder:{sample.id}:d{days_val}:{today.isoformat()}'
 
         # Skip if a reminder was already sent today for this tier
         existing = Notification.query.filter(
@@ -529,6 +529,67 @@ def send_report_date_reminders():
             count += 1
 
         # Notify branch heads
+        head_roles = [Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD]
+        heads = User.query.join(user_roles).filter(
+            user_roles.c.role.in_(head_roles),
+            User.is_active_user.is_(True),
+        ).distinct().all()
+
+        effective_branch = sample.sample_type
+        if effective_branch == Branch.PHARMACEUTICAL_NR:
+            effective_branch = Branch.PHARMACEUTICAL
+
+        for head in heads:
+            if head.id in notified_users:
+                continue
+            if head.branches and effective_branch not in head.branches and sample.sample_type not in head.branches:
+                continue
+            create_notification(head.id, title, message, link)
+            notified_users.add(head.id)
+            count += 1
+
+    # -----------------------------------------------------------------------
+    # Overdue samples: expected_report_date is in the past and not terminal
+    # -----------------------------------------------------------------------
+    overdue_samples = Sample.query.filter(
+        Sample.expected_report_date.isnot(None),
+        Sample.expected_report_date < today,
+        Sample.status.notin_(terminal_statuses),
+    ).all()
+
+    for sample in overdue_samples:
+        overdue_days = (today - sample.expected_report_date).days
+        title = f'🔴 OVERDUE: {sample.lab_number}'
+        message = (
+            f'Sample "{sample.sample_name}" (Lab# {sample.lab_number}) '
+            f'is OVERDUE by {overdue_days} day{"s" if overdue_days != 1 else ""}. '
+            f'Expected report date was {sample.expected_report_date.strftime("%d %b %Y")}. '
+            f'Please take immediate action.'
+        )
+        link = f'/samples/{sample.id}'
+
+        # Avoid sending duplicate overdue notifications on the same day
+        existing = Notification.query.filter(
+            Notification.title.contains('OVERDUE'),
+            Notification.title.contains(sample.lab_number),
+            Notification.created_at >= db.func.date(db.func.current_timestamp()),
+        ).first()
+        if existing:
+            continue
+
+        notified_users = set()
+
+        for assignment in sample.assignments.all():
+            if assignment.chemist_id not in notified_users:
+                create_notification(assignment.chemist_id, title, message, link)
+                notified_users.add(assignment.chemist_id)
+                count += 1
+
+        if sample.uploaded_by not in notified_users:
+            create_notification(sample.uploaded_by, title, message, link)
+            notified_users.add(sample.uploaded_by)
+            count += 1
+
         head_roles = [Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD]
         heads = User.query.join(user_roles).filter(
             user_roles.c.role.in_(head_roles),

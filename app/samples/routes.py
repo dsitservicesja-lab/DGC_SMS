@@ -1,7 +1,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 
 from flask import (
     render_template, redirect, url_for, flash, request,
@@ -19,6 +19,7 @@ from app.models import (
     DocumentVersion, ReviewHistory, BackDateRequest,
     AuditLog, Notification, Setting,
     KpiTarget, fiscal_year_for_date, fiscal_quarter_for_date,
+    calculate_working_days, fetch_non_working_days,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -144,42 +145,38 @@ def sample_list():
     pagination = query.paginate(page=page, per_page=25, error_out=False)
     result_count = pagination.total
 
-    # Build a dict of avg TAT targets per branch (from the most recent KPI targets)
-    # Fall back to the current fiscal year/quarter if no specific targets are set.
-    current_date = date.today()
-    fy = fiscal_year_for_date(current_date)
-    fq = fiscal_quarter_for_date(current_date)
-    _tat_key_for_branch = {
-        Branch.PHARMACEUTICAL:    'avg_days_pharma_coa',
-        Branch.PHARMACEUTICAL_NR: 'avg_days_pharma_coa',
-        Branch.FOOD_MILK:         'avg_days_milk_coa',
-        Branch.TOXICOLOGY:        'avg_days_toxicology_roa',
-        Branch.FOOD_ALCOHOL:      'avg_days_alcohol_coa',
-    }
-    _tat_key_for_alcohol_type = {
-        'Alcohol Determination':              'avg_days_alcohol_determination',
-        'Denatured Alcohol (bitrex)':         'avg_days_alcohol_denatured',
-        'Alcohol Determination and Denatured': 'avg_days_alcohol_det_denatured',
-    }
-    # Load relevant KPI targets for the current quarter
-    _kpi_keys = set(_tat_key_for_branch.values()) | set(_tat_key_for_alcohol_type.values())
-    _targets = {
-        t.kpi_key: t.target_value
-        for t in KpiTarget.query.filter(
-            KpiTarget.year == fy,
-            KpiTarget.quarter == fq,
-            KpiTarget.kpi_key.in_(list(_kpi_keys)),
-        ).all()
-        if t.target_value is not None
-    }
-    avg_tat_by_branch = {
-        branch: _targets.get(key)
-        for branch, key in _tat_key_for_branch.items()
-    }
-    avg_tat_by_alcohol_type = {
-        alc_type: _targets.get(key)
-        for alc_type, key in _tat_key_for_alcohol_type.items()
-    }
+    # Compute per-sample working-day countdown to expected_report_date.
+    # Pre-fetch holidays once for the relevant date window to avoid N+1 queries.
+    terminal_statuses = {SampleStatus.CERTIFIED, SampleStatus.COMPLETED, SampleStatus.REJECTED}
+    today = date.today()
+    samples_with_dates = [
+        s for s in pagination.items if s.expected_report_date is not None
+    ]
+    if samples_with_dates:
+        min_date = min(s.expected_report_date for s in samples_with_dates)
+        max_date = max(s.expected_report_date for s in samples_with_dates)
+        # Ensure today is within the pre-fetch window
+        window_start = min(today, min_date)
+        window_end = max(today, max_date)
+        holidays = fetch_non_working_days(window_start, window_end)
+    else:
+        holidays = set()
+
+    tat_remaining = {}
+    for sample in pagination.items:
+        if sample.expected_report_date is None or sample.status in terminal_statuses:
+            tat_remaining[sample.id] = None
+        elif sample.expected_report_date >= today:
+            # Working days remaining (0 = due today, >0 = future)
+            tat_remaining[sample.id] = (
+                calculate_working_days(today, sample.expected_report_date, holidays) - 1
+            )
+        else:
+            # Overdue: negative number of working days past the deadline
+            tat_remaining[sample.id] = -(
+                calculate_working_days(sample.expected_report_date, today - timedelta(days=1), holidays)
+                if today > sample.expected_report_date else 0
+            )
 
     return render_template(
         'samples/sample_list.html',
@@ -192,11 +189,11 @@ def sample_list():
         search=search,
         result_count=result_count,
         is_filtered=bool(status_filter or type_filter or search),
-        today_date=date.today(),
+        today_date=today,
         sort_by=sort_by,
         sort_dir=sort_dir,
-        avg_tat_by_branch=avg_tat_by_branch,
-        avg_tat_by_alcohol_type=avg_tat_by_alcohol_type,
+        tat_remaining=tat_remaining,
+        terminal_statuses=terminal_statuses,
     )
 
 
@@ -413,7 +410,18 @@ def edit(sample_id):
     # expects the enum .name string to match its choices.
     if request.method == 'GET' and sample.sample_type:
         form.sample_type.data = sample.sample_type.name
+        form.lab_number.data = sample.lab_number
     if form.validate_on_submit():
+        new_lab_number = form.lab_number.data.strip()
+        if new_lab_number != sample.lab_number:
+            conflict = Sample.query.filter(
+                Sample.lab_number == new_lab_number,
+                Sample.id != sample.id,
+            ).first()
+            if conflict:
+                flash(f'Lab number "{new_lab_number}" is already in use by another sample.', 'danger')
+                return render_template('samples/edit.html', form=form, sample=sample)
+            sample.lab_number = new_lab_number
         sample.sample_name = form.sample_name.data
         sample.sample_type = Branch[form.sample_type.data]
         sample.description = form.description.data

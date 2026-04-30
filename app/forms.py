@@ -505,6 +505,7 @@ def get_sample_register_form(sample_type):
 
 
 class SampleEditForm(FlaskForm):
+    lab_number = StringField('Lab Number', validators=[DataRequired(), Length(max=50)])
     sample_name = StringField('Sample Name', validators=[DataRequired(), Length(max=255)])
     sample_type = SelectField(
         'Laboratory',

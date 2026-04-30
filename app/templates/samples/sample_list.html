@@ -88,6 +88,14 @@
     'Completed': 'success',
 } %}
 
+{% set branch_colors = {
+    'Toxicology': 'warning',
+    'Pharmaceutical': 'primary',
+    'Not Registered Pharm': 'info',
+    'Food (Milk)': 'success',
+    'Food (Alcohol)': 'danger',
+} %}
+
 {% macro sort_url(col) -%}
     {{ url_for('samples.sample_list', q=search, status=status_filter, type=type_filter,
                sort=col, dir=('asc' if (sort_by == col and sort_dir == 'desc') else 'desc')) }}
@@ -120,7 +128,7 @@
                     <th><a href="{{ sort_url('sample_name') }}" class="text-decoration-none text-reset">Sample Name{{ sort_icon('sample_name') }}</a></th>
                     <th>Type</th>
                     <th><a href="{{ sort_url('date_received') }}" class="text-decoration-none text-reset">Date Received{{ sort_icon('date_received') }}</a></th>
-                    <th>Avg TAT (days)</th>
+                    <th>Time Remaining</th>
                     <th><a href="{{ sort_url('status') }}" class="text-decoration-none text-reset">Status{{ sort_icon('status') }}</a></th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -140,18 +148,30 @@
                     </td>
                     <td>{{ sample.sample_name }}</td>
                     <td>
-                        <span class="badge rounded-pill bg-info text-dark">{{ sample.sample_type.value }}</span>
+                        {% set _branch_color = branch_colors.get(sample.sample_type.value, 'secondary') %}
+                        <span class="badge rounded-pill bg-{{ _branch_color }}{% if _branch_color == 'warning' %} text-dark{% endif %}">{{ sample.sample_type.value }}</span>
                     </td>
                     <td class="text-muted" style="font-size:.85rem;">{{ sample.date_received.strftime('%d %b %Y') }}</td>
                     <td style="font-size:.85rem;">
-                        {% set _alc_tat = avg_tat_by_alcohol_type.get(sample.alcohol_type) if sample.alcohol_type else none %}
-                        {% set _branch_tat = avg_tat_by_branch.get(sample.sample_type) %}
-                        {% if sample.sample_type == Branch.FOOD_ALCOHOL and _alc_tat is not none %}
-                            <span class="text-info fw-semibold">{{ _alc_tat }} d</span>
-                        {% elif _branch_tat is not none %}
-                            <span class="text-info fw-semibold">{{ _branch_tat }} d</span>
-                        {% else %}
+                        {% set _remaining = tat_remaining.get(sample.id) %}
+                        {% if _remaining is none %}
                             <span class="text-muted">—</span>
+                        {% elif _remaining < 0 %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ _remaining|abs }} day{{ 's' if _remaining|abs != 1 else '' }} overdue
+                            </span>
+                        {% elif _remaining == 0 %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-clock-fill me-1"></i>Due today
+                            </span>
+                        {% elif _remaining <= 2 %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-clock me-1"></i>{{ _remaining }} working day{{ 's' if _remaining != 1 else '' }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-clock me-1"></i>{{ _remaining }} working days
+                            </span>
                         {% endif %}
                     </td>
                     <td>
