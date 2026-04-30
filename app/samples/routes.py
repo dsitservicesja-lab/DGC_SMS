@@ -1,7 +1,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, timezone, date
 
 from flask import (
     render_template, redirect, url_for, flash, request,
@@ -922,7 +922,7 @@ def submit_report(assignment_id):
     ).all()
 
     today = jamaica_now().date()
-    min_test_date = today - timedelta(days=31)
+    min_test_date = assignment.sample.date_received
 
     form = ReportSubmitForm()
     if form.validate_on_submit():
@@ -944,7 +944,7 @@ def submit_report(assignment_id):
                     today=today.isoformat(), min_test_date=min_test_date.isoformat(),
                 )
             if test_date < min_test_date:
-                flash('Test date cannot be more than one month in the past.', 'danger')
+                flash('Test date cannot be before the date the sample was received.', 'danger')
                 return render_template(
                     'samples/submit_report.html', form=form, assignment=assignment,
                     sibling_assignments=sibling_assignments,
@@ -997,7 +997,7 @@ def submit_report(assignment_id):
                         if parsed_date > today:
                             date_error = f'Test date for {a.test_name} cannot be in the future.'
                         elif parsed_date < min_test_date:
-                            date_error = f'Test date for {a.test_name} cannot be more than one month in the past.'
+                            date_error = f'Test date for {a.test_name} cannot be before the date the sample was received.'
                         else:
                             a.test_date = parsed_date
                     except ValueError:
