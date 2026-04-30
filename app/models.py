@@ -864,6 +864,33 @@ def calculate_working_days(start_date, end_date, non_working_dates=None):
     return count
 
 
+def add_working_days(start_date, n, non_working_dates=None):
+    """Return the date that is *n* working days after *start_date*,
+    excluding weekends and non-working days.
+
+    Pass a pre-fetched set of non-working dates as *non_working_dates* to avoid
+    a database query on each call when processing multiple samples.
+    """
+    if not start_date or n is None or n <= 0:
+        return start_date
+    if isinstance(start_date, datetime):
+        start_date = start_date.date()
+
+    if non_working_dates is None:
+        # Upper bound: each working day needs at most ~2 calendar days on average
+        # (weekends) plus a 10-day buffer for public holidays.
+        rough_end = start_date + timedelta(days=int(n) * 2 + 10)
+        non_working_dates = fetch_non_working_days(start_date, rough_end)
+
+    count = 0
+    current = start_date
+    while count < n:
+        current += timedelta(days=1)
+        if current.weekday() < 5 and current not in non_working_dates:
+            count += 1
+    return current
+
+
 # ---------------------------------------------------------------------------
 # Supporting Documents (additional uploads by officers)
 # ---------------------------------------------------------------------------

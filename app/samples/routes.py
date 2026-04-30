@@ -19,7 +19,7 @@ from app.models import (
     DocumentVersion, ReviewHistory, BackDateRequest,
     AuditLog, Notification, Setting,
     KpiTarget, fiscal_year_for_date, fiscal_quarter_for_date,
-    calculate_working_days, fetch_non_working_days,
+    calculate_working_days, fetch_non_working_days, add_working_days,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
@@ -146,36 +146,126 @@ def sample_list():
     result_count = pagination.total
 
     # Compute per-sample working-day countdown to expected_report_date.
-    # Pre-fetch holidays once for the relevant date window to avoid N+1 queries.
+    # For samples without an explicit expected_report_date, derive a virtual
+    # deadline from date_received + KPI TAT target days for the sample's lab.
     terminal_statuses = {SampleStatus.CERTIFIED, SampleStatus.COMPLETED, SampleStatus.REJECTED}
     today = date.today()
-    samples_with_dates = [
-        s for s in pagination.items if s.expected_report_date is not None
+
+    # Branch → KPI metric key that holds the TAT (turnaround) target in days.
+    _BRANCH_TAT_KEY = {
+        Branch.TOXICOLOGY:        'avg_days_toxicology_roa',
+        Branch.PHARMACEUTICAL:    'avg_days_pharma_coa',
+        Branch.PHARMACEUTICAL_NR: 'avg_days_pharma_coa',
+        Branch.FOOD_MILK:         'avg_days_milk_coa',
+        Branch.FOOD_ALCOHOL:      'avg_days_alcohol_coa',
+    }
+
+    # Collect samples that need a virtual deadline (no explicit date, not done).
+    samples_needing_virtual = [
+        s for s in pagination.items
+        if s.expected_report_date is None
+        and s.status not in terminal_statuses
+        and s.sample_type in _BRANCH_TAT_KEY
     ]
-    if samples_with_dates:
-        min_date = min(s.expected_report_date for s in samples_with_dates)
-        max_date = max(s.expected_report_date for s in samples_with_dates)
-        # Ensure today is within the pre-fetch window
-        window_start = min(today, min_date)
-        window_end = max(today, max_date)
+
+    # Fetch KPI targets for the fiscal year/quarter of each sample's date_received.
+    kpi_targets_map = {}  # (kpi_key, year, quarter) -> target_value (days)
+    fallback_targets_map = {}  # kpi_key -> latest target_value across any quarter
+    if samples_needing_virtual:
+        kpi_lookups = set()
+        for s in samples_needing_virtual:
+            kpi_key = _BRANCH_TAT_KEY[s.sample_type]
+            fy = fiscal_year_for_date(s.date_received)
+            fq = fiscal_quarter_for_date(s.date_received)
+            kpi_lookups.add((kpi_key, fy, fq))
+        conditions = [
+            db.and_(
+                KpiTarget.kpi_key == k,
+                KpiTarget.year == y,
+                KpiTarget.quarter == q,
+            )
+            for k, y, q in kpi_lookups
+        ]
+        rows = KpiTarget.query.filter(db.or_(*conditions)).all()
+        for row in rows:
+            kpi_targets_map[(row.kpi_key, row.year, row.quarter)] = row.target_value
+
+        # Fallback: if no target for a specific quarter, use the latest available
+        # target for that kpi_key across all quarters.
+        missing_keys = {
+            _BRANCH_TAT_KEY[s.sample_type]
+            for s in samples_needing_virtual
+            if (_BRANCH_TAT_KEY[s.sample_type],
+                fiscal_year_for_date(s.date_received),
+                fiscal_quarter_for_date(s.date_received)) not in kpi_targets_map
+        }
+        if missing_keys:
+            fallback_rows = KpiTarget.query.filter(
+                KpiTarget.kpi_key.in_(missing_keys),
+                KpiTarget.target_value.isnot(None),
+            ).order_by(KpiTarget.year.desc(), KpiTarget.quarter.desc()).all()
+            fallback_targets_map = {}  # kpi_key -> latest target_value (any quarter)
+            for row in fallback_rows:
+                if row.kpi_key not in fallback_targets_map:
+                    fallback_targets_map[row.kpi_key] = row.target_value
+
+    # Helper: look up TAT target days for a sample (quarter-specific, then fallback).
+    def _get_target_days(s):
+        kpi_key = _BRANCH_TAT_KEY[s.sample_type]
+        fy = fiscal_year_for_date(s.date_received)
+        fq = fiscal_quarter_for_date(s.date_received)
+        return kpi_targets_map.get((kpi_key, fy, fq)) or fallback_targets_map.get(kpi_key)
+
+    # Estimate rough upper bound for virtual deadlines to size the holiday window.
+    # Each working day requires at most ~2 calendar days on average (weekends)
+    # plus a 10-day buffer for public holidays.
+    rough_virtual_ends = []
+    for s in samples_needing_virtual:
+        target_days = _get_target_days(s)
+        if target_days and target_days > 0:
+            rough_virtual_ends.append(
+                s.date_received + timedelta(days=int(target_days) * 2 + 10)
+            )
+
+    # Pre-fetch holidays once for the full date window to avoid N+1 queries.
+    all_deadline_dates = (
+        [s.expected_report_date for s in pagination.items if s.expected_report_date is not None]
+        + rough_virtual_ends
+    )
+    if all_deadline_dates:
+        window_start = min(today, min(all_deadline_dates))
+        window_end = max(today, max(all_deadline_dates))
         holidays = fetch_non_working_days(window_start, window_end)
     else:
         holidays = set()
 
+    # Compute virtual deadlines (date_received + KPI target working days).
+    virtual_deadlines = {}
+    for s in samples_needing_virtual:
+        target_days = _get_target_days(s)
+        if target_days and target_days > 0:
+            virtual_deadlines[s.id] = add_working_days(
+                s.date_received, int(target_days), holidays
+            )
+
     tat_remaining = {}
     for sample in pagination.items:
-        if sample.expected_report_date is None or sample.status in terminal_statuses:
+        if sample.status in terminal_statuses:
             tat_remaining[sample.id] = None
-        elif sample.expected_report_date >= today:
+            continue
+        deadline = sample.expected_report_date or virtual_deadlines.get(sample.id)
+        if deadline is None:
+            tat_remaining[sample.id] = None
+        elif deadline >= today:
             # Working days remaining (0 = due today, >0 = future)
             tat_remaining[sample.id] = (
-                calculate_working_days(today, sample.expected_report_date, holidays) - 1
+                calculate_working_days(today, deadline, holidays) - 1
             )
         else:
             # Overdue: count working days from the deadline up to (but not including)
             # today, then negate to produce a negative "days remaining" value.
             tat_remaining[sample.id] = -(
-                calculate_working_days(sample.expected_report_date, today - timedelta(days=1), holidays)
+                calculate_working_days(deadline, today - timedelta(days=1), holidays)
             )
 
     return render_template(
