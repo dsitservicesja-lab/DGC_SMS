@@ -256,6 +256,17 @@ NEW_TABLES = [
         '  entity_label VARCHAR(255)'
         ')',
     ),
+    (
+        'direct_messages',
+        'CREATE TABLE IF NOT EXISTS direct_messages ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  sender_id INTEGER NOT NULL REFERENCES users(id),'
+        '  recipient_id INTEGER NOT NULL REFERENCES users(id),'
+        '  body TEXT NOT NULL,'
+        '  is_read BOOLEAN DEFAULT 0,'
+        '  created_at DATETIME'
+        ')',
+    ),
 ]
 
 # ------------------------------------------------------------------------------

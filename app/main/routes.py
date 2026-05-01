@@ -261,6 +261,20 @@ def mark_notification_read(notif_id):
     return redirect(url_for('main.notifications'))
 
 
+@main_bp.route('/notifications/read-all', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    updated = Notification.query.filter_by(
+        user_id=current_user.id, is_read=False
+    ).update({'is_read': True})
+    db.session.commit()
+    if updated:
+        flash(f'{updated} notification{"s" if updated != 1 else ""} marked as read.', 'success')
+    else:
+        flash('No unread notifications.', 'info')
+    return redirect(url_for('main.notifications'))
+
+
 @main_bp.route('/api/notifications/unread-count')
 @login_required
 def unread_notification_count():
