@@ -2252,7 +2252,9 @@ def export_data():
             'supporting_documents': _table_to_dicts(SupportingDocument),
             'document_versions': _table_to_dicts(DocumentVersion),
             'back_date_requests': _table_to_dicts(BackDateRequest),
+            'delete_requests': _table_to_dicts(DeleteRequest),
             'audit_log': _table_to_dicts(AuditLog),
+            'direct_messages': _table_to_dicts(DirectMessage),
         },
     }
 
@@ -2323,8 +2325,8 @@ _DATETIME_COLUMNS = {
     'hod_reviewed_at', 'certified_at', 'assigned_date',
     'date_completed', 'report_submitted_at',
     'preliminary_reviewed_at', 'reviewed_at', 'uploaded_at',
-    'reviewed_at', 'requested_at', 'decided_at',
-    'performed_at', 'locked_until',
+    'requested_at', 'decided_at',
+    'performed_at', 'locked_until', 'last_seen',
 }
 
 
@@ -2425,6 +2427,8 @@ def import_data():
         # Delete in FK-safe order (children first)
         AuditLog.query.delete()
         BackDateRequest.query.delete()
+        DeleteRequest.query.delete()
+        DirectMessage.query.delete()
         DocumentVersion.query.delete()
         SupportingDocument.query.delete()
         ReviewHistory.query.delete()
@@ -2460,6 +2464,7 @@ def import_data():
                 created_at=row.get('created_at'),
                 failed_login_attempts=row.get('failed_login_attempts', 0),
                 locked_until=row.get('locked_until'),
+                last_seen=row.get('last_seen'),
             )
             db.session.add(user)
         db.session.flush()
@@ -2592,6 +2597,24 @@ def import_data():
                 if hasattr(al, col):
                     setattr(al, col, val)
             db.session.add(al)
+
+        # 15. Delete Requests
+        for row in tables.get('delete_requests', []):
+            row = _coerce_row('delete_requests', row)
+            dr = DeleteRequest()
+            for col, val in row.items():
+                if hasattr(dr, col):
+                    setattr(dr, col, val)
+            db.session.add(dr)
+
+        # 16. Direct Messages
+        for row in tables.get('direct_messages', []):
+            row = _coerce_row('direct_messages', row)
+            dm = DirectMessage()
+            for col, val in row.items():
+                if hasattr(dm, col):
+                    setattr(dm, col, val)
+            db.session.add(dm)
 
         db.session.commit()
 

@@ -13,6 +13,7 @@ from app.models import (
     SampleStatus, AssignmentStatus, Setting, Notification,
     KpiTarget, NonWorkingDay, AuditLog, ReviewHistory,
     SupportingDocument, DocumentVersion, BackDateRequest,
+    DeleteRequest, DirectMessage,
     user_roles, user_branches, jamaica_now,
 )
 from tests.conftest import _create_user, _login
@@ -171,7 +172,8 @@ class TestExport:
             'settings', 'samples', 'sample_assignments', 'sample_history',
             'review_history', 'notifications', 'kpi_targets',
             'non_working_days', 'supporting_documents',
-            'document_versions', 'back_date_requests', 'audit_log',
+            'document_versions', 'back_date_requests', 'delete_requests',
+            'audit_log', 'direct_messages',
         }
         assert expected_tables == set(data['tables'].keys())
 
@@ -399,7 +401,9 @@ class TestRoundTrip:
                     'supporting_documents': [],
                     'document_versions': [],
                     'back_date_requests': [],
+                    'delete_requests': [],
                     'audit_log': [],
+                    'direct_messages': [],
                 },
                 'row_counts': {},
             }
