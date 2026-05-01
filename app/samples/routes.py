@@ -341,7 +341,9 @@ def register():
         return redirect(url_for('samples.sample_list'))
 
     selected_type = request.form.get('sample_type') if request.method == 'POST' else request.args.get('type')
-    FormClass = get_sample_register_form(selected_type) if selected_type else SampleRegisterForm
+    if not selected_type:
+        selected_type = list(Branch)[0].name
+    FormClass = get_sample_register_form(selected_type)
     form = FormClass()
 
     if request.method == 'GET' and selected_type in Branch.__members__:
