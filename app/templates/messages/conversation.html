@@ -132,7 +132,7 @@ textarea#msgBody { resize: none; }
             </div>
         </div>
 
-        <div class="msg-body" id="msgBody">
+        <div class="msg-body" id="msgThread">
             {% if thread %}
             {% set ns = namespace(last_date=None) %}
             {% for msg in thread %}
@@ -164,7 +164,7 @@ textarea#msgBody { resize: none; }
         <div class="msg-foot">
             <form method="POST" class="d-flex gap-2" id="sendForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea class="form-control" id="msgBody" name="body" rows="2"
+                <textarea class="form-control" id="msgInput" name="body" rows="2"
                           placeholder="Type a message…" maxlength="4000" required></textarea>
                 <button type="submit" class="btn btn-primary align-self-end" style="padding:.5rem .9rem;">
                     <i class="bi bi-send-fill"></i>
@@ -213,12 +213,12 @@ textarea#msgBody { resize: none; }
 <script>
 // Auto-scroll to bottom of chat
 (function() {
-    var body = document.getElementById('msgBody');
+    var body = document.getElementById('msgThread');
     if (body) body.scrollTop = body.scrollHeight;
 })();
 
 // Ctrl+Enter / Cmd+Enter to submit
-document.querySelector('textarea[name="body"]').addEventListener('keydown', function(e) {
+document.getElementById('msgInput').addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         document.getElementById('sendForm').submit();
