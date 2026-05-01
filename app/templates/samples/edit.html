@@ -96,6 +96,30 @@
                             {{ form.toxicology_sample_type_name.label(class="form-label fw-semibold") }}
                             {{ form.toxicology_sample_type_name(class="form-select") }}
                         </div>
+                        <div class="col-md-4">
+                            {{ form.patient_gender.label(class="form-label fw-semibold") }}
+                            {{ form.patient_gender(class="form-select") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.doctors_name.label(class="form-label fw-semibold") }}
+                            {{ form.doctors_name(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.registration_docket_no.label(class="form-label fw-semibold") }}
+                            {{ form.registration_docket_no(class="form-control") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.ward_clinic.label(class="form-label fw-semibold") }}
+                            {{ form.ward_clinic(class="form-control") }}
+                        </div>
+                        <div class="col-md-8">
+                            {{ form.test_requested.label(class="form-label fw-semibold") }}
+                            {{ form.test_requested(class="form-control") }}
+                        </div>
+                        <div class="col-12">
+                            {{ form.diagnosis_indicated.label(class="form-label fw-semibold") }}
+                            {{ form.diagnosis_indicated(class="form-control", rows=2) }}
+                        </div>
 
                         <div class="col-md-6">
                             {{ form.expected_report_date.label(class="form-label fw-semibold") }}

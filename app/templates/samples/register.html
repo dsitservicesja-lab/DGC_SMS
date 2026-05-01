@@ -105,6 +105,54 @@
                         </div>
                         {% endif %}
 
+                        {# Patient Gender (Toxicology) #}
+                        {% if form.patient_gender %}
+                        <div class="col-md-4" id="patient_gender_field">
+                            {{ form.patient_gender.label(class="form-label fw-semibold") }}
+                            {{ form.patient_gender(class="form-select") }}
+                        </div>
+                        {% endif %}
+
+                        {# Doctor's Name (Toxicology) #}
+                        {% if form.doctors_name %}
+                        <div class="col-md-4" id="doctors_name_field">
+                            {{ form.doctors_name.label(class="form-label fw-semibold") }}
+                            {{ form.doctors_name(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Registration/Docket No. (Toxicology) #}
+                        {% if form.registration_docket_no %}
+                        <div class="col-md-4" id="registration_docket_no_field">
+                            {{ form.registration_docket_no.label(class="form-label fw-semibold") }}
+                            {{ form.registration_docket_no(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Ward/Clinic (Toxicology) #}
+                        {% if form.ward_clinic %}
+                        <div class="col-md-4" id="ward_clinic_field">
+                            {{ form.ward_clinic.label(class="form-label fw-semibold") }}
+                            {{ form.ward_clinic(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Test Requested (Toxicology) #}
+                        {% if form.test_requested %}
+                        <div class="col-md-8" id="test_requested_field">
+                            {{ form.test_requested.label(class="form-label fw-semibold") }}
+                            {{ form.test_requested(class="form-control") }}
+                        </div>
+                        {% endif %}
+
+                        {# Diagnosis Indicated (Toxicology) #}
+                        {% if form.diagnosis_indicated %}
+                        <div class="col-12" id="diagnosis_indicated_field">
+                            {{ form.diagnosis_indicated.label(class="form-label fw-semibold") }}
+                            {{ form.diagnosis_indicated(class="form-control", rows=2) }}
+                        </div>
+                        {% endif %}
+
                         {# Milk Type (Food Milk) #}
                         {% if form.milk_type %}
                         <div class="col-md-4" id="milk_type_field">

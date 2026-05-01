@@ -423,6 +423,14 @@ class Sample(db.Model):
     # Toxicology – sample type dropdown (Blood, Urine, etc.)
     toxicology_sample_type_name = db.Column(db.String(100), nullable=True)
 
+    # Toxicology – additional clinical fields
+    doctors_name = db.Column(db.String(255), nullable=True)
+    registration_docket_no = db.Column(db.String(100), nullable=True)
+    patient_gender = db.Column(db.String(20), nullable=True)
+    ward_clinic = db.Column(db.String(255), nullable=True)
+    test_requested = db.Column(db.String(500), nullable=True)
+    diagnosis_indicated = db.Column(db.Text, nullable=True)
+
     # Scanned document
     scanned_file = db.Column(db.String(500), nullable=True)
     scanned_file_original_name = db.Column(db.String(255), nullable=True)

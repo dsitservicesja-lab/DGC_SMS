@@ -407,6 +407,25 @@ def register():
         bln = _get_field(form, 'batch_lot_number')
         if bln:
             sample.batch_lot_number = bln
+        # Toxicology clinical fields
+        dn = _get_field(form, 'doctors_name')
+        if dn:
+            sample.doctors_name = dn
+        rdn = _get_field(form, 'registration_docket_no')
+        if rdn:
+            sample.registration_docket_no = rdn
+        pg = _get_field(form, 'patient_gender')
+        if pg:
+            sample.patient_gender = pg
+        wc = _get_field(form, 'ward_clinic')
+        if wc:
+            sample.ward_clinic = wc
+        tr = _get_field(form, 'test_requested')
+        if tr:
+            sample.test_requested = tr
+        di = _get_field(form, 'diagnosis_indicated')
+        if di:
+            sample.diagnosis_indicated = di
 
         if form.scanned_file.data:
             stored, original = _save_file(form.scanned_file.data)
@@ -543,6 +562,12 @@ def edit(sample_id):
         sample.lot_number = form.lot_number.data or None
         sample.expiration_date = form.expiration_date.data
         sample.toxicology_sample_type_name = form.toxicology_sample_type_name.data or None
+        sample.doctors_name = form.doctors_name.data or None
+        sample.registration_docket_no = form.registration_docket_no.data or None
+        sample.patient_gender = form.patient_gender.data or None
+        sample.ward_clinic = form.ward_clinic.data or None
+        sample.test_requested = form.test_requested.data or None
+        sample.diagnosis_indicated = form.diagnosis_indicated.data or None
         sample.expected_report_date = form.expected_report_date.data
 
         scanned_upload = form.scanned_file.data

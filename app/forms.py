@@ -353,9 +353,42 @@ class ToxicologySampleRegisterForm(SampleRegisterForm):
         validators=[Optional()],
     )
 
+    # Source relabelled as "Hospital" for toxicology
+    source = StringField('Hospital', validators=[Optional(), Length(max=255)])
+
     patient_name = StringField(
         'Patient Name',
         validators=[Optional(), Length(max=255)]
+    )
+    patient_gender = SelectField(
+        'Patient Gender',
+        choices=[
+            ('', '-- Select --'),
+            ('Male', 'Male'),
+            ('Female', 'Female'),
+            ('Other', 'Other'),
+        ],
+        validators=[Optional()],
+    )
+    doctors_name = StringField(
+        "Doctor's Name",
+        validators=[Optional(), Length(max=255)]
+    )
+    registration_docket_no = StringField(
+        'Registration/Docket No.',
+        validators=[Optional(), Length(max=100)]
+    )
+    ward_clinic = StringField(
+        'Ward/Clinic',
+        validators=[Optional(), Length(max=255)]
+    )
+    test_requested = StringField(
+        'Test Requested',
+        validators=[Optional(), Length(max=500)]
+    )
+    diagnosis_indicated = TextAreaField(
+        'Diagnosis Indicated',
+        validators=[Optional()]
     )
     volume = StringField(
         'Volume',
@@ -551,6 +584,21 @@ class SampleEditForm(FlaskForm):
         choices=TOXICOLOGY_SAMPLE_TYPE_CHOICES,
         validators=[Optional()],
     )
+    doctors_name = StringField("Doctor's Name", validators=[Optional(), Length(max=255)])
+    registration_docket_no = StringField('Registration/Docket No.', validators=[Optional(), Length(max=100)])
+    patient_gender = SelectField(
+        'Patient Gender',
+        choices=[
+            ('', '-- Select --'),
+            ('Male', 'Male'),
+            ('Female', 'Female'),
+            ('Other', 'Other'),
+        ],
+        validators=[Optional()],
+    )
+    ward_clinic = StringField('Ward/Clinic', validators=[Optional(), Length(max=255)])
+    test_requested = StringField('Test Requested', validators=[Optional(), Length(max=500)])
+    diagnosis_indicated = TextAreaField('Diagnosis Indicated', validators=[Optional()])
     expected_report_date = DateField('Expected Report Date', validators=[Optional()])
     scanned_file = FileField(
         'Replace Submission Form',

@@ -159,7 +159,7 @@
                             <dd class="mb-3">{{ sample.quantity }}</dd>
                             {% endif %}
                             {% if sample.source %}
-                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Source</dt>
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">{% if sample.sample_type.name == 'TOXICOLOGY' %}Hospital{% else %}Source{% endif %}</dt>
                             <dd class="mb-0">{{ sample.source }}</dd>
                             {% endif %}
                             {% if sample.lot_number %}
@@ -223,6 +223,30 @@
                             {% if sample.patient_name %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Patient Name</dt>
                             <dd class="mb-3">{{ sample.patient_name }}</dd>
+                            {% endif %}
+                            {% if sample.patient_gender %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Patient Gender</dt>
+                            <dd class="mb-3">{{ sample.patient_gender }}</dd>
+                            {% endif %}
+                            {% if sample.doctors_name %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Doctor's Name</dt>
+                            <dd class="mb-3">{{ sample.doctors_name }}</dd>
+                            {% endif %}
+                            {% if sample.registration_docket_no %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Registration/Docket No.</dt>
+                            <dd class="mb-3">{{ sample.registration_docket_no }}</dd>
+                            {% endif %}
+                            {% if sample.ward_clinic %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Ward/Clinic</dt>
+                            <dd class="mb-3">{{ sample.ward_clinic }}</dd>
+                            {% endif %}
+                            {% if sample.test_requested %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Test Requested</dt>
+                            <dd class="mb-3">{{ sample.test_requested }}</dd>
+                            {% endif %}
+                            {% if sample.diagnosis_indicated %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Diagnosis Indicated</dt>
+                            <dd class="mb-3">{{ sample.diagnosis_indicated }}</dd>
                             {% endif %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Registered By</dt>
                             <dd class="mb-0">{{ sample.uploaded_by_user.full_name if sample.uploaded_by_user else 'Unknown' }}</dd>

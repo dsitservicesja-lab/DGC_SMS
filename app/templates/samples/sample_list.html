@@ -128,7 +128,7 @@
                     <th><a href="{{ sort_url('sample_name') }}" class="text-decoration-none text-reset">Sample Name{{ sort_icon('sample_name') }}</a></th>
                     <th>Type</th>
                     <th><a href="{{ sort_url('date_received') }}" class="text-decoration-none text-reset">Date Received{{ sort_icon('date_received') }}</a></th>
-                    <th>Time Remaining</th>
+                    <th>Remaining/Completion Time</th>
                     <th><a href="{{ sort_url('status') }}" class="text-decoration-none text-reset">Status{{ sort_icon('status') }}</a></th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -153,6 +153,23 @@
                     </td>
                     <td class="text-muted" style="font-size:.85rem;">{{ sample.date_received.strftime('%d %b %Y') }}</td>
                     <td style="font-size:.85rem;">
+                        {% if sample.status.name == 'CERTIFIED' and sample.certified_at %}
+                            {# Show how long it took to certify #}
+                            {% set _cert_days = (sample.certified_at.date() - sample.date_received).days %}
+                            {% if _cert_days <= 14 %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-patch-check-fill me-1"></i>{{ _cert_days }} day{{ 's' if _cert_days != 1 else '' }}
+                            </span>
+                            {% elif _cert_days <= 28 %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-patch-check me-1"></i>{{ _cert_days }} days
+                            </span>
+                            {% else %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-patch-check me-1"></i>{{ _cert_days }} days
+                            </span>
+                            {% endif %}
+                        {% else %}
                         {% set _remaining = tat_remaining.get(sample.id) %}
                         {% if _remaining is none %}
                             <span class="text-muted">—</span>
@@ -172,6 +189,7 @@
                             <span class="badge bg-success">
                                 <i class="bi bi-clock me-1"></i>{{ _remaining }} working days
                             </span>
+                        {% endif %}
                         {% endif %}
                     </td>
                     <td>

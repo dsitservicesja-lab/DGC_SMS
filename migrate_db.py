@@ -96,6 +96,13 @@ MIGRATIONS = [
     ('sample_assignments', 'out_of_spec', 'BOOLEAN'),
     # back_date_requests – optional link to a specific assignment
     ('back_date_requests', 'assignment_id', 'INTEGER REFERENCES sample_assignments(id)'),
+    # samples – toxicology clinical fields
+    ('samples', 'doctors_name', 'VARCHAR(255)'),
+    ('samples', 'registration_docket_no', 'VARCHAR(100)'),
+    ('samples', 'patient_gender', 'VARCHAR(20)'),
+    ('samples', 'ward_clinic', 'VARCHAR(255)'),
+    ('samples', 'test_requested', 'VARCHAR(500)'),
+    ('samples', 'diagnosis_indicated', 'TEXT'),
 ]
 
 NEW_TABLES = [
