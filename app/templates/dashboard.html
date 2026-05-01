@@ -73,13 +73,21 @@
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card stat-card stat-purple h-100">
+        <a href="{{ url_for('samples.sample_list', status=['REPORT_SUBMITTED', 'UNDER_PRELIMINARY_REVIEW']) }}"
+           class="text-decoration-none">
+        <div class="card stat-card stat-purple h-100 stat-card-link">
             <div class="card-body">
                 <div class="stat-label">Preliminary Reviews</div>
-                <div class="stat-value" data-count="{{ stats.preliminary_review }}">{{ stats.preliminary_review }}</div>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="stat-value" data-count="{{ stats.preliminary_review }}">{{ stats.preliminary_review }}</div>
+                    {% if stats.preliminary_review > 0 %}
+                    <span class="badge stat-needs-review-badge ms-1">Needs Review</span>
+                    {% endif %}
+                </div>
             </div>
             <i class="bi bi-eye stat-icon"></i>
         </div>
+        </a>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="card stat-card stat-green h-100">
@@ -351,6 +359,21 @@
 [data-bs-theme="dark"] .notif-type-sm.review { background: #052e16; color: #34d399; }
 [data-bs-theme="dark"] .notif-type-sm.alert-icon { background: #450a0a; color: #f87171; }
 [data-bs-theme="dark"] .notif-type-sm.default { background: #1e293b; color: #94a3b8; }
+
+/* Linked stat card */
+.stat-card-link { cursor: pointer; }
+.stat-card-link:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 14px 32px rgba(0,0,0,.25) !important;
+}
+
+/* Preliminary review needs-review badge on stat card */
+.stat-needs-review-badge {
+    font-size: .7rem;
+    background: rgba(255,255,255,.9);
+    color: #6c3483;
+    vertical-align: middle;
+}
 </style>
 {% endblock %}
 

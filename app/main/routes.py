@@ -119,7 +119,7 @@ def dashboard():
         stats['registered'] = my_samples.filter_by(
             status=SampleStatus.REGISTERED
         ).count()
-        stats['preliminary_review'] = my_samples.filter(
+        stats['preliminary_review'] = Sample.query.filter(
             Sample.status.in_([
                 SampleStatus.REPORT_SUBMITTED,
                 SampleStatus.UNDER_PRELIMINARY_REVIEW,

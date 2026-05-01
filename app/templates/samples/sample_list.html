@@ -55,7 +55,7 @@
 <div class="mb-2 text-muted small">
     <i class="bi bi-info-circle me-1"></i>
     Showing <strong>{{ result_count }}</strong> result{% if result_count != 1 %}s{% endif %}
-    {% if status_filter or type_filter or search %}
+    {% if status_filter or status_filters or type_filter or search %}
     for the current filters
     {% endif %}
 </div>
@@ -97,12 +97,12 @@
 } %}
 
 {% macro sort_url(col) -%}
-    {{ url_for('samples.sample_list', q=search, status=status_filter, type=type_filter,
+    {{ url_for('samples.sample_list', q=search, status=status_filters if status_filters|length > 1 else status_filter, type=type_filter,
                sort=col, dir=('asc' if (sort_by == col and sort_dir == 'desc') else 'desc')) }}
 {%- endmacro %}
 
 {% macro page_url(p) -%}
-    {{ url_for('samples.sample_list', q=search, status=status_filter, type=type_filter,
+    {{ url_for('samples.sample_list', q=search, status=status_filters if status_filters|length > 1 else status_filter, type=type_filter,
                sort=sort_by, dir=sort_dir, page=p) }}
 {%- endmacro %}
 

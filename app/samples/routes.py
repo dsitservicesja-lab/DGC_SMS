@@ -90,11 +90,21 @@ def sample_list():
     query = Sample.query
 
     # Filters
-    status_filter = request.args.get('status')
+    status_filters = request.args.getlist('status')
+    status_filter = status_filters[0] if len(status_filters) == 1 else None
     type_filter = request.args.get('type')
     search = request.args.get('q', '').strip()
 
-    if status_filter:
+    if len(status_filters) > 1:
+        valid_statuses = []
+        for sf in status_filters:
+            try:
+                valid_statuses.append(SampleStatus[sf])
+            except KeyError:
+                pass
+        if valid_statuses:
+            query = query.filter(Sample.status.in_(valid_statuses))
+    elif status_filter:
         try:
             query = query.filter(Sample.status == SampleStatus[status_filter])
         except KeyError:
@@ -279,10 +289,11 @@ def sample_list():
         SampleStatus=SampleStatus,
         Branch=Branch,
         status_filter=status_filter,
+        status_filters=status_filters,
         type_filter=type_filter,
         search=search,
         result_count=result_count,
-        is_filtered=bool(status_filter or type_filter or search),
+        is_filtered=bool(status_filters or type_filter or search),
         today_date=today,
         sort_by=sort_by,
         sort_dir=sort_dir,
