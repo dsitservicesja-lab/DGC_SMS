@@ -1089,6 +1089,38 @@ class AuditLog(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# Direct Messages  (in-app messenger)
+# ---------------------------------------------------------------------------
+
+class DirectMessage(db.Model):
+    """A private message sent from one user to another."""
+    __tablename__ = 'direct_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False, index=True
+    )
+    recipient_id = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False, index=True
+    )
+    body = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=jamaica_now)
+
+    sender = db.relationship(
+        'User', foreign_keys=[sender_id],
+        backref=db.backref('sent_messages', lazy='dynamic')
+    )
+    recipient = db.relationship(
+        'User', foreign_keys=[recipient_id],
+        backref=db.backref('received_messages', lazy='dynamic')
+    )
+
+    def __repr__(self):
+        return f'<DirectMessage from {self.sender_id} to {self.recipient_id}>'
+
+
+# ---------------------------------------------------------------------------
 # Financial Year Utilities
 # ---------------------------------------------------------------------------
 

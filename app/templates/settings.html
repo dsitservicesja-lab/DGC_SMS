@@ -89,6 +89,25 @@
         </div>
         </form>
 
+        <!-- Test email form (outside the settings form) -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-send-check me-2"></i>Test Email Delivery</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Send a test email to <strong>{{ current_user.email }}</strong> to confirm the mail
+                    server is reachable and credentials are correct.
+                </p>
+                <form method="POST" action="{{ url_for('main.test_email') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-envelope-arrow-up me-1"></i>Send Test Email
+                    </button>
+                </form>
+            </div>
+        </div>
+
         {% if current_user.has_role(Role.ADMIN) %}
         <!-- Export / Import card -->
         <div class="card mb-4 border-primary">

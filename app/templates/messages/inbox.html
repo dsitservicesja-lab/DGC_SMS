@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Messages - DGC SMS{% endblock %}
+
+{% block extra_css %}
+<style>
+.msg-layout { display: flex; gap: 1rem; min-height: 60vh; }
+.msg-sidebar {
+    width: 280px; flex-shrink: 0;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: .75rem;
+    overflow: hidden;
+}
+.msg-main {
+    flex: 1; background: #fff; border: 1px solid #e2e8f0; border-radius: .75rem;
+    display: flex; align-items: center; justify-content: center;
+    color: #94a3b8; flex-direction: column; gap: .75rem;
+    min-height: 300px;
+}
+.msg-main i { font-size: 3rem; opacity: .4; }
+
+.conv-item {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .75rem 1rem; border-bottom: 1px solid #f1f5f9;
+    text-decoration: none; color: inherit;
+    transition: background .15s;
+}
+.conv-item:hover { background: #f8fafc; }
+.conv-item.unread { background: #f0f7ff; }
+.conv-avatar {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--dgc-secondary), var(--dgc-accent));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .9rem;
+}
+.conv-body { flex: 1; min-width: 0; }
+.conv-name { font-weight: 600; font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-preview { font-size: .78rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-meta { font-size: .7rem; color: #94a3b8; text-align: right; white-space: nowrap; }
+.unread-badge {
+    background: #2e86c1; color: #fff; border-radius: 99px;
+    font-size: .65rem; font-weight: 700; min-width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
+}
+.new-conv-btn {
+    display: flex; align-items: center; justify-content: center; gap: .5rem;
+    padding: .65rem 1rem; margin: .75rem;
+    background: linear-gradient(135deg, var(--dgc-secondary), #3498db);
+    color: #fff; border-radius: .5rem; font-size: .85rem; font-weight: 600;
+    text-decoration: none; transition: opacity .15s;
+}
+.new-conv-btn:hover { opacity: .88; color: #fff; }
+
+/* Dark mode */
+[data-bs-theme="dark"] .msg-sidebar,
+[data-bs-theme="dark"] .msg-main { background: #1e293b; border-color: #334155; }
+[data-bs-theme="dark"] .conv-item:hover { background: #263548; }
+[data-bs-theme="dark"] .conv-item.unread { background: #1a2e47; }
+[data-bs-theme="dark"] .conv-preview { color: #94a3b8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-chat-dots"></i> Messages</h2>
+</div>
+
+<div class="msg-layout">
+    <!-- Conversation list -->
+    <div class="msg-sidebar">
+        <a href="#newConvModal" data-bs-toggle="modal" class="new-conv-btn">
+            <i class="bi bi-pencil-square"></i> New Conversation
+        </a>
+        {% if conversations %}
+        <div>
+            {% for c in conversations %}
+            <a href="{{ url_for('main.messages_conversation', partner_id=c.partner.id) }}"
+               class="conv-item {% if c.unread %}unread{% endif %}">
+                <div class="conv-avatar">
+                    {{ c.partner.first_name[0] }}{{ c.partner.last_name[0] }}
+                </div>
+                <div class="conv-body">
+                    <div class="conv-name">{{ c.partner.full_name }}</div>
+                    <div class="conv-preview">
+                        {% if c.last_msg.sender_id == current_user.id %}
+                        <span class="text-muted">You:</span>
+                        {% endif %}
+                        {{ c.last_msg.body[:60] }}{% if c.last_msg.body|length > 60 %}…{% endif %}
+                    </div>
+                </div>
+                <div class="conv-meta">
+                    <div>{{ c.last_msg.created_at.strftime('%d %b') }}</div>
+                    {% if c.unread %}
+                    <div class="mt-1"><span class="unread-badge">{{ c.unread }}</span></div>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted p-4" style="font-size:.85rem;">
+            <i class="bi bi-chat-square-text d-block mb-2" style="font-size:2rem; opacity:.3;"></i>
+            No conversations yet
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Empty state -->
+    <div class="msg-main">
+        <i class="bi bi-chat-dots"></i>
+        <p class="mb-0 fw-semibold">Select a conversation</p>
+        <p class="small">or start a new one</p>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newConvModal">
+            <i class="bi bi-pencil-square me-1"></i> New Message
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- New conversation modal -->
+<div class="modal fade" id="newConvModal" tabindex="-1" aria-labelledby="newConvLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newConvLabel"><i class="bi bi-pencil-square me-2"></i>New Message</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label fw-semibold">Send message to:</label>
+                <input type="text" class="form-control mb-2" id="userSearch" placeholder="Search users…">
+                <div id="userList" style="max-height:240px;overflow-y:auto;">
+                    {% for u in all_users %}
+                    <a href="{{ url_for('main.messages_conversation', partner_id=u.id) }}"
+                       class="d-flex align-items-center gap-2 p-2 rounded user-row text-decoration-none text-body"
+                       data-name="{{ u.full_name|lower }}">
+                        <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--dgc-secondary),var(--dgc-accent));color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;">
+                            {{ u.first_name[0] }}{{ u.last_name[0] }}
+                        </div>
+                        <div>
+                            <div style="font-size:.875rem;font-weight:600;">{{ u.full_name }}</div>
+                            <div style="font-size:.75rem;color:#64748b;">{{ u.role_names }}</div>
+                        </div>
+                    </a>
+                    {% else %}
+                    <p class="text-muted small mb-0">No other users available.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('userSearch').addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#userList .user-row').forEach(function(row) {
+        row.style.display = row.dataset.name.includes(q) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

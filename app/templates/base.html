@@ -466,6 +466,12 @@
             <i class="bi bi-moon-stars" id="theme-icon"></i>
         </button>
 
+        <!-- Messages -->
+        <a href="{{ url_for('main.messages_inbox') }}" class="topbar-icon-btn" title="Messages">
+            <i class="bi bi-chat-dots fs-5"></i>
+            <span id="msg-badge" class="topbar-notif-badge d-none">0</span>
+        </a>
+
         <!-- Notifications bell -->
         <a href="{{ url_for('main.notifications') }}" class="topbar-icon-btn" title="Notifications">
             <i class="bi bi-bell fs-5"></i>
@@ -539,6 +545,13 @@
                     <a class="nav-link {% if request.endpoint == 'main.notifications' %}active{% endif %}"
                        href="{{ url_for('main.notifications') }}">
                         <i class="bi bi-bell"></i> Notifications
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('main.messages') %}active{% endif %}"
+                       href="{{ url_for('main.messages_inbox') }}">
+                        <i class="bi bi-chat-dots"></i> Messages
+                        <span id="sidebar-msg-badge" class="ms-auto badge bg-primary d-none" style="font-size:.6rem;"></span>
                     </a>
                 </li>
                 {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) %}
@@ -805,6 +818,26 @@
         }
         checkNotifications();
         setInterval(checkNotifications, 30000);
+
+        /* ── Message unread count polling ─────────── */
+        function checkMessages() {
+            fetch('{{ url_for("main.unread_message_count") }}')
+                .then(r => r.json())
+                .then(data => {
+                    const topBadge = document.getElementById('msg-badge');
+                    const sideBadge = document.getElementById('sidebar-msg-badge');
+                    if (data.count > 0) {
+                        if (topBadge) { topBadge.textContent = data.count; topBadge.classList.remove('d-none'); }
+                        if (sideBadge) { sideBadge.textContent = data.count; sideBadge.classList.remove('d-none'); }
+                    } else {
+                        if (topBadge) topBadge.classList.add('d-none');
+                        if (sideBadge) sideBadge.classList.add('d-none');
+                    }
+                })
+                .catch(() => {});
+        }
+        checkMessages();
+        setInterval(checkMessages, 30000);
 
         /* ── Mobile sidebar toggle ────────────── */
         const sidebarToggle   = document.getElementById('sidebar-toggle');

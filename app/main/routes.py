@@ -20,7 +20,7 @@ from app.models import (
     fiscal_quarter_months, fiscal_year_date_range,
     SupportingDocument, ReviewHistory, AuditLog,
     user_roles, user_branches, user_permissions,
-    DeleteRequest,
+    DeleteRequest, DirectMessage,
 )
 
 
@@ -1547,7 +1547,6 @@ def settings():
         db.session.commit()
         flash('Settings updated.', 'success')
         return redirect(url_for('main.settings'))
-
     email_enabled = Setting.get_bool('email_enabled', default=True)
     preliminary_review_grouped = Setting.get_bool('preliminary_review_grouped', default=False)
     technical_review_grouped = Setting.get_bool('technical_review_grouped', default=False)
@@ -1556,6 +1555,44 @@ def settings():
                            preliminary_review_grouped=preliminary_review_grouped,
                            technical_review_grouped=technical_review_grouped,
                            sample_count=sample_count)
+
+
+@main_bp.route('/settings/test-email', methods=['POST'])
+@login_required
+def test_email():
+    """Send a test email to the current user to verify mail configuration."""
+    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+    if not current_user.email:
+        flash('Your account does not have an email address configured.', 'warning')
+        return redirect(url_for('main.settings'))
+    try:
+        from app.notifications import send_email, _build_html_email
+        body_text = (
+            f'Hello {current_user.first_name},\n\n'
+            'This is a test email from DGC SMS to verify your mail configuration is working.\n\n'
+            'If you received this email, your email settings are correctly configured.'
+        )
+        body_html = _build_html_email(
+            'Test Email',
+            body_text,
+        )
+        send_email(
+            subject='[DGC SMS] Test Email',
+            recipients=[current_user.email],
+            body_text=body_text,
+            body_html=body_html,
+        )
+        flash(
+            f'Test email queued for delivery to {current_user.email}. '
+            'Check your inbox (and spam folder) in a few minutes.',
+            'success',
+        )
+    except Exception as exc:
+        current_app.logger.exception('Test email failed')
+        flash(f'Failed to send test email: {exc}', 'danger')
+    return redirect(url_for('main.settings'))
 
 
 @main_bp.route('/clear-sample-data', methods=['POST'])
@@ -2558,3 +2595,123 @@ def import_data():
         flash(f'Import failed: {e}', 'danger')
 
     return redirect(url_for('main.settings'))
+
+
+# ---------------------------------------------------------------------------
+# In-App Messenger
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/messages')
+@login_required
+def messages_inbox():
+    """Show all conversations for the current user."""
+    from sqlalchemy import func, or_, and_
+    uid = current_user.id
+
+    # All users that exchanged at least one message with the current user
+    sent_to = db.session.query(DirectMessage.recipient_id.label('other_id')).filter(
+        DirectMessage.sender_id == uid
+    )
+    received_from = db.session.query(DirectMessage.sender_id.label('other_id')).filter(
+        DirectMessage.recipient_id == uid
+    )
+    partner_ids = {row.other_id for row in sent_to.union(received_from).all()}
+
+    conversations = []
+    for pid in partner_ids:
+        partner = db.session.get(User, pid)
+        if not partner:
+            continue
+        # Most recent message in this conversation
+        last_msg = DirectMessage.query.filter(
+            or_(
+                and_(DirectMessage.sender_id == uid, DirectMessage.recipient_id == pid),
+                and_(DirectMessage.sender_id == pid, DirectMessage.recipient_id == uid),
+            )
+        ).order_by(DirectMessage.created_at.desc()).first()
+        unread_count = DirectMessage.query.filter_by(
+            sender_id=pid, recipient_id=uid, is_read=False
+        ).count()
+        conversations.append({
+            'partner': partner,
+            'last_msg': last_msg,
+            'unread': unread_count,
+        })
+
+    # Sort by most recent message first
+    conversations.sort(key=lambda c: c['last_msg'].created_at, reverse=True)
+
+    # Users available to start a new conversation (all active users except self)
+    all_users = User.query.filter(
+        User.id != uid,
+        User.is_active_user.is_(True),
+    ).order_by(User.first_name, User.last_name).all()
+
+    return render_template(
+        'messages/inbox.html',
+        conversations=conversations,
+        all_users=all_users,
+    )
+
+
+@main_bp.route('/messages/<int:partner_id>', methods=['GET', 'POST'])
+@login_required
+def messages_conversation(partner_id):
+    """View and send messages in a conversation with partner_id."""
+    from sqlalchemy import or_, and_
+
+    partner = db.get_or_404(User, partner_id)
+    if partner.id == current_user.id:
+        flash('You cannot message yourself.', 'warning')
+        return redirect(url_for('main.messages_inbox'))
+
+    uid = current_user.id
+
+    if request.method == 'POST':
+        body = request.form.get('body', '').strip()
+        if not body:
+            flash('Message cannot be empty.', 'warning')
+            return redirect(url_for('main.messages_conversation', partner_id=partner_id))
+        if len(body) > 4000:
+            flash('Message is too long (max 4000 characters).', 'warning')
+            return redirect(url_for('main.messages_conversation', partner_id=partner_id))
+        msg = DirectMessage(sender_id=uid, recipient_id=partner_id, body=body)
+        db.session.add(msg)
+        db.session.commit()
+        return redirect(url_for('main.messages_conversation', partner_id=partner_id))
+
+    # Mark all incoming messages from partner as read
+    DirectMessage.query.filter_by(
+        sender_id=partner_id, recipient_id=uid, is_read=False
+    ).update({'is_read': True})
+    db.session.commit()
+
+    # Load full thread ordered oldest→newest
+    thread = DirectMessage.query.filter(
+        or_(
+            and_(DirectMessage.sender_id == uid, DirectMessage.recipient_id == partner_id),
+            and_(DirectMessage.sender_id == partner_id, DirectMessage.recipient_id == uid),
+        )
+    ).order_by(DirectMessage.created_at.asc()).all()
+
+    # Users available to start a new conversation (for sidebar)
+    all_users = User.query.filter(
+        User.id != uid,
+        User.is_active_user.is_(True),
+    ).order_by(User.first_name, User.last_name).all()
+
+    return render_template(
+        'messages/conversation.html',
+        partner=partner,
+        thread=thread,
+        all_users=all_users,
+    )
+
+
+@main_bp.route('/api/messages/unread-count')
+@login_required
+def unread_message_count():
+    count = DirectMessage.query.filter_by(
+        recipient_id=current_user.id, is_read=False
+    ).count()
+    return jsonify({'count': count})

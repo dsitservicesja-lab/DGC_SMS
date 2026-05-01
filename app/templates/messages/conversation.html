@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Chat with {{ partner.full_name }} - DGC SMS{% endblock %}
+
+{% block extra_css %}
+<style>
+.msg-layout { display: flex; gap: 1rem; min-height: 65vh; }
+.msg-sidebar {
+    width: 280px; flex-shrink: 0;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: .75rem;
+    overflow: hidden;
+}
+.msg-panel {
+    flex: 1; background: #fff; border: 1px solid #e2e8f0; border-radius: .75rem;
+    display: flex; flex-direction: column; min-height: 500px;
+}
+.msg-panel-header {
+    padding: .85rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; gap: .75rem;
+}
+.msg-body {
+    flex: 1; overflow-y: auto; padding: 1.25rem;
+    display: flex; flex-direction: column; gap: .75rem;
+}
+.msg-foot {
+    padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+}
+.bubble-row { display: flex; gap: .5rem; align-items: flex-end; }
+.bubble-row.mine { flex-direction: row-reverse; }
+.bubble {
+    max-width: 65%; padding: .6rem .9rem; border-radius: 1rem;
+    font-size: .875rem; line-height: 1.5; word-break: break-word;
+    position: relative;
+}
+.bubble.theirs {
+    background: #f1f5f9; color: #1e293b; border-bottom-left-radius: .25rem;
+}
+.bubble.mine {
+    background: linear-gradient(135deg, var(--dgc-secondary), #3498db);
+    color: #fff; border-bottom-right-radius: .25rem;
+}
+.bubble-time { font-size: .65rem; opacity: .6; white-space: nowrap; }
+.bubble.mine .bubble-time { text-align: right; }
+.bubble-avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #64748b, #94a3b8);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .72rem; margin-bottom: 2px;
+}
+.day-separator {
+    text-align: center; color: #94a3b8; font-size: .72rem;
+    display: flex; align-items: center; gap: .75rem; margin: .5rem 0;
+}
+.day-separator::before, .day-separator::after {
+    content: ''; flex: 1; height: 1px; background: #e2e8f0;
+}
+
+/* Sidebar styles (same as inbox) */
+.conv-item {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .75rem 1rem; border-bottom: 1px solid #f1f5f9;
+    text-decoration: none; color: inherit; transition: background .15s;
+}
+.conv-item:hover { background: #f8fafc; }
+.conv-item.active { background: #eff6ff; }
+.conv-avatar-sm {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--dgc-secondary), var(--dgc-accent));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .8rem;
+}
+.conv-name { font-weight: 600; font-size: .875rem; }
+.new-conv-btn {
+    display: flex; align-items: center; justify-content: center; gap: .5rem;
+    padding: .65rem 1rem; margin: .75rem;
+    background: linear-gradient(135deg, var(--dgc-secondary), #3498db);
+    color: #fff; border-radius: .5rem; font-size: .85rem; font-weight: 600;
+    text-decoration: none; transition: opacity .15s;
+}
+.new-conv-btn:hover { opacity: .88; color: #fff; }
+.partner-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--dgc-secondary), var(--dgc-accent));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .95rem; flex-shrink: 0;
+}
+textarea#msgBody { resize: none; }
+
+/* Dark mode */
+[data-bs-theme="dark"] .msg-sidebar,
+[data-bs-theme="dark"] .msg-panel { background: #1e293b; border-color: #334155; }
+[data-bs-theme="dark"] .msg-panel-header,
+[data-bs-theme="dark"] .msg-foot { border-color: #334155; }
+[data-bs-theme="dark"] .bubble.theirs { background: #334155; color: #e2e8f0; }
+[data-bs-theme="dark"] .day-separator { color: #475569; }
+[data-bs-theme="dark"] .day-separator::before,
+[data-bs-theme="dark"] .day-separator::after { background: #334155; }
+[data-bs-theme="dark"] .conv-item:hover { background: #263548; }
+[data-bs-theme="dark"] .conv-item.active { background: #1e3a5f; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-chat-dots"></i> Messages</h2>
+    <a href="{{ url_for('main.messages_inbox') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Inbox
+    </a>
+</div>
+
+<div class="msg-layout">
+    <!-- Contact sidebar -->
+    <div class="msg-sidebar">
+        <a href="#newConvModal" data-bs-toggle="modal" class="new-conv-btn">
+            <i class="bi bi-pencil-square"></i> New Conversation
+        </a>
+        {% for u in all_users %}
+        <a href="{{ url_for('main.messages_conversation', partner_id=u.id) }}"
+           class="conv-item {% if u.id == partner.id %}active{% endif %}">
+            <div class="conv-avatar-sm">{{ u.first_name[0] }}{{ u.last_name[0] }}</div>
+            <div class="conv-name">{{ u.full_name }}</div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- Chat panel -->
+    <div class="msg-panel">
+        <div class="msg-panel-header">
+            <div class="partner-avatar">{{ partner.first_name[0] }}{{ partner.last_name[0] }}</div>
+            <div>
+                <div class="fw-semibold" style="font-size:.95rem;">{{ partner.full_name }}</div>
+                <div style="font-size:.75rem; color:#64748b;">{{ partner.role_names }}</div>
+            </div>
+        </div>
+
+        <div class="msg-body" id="msgBody">
+            {% if thread %}
+            {% set ns = namespace(last_date=None) %}
+            {% for msg in thread %}
+                {% set msg_date = msg.created_at.strftime('%A, %d %b %Y') %}
+                {% if msg_date != ns.last_date %}
+                <div class="day-separator">{{ msg_date }}</div>
+                {% set ns.last_date = msg_date %}
+                {% endif %}
+
+                {% set is_mine = (msg.sender_id == current_user.id) %}
+                <div class="bubble-row {% if is_mine %}mine{% endif %}">
+                    {% if not is_mine %}
+                    <div class="bubble-avatar">{{ partner.first_name[0] }}{{ partner.last_name[0] }}</div>
+                    {% endif %}
+                    <div class="bubble {% if is_mine %}mine{% else %}theirs{% endif %}">
+                        {{ msg.body | e }}
+                        <div class="bubble-time">{{ msg.created_at.strftime('%H:%M') }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+            {% else %}
+            <div class="d-flex flex-column align-items-center justify-content-center flex-grow-1 text-muted">
+                <i class="bi bi-chat-square-text mb-2" style="font-size:2.5rem; opacity:.3;"></i>
+                <p class="mb-0">No messages yet. Say hello!</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="msg-foot">
+            <form method="POST" class="d-flex gap-2" id="sendForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <textarea class="form-control" id="msgBody" name="body" rows="2"
+                          placeholder="Type a message…" maxlength="4000" required></textarea>
+                <button type="submit" class="btn btn-primary align-self-end" style="padding:.5rem .9rem;">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="newConvModal" tabindex="-1" aria-labelledby="newConvLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newConvLabel"><i class="bi bi-pencil-square me-2"></i>New Message</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label fw-semibold">Send message to:</label>
+                <input type="text" class="form-control mb-2" id="userSearch" placeholder="Search users…">
+                <div id="userList" style="max-height:240px;overflow-y:auto;">
+                    {% for u in all_users %}
+                    <a href="{{ url_for('main.messages_conversation', partner_id=u.id) }}"
+                       class="d-flex align-items-center gap-2 p-2 rounded user-row text-decoration-none text-body"
+                       data-name="{{ u.full_name|lower }}">
+                        <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--dgc-secondary),var(--dgc-accent));color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;">
+                            {{ u.first_name[0] }}{{ u.last_name[0] }}
+                        </div>
+                        <div>
+                            <div style="font-size:.875rem;font-weight:600;">{{ u.full_name }}</div>
+                            <div style="font-size:.75rem;color:#64748b;">{{ u.role_names }}</div>
+                        </div>
+                    </a>
+                    {% else %}
+                    <p class="text-muted small mb-0">No other users available.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-scroll to bottom of chat
+(function() {
+    var body = document.getElementById('msgBody');
+    if (body) body.scrollTop = body.scrollHeight;
+})();
+
+// Ctrl+Enter / Cmd+Enter to submit
+document.querySelector('textarea[name="body"]').addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('sendForm').submit();
+    }
+});
+
+// User search in modal
+document.getElementById('userSearch').addEventListener('input', function() {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#userList .user-row').forEach(function(row) {
+        row.style.display = row.dataset.name.includes(q) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}
