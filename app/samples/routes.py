@@ -342,7 +342,7 @@ def register():
 
     selected_type = request.form.get('sample_type') if request.method == 'POST' else request.args.get('type')
     if not selected_type:
-        selected_type = list(Branch)[0].name
+        selected_type = next(iter(Branch)).name
     FormClass = get_sample_register_form(selected_type)
     form = FormClass()
 
