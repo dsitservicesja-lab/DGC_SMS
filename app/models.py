@@ -149,6 +149,8 @@ class User(UserMixin, db.Model):
     # Account lockout – brute-force protection
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
+    # Activity tracking – updated on every authenticated request
+    last_seen = db.Column(db.DateTime, nullable=True)
 
     # Relationships
     uploaded_samples = db.relationship(

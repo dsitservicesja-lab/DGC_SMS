@@ -606,6 +606,14 @@
                         <i class="bi bi-people"></i> Users
                     </a>
                 </li>
+                {% if current_user.has_role(Role.ADMIN) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'auth.active_users' %}active{% endif %}"
+                       href="{{ url_for('auth.active_users') }}">
+                        <i class="bi bi-person-check"></i> Active Users
+                    </a>
+                </li>
+                {% endif %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.endpoint == 'main.calendar_management' %}active{% endif %}"
                        href="{{ url_for('main.calendar_management') }}">

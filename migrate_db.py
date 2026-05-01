@@ -86,6 +86,8 @@ MIGRATIONS = [
     # users – account lockout (brute-force protection)
     ('users', 'failed_login_attempts', 'INTEGER DEFAULT 0'),
     ('users', 'locked_until', 'DATETIME'),
+    # users – activity tracking
+    ('users', 'last_seen', 'DATETIME'),
     # sample_assignments – report metadata (test date, spec compliance, comments)
     ('sample_assignments', 'test_date', 'DATE'),
     ('sample_assignments', 'meets_specifications', 'VARCHAR(20)'),

@@ -107,6 +107,30 @@ def create_app(config_name=None):
         from flask import session
         session.permanent = True
 
+    @app.before_request
+    def update_last_seen():
+        from flask_login import current_user
+        from flask import request
+        from app.models import jamaica_now
+        if (
+            current_user.is_authenticated
+            and request.endpoint
+            and request.endpoint != 'static'
+        ):
+            # Store as naive datetime (SQLite doesn't preserve timezone info)
+            now = jamaica_now().replace(tzinfo=None)
+            # Only write to DB at most once per minute to avoid hammering
+            if (
+                current_user.last_seen is None
+                or (now - current_user.last_seen).total_seconds() > 60
+            ):
+                current_user.last_seen = now
+                try:
+                    db.session.commit()
+                except Exception:
+                    current_app.logger.exception('Failed to update last_seen for user %s', current_user.id)
+                    db.session.rollback()
+
     @app.after_request
     def set_security_headers(response):
         """Add HTTP security headers to every response."""

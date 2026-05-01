@@ -1,4 +1,5 @@
 import time
+from datetime import timedelta
 
 from flask import render_template, redirect, url_for, flash, request, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
@@ -7,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 from app import db
 from app.auth import auth_bp
 from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
-from app.models import User, Role, Branch, Permission, Notification, SampleHistory, SampleAssignment, Sample
+from app.models import User, Role, Branch, Permission, Notification, SampleHistory, SampleAssignment, Sample, jamaica_now
 from app.notifications import send_email
 
 
@@ -330,3 +331,31 @@ def user_delete(user_id):
     db.session.commit()
     flash(f'User {user.username} has been deleted.', 'success')
     return redirect(url_for('auth.user_list'))
+
+
+# ---------------------------------------------------------------------------
+# Active / logged-in users (Admin only)
+# ---------------------------------------------------------------------------
+
+_ONLINE_THRESHOLD_MINUTES = 15
+
+
+@auth_bp.route('/active-users')
+@login_required
+def active_users():
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+    # Strip timezone for SQLite comparison (DB stores naive datetimes)
+    cutoff = jamaica_now().replace(tzinfo=None) - timedelta(minutes=_ONLINE_THRESHOLD_MINUTES)
+    online = (
+        User.query
+        .filter(User.last_seen >= cutoff, User.is_active_user.is_(True))
+        .order_by(User.last_seen.desc())
+        .all()
+    )
+    return render_template(
+        'auth/active_users.html',
+        online_users=online,
+        threshold_minutes=_ONLINE_THRESHOLD_MINUTES,
+    )
