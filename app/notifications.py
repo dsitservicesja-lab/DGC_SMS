@@ -10,25 +10,107 @@ from app import db, mail
 from app.models import Notification, User, Branch, Role, user_roles, user_branches
 
 
-def _send_async_email(app, msg):
+def _get_smtp_settings():
+    """Read SMTP settings from the database, falling back to app config values.
+
+    Returns a dict with keys: server, port, use_tls, username, password, sender.
+    Returns None when no custom DB settings are configured (caller should use
+    the default Flask-Mail setup).
+    """
+    from app.models import Setting
+    server = Setting.get('smtp_server', '').strip()
+    if not server:
+        return None
+    try:
+        port = int(Setting.get('smtp_port', '587').strip() or 587)
+    except (ValueError, TypeError):
+        port = 587
+    use_tls = Setting.get_bool('smtp_use_tls', default=True)
+    username = Setting.get('smtp_username', '').strip() or None
+    password = Setting.get('smtp_password', '').strip() or None
+    sender = Setting.get('smtp_sender', '').strip() or None
+    return {
+        'server': server,
+        'port': port,
+        'use_tls': use_tls,
+        'username': username,
+        'password': password,
+        'sender': sender,
+    }
+
+
+def _send_async_email(app, msg, smtp_cfg=None):
     with app.app_context():
         try:
-            mail.send(msg)
+            if smtp_cfg:
+                import smtplib
+                import ssl as _ssl
+                from email.mime.multipart import MIMEMultipart
+                from email.mime.text import MIMEText as _MIMEText
+
+                sender = smtp_cfg.get('sender') or smtp_cfg.get('username') or ''
+                if not sender:
+                    app.logger.error(
+                        'SMTP send skipped: no sender address configured. '
+                        'Set a Sender Address or Username in the Mail Server settings.'
+                    )
+                    return
+
+                mime = MIMEMultipart('alternative')
+                mime['Subject'] = msg.subject
+                mime['From'] = sender
+                mime['To'] = ', '.join(msg.recipients)
+                if msg.body:
+                    mime.attach(_MIMEText(msg.body, 'plain'))
+                if getattr(msg, 'html', None):
+                    mime.attach(_MIMEText(msg.html, 'html'))
+
+                context = _ssl.create_default_context()
+                server = smtp_cfg['server']
+                port = smtp_cfg['port']
+                username = smtp_cfg.get('username')
+                password = smtp_cfg.get('password')
+
+                # Warn when credentials would be sent over an unencrypted connection
+                if username and password and not smtp_cfg.get('use_tls'):
+                    app.logger.warning(
+                        'SMTP credentials are being sent without TLS encryption (port %s). '
+                        'Enable TLS in the Mail Server settings if your server supports it.',
+                        port,
+                    )
+
+                with smtplib.SMTP(server, port) as smtp:
+                    if smtp_cfg.get('use_tls'):
+                        smtp.starttls(context=context)
+                    if username and password:
+                        smtp.login(username, password)
+                    smtp.sendmail(sender, msg.recipients, mime.as_string())
+            else:
+                mail.send(msg)
         except Exception as e:
             app.logger.error(f'Failed to send email: {e}')
 
 
 def send_email(subject, recipients, body_text, body_html=None):
-    """Send an email (non-blocking). Respects the email_enabled setting."""
+    """Send an email (non-blocking). Respects the email_enabled setting.
+
+    SMTP connection settings are read from the database at send time so that
+    admin changes take effect immediately without an application restart.
+    """
     from app.models import Setting
     if not Setting.get_bool('email_enabled', default=True):
         current_app.logger.info(f'Email suppressed (disabled in settings): {subject}')
         return
     app = current_app._get_current_object()
-    msg = Message(subject=subject, recipients=recipients, body=body_text)
+    smtp_cfg = _get_smtp_settings()
+    # Determine sender for the Message object
+    sender = None
+    if smtp_cfg:
+        sender = smtp_cfg.get('sender') or smtp_cfg.get('username')
+    msg = Message(subject=subject, recipients=recipients, body=body_text, sender=sender)
     if body_html:
         msg.html = body_html
-    thread = Thread(target=_send_async_email, args=(app, msg))
+    thread = Thread(target=_send_async_email, args=(app, msg, smtp_cfg))
     thread.daemon = True
     thread.start()
 

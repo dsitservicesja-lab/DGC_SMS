@@ -32,6 +32,94 @@
             </div>
         </div>
 
+        {% if smtp_settings is not none %}
+        <!-- SMTP / Mail Server settings card (admin only) -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-server me-2"></i>Mail Server (SMTP)</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Configure the outgoing mail server. Leave <strong>SMTP Server</strong> blank to
+                    use the default server set in the application configuration file.
+                </p>
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    The SMTP password is stored in the database. Ensure your database file is
+                    protected with appropriate file-system permissions.
+                </div>
+                <div class="row g-3">
+                    <div class="col-sm-8">
+                        <label for="smtp_server" class="form-label fw-semibold">SMTP Server</label>
+                        <input type="text" class="form-control" id="smtp_server" name="smtp_server"
+                               placeholder="e.g. smtp.gmail.com"
+                               value="{{ smtp_settings.server }}">
+                    </div>
+                    <div class="col-sm-4">
+                        <label for="smtp_port" class="form-label fw-semibold">Port</label>
+                        <input type="number" class="form-control" id="smtp_port" name="smtp_port"
+                               placeholder="587"
+                               value="{{ smtp_settings.port }}">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="smtp_use_tls" name="smtp_use_tls"
+                                   {% if smtp_settings.use_tls %}checked{% endif %}>
+                            <label class="form-check-label fw-semibold" for="smtp_use_tls">
+                                Use TLS (STARTTLS)
+                            </label>
+                        </div>
+                        <p class="text-muted small mb-0 mt-1">
+                            Enable for port 587 (recommended). Disable for port 465 (SSL) or
+                            unencrypted port 25.
+                        </p>
+                    </div>
+                    <div class="col-12">
+                        <label for="smtp_username" class="form-label fw-semibold">
+                            Username / Login Email
+                        </label>
+                        <input type="text" class="form-control" id="smtp_username"
+                               name="smtp_username" autocomplete="username"
+                               placeholder="e.g. yourname@gmail.com"
+                               value="{{ smtp_settings.username }}">
+                    </div>
+                    <div class="col-12">
+                        <label for="smtp_password" class="form-label fw-semibold">Password</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="smtp_password"
+                                   name="smtp_password" autocomplete="new-password"
+                                   placeholder="{% if smtp_settings.has_password %}Leave blank to keep existing password{% else %}Enter SMTP password{% endif %}">
+                            <button class="btn btn-outline-secondary" type="button"
+                                    id="toggleSmtpPassword" title="Show/hide password">
+                                <i class="bi bi-eye" id="smtpPasswordEyeIcon"></i>
+                            </button>
+                        </div>
+                        {% if smtp_settings.has_password %}
+                        <p class="text-muted small mt-1 mb-0">
+                            <i class="bi bi-lock-fill me-1"></i>A password is saved.
+                            Leave blank to keep it unchanged.
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="col-12">
+                        <label for="smtp_sender" class="form-label fw-semibold">
+                            From / Sender Address
+                        </label>
+                        <input type="email" class="form-control" id="smtp_sender"
+                               name="smtp_sender" autocomplete="off"
+                               placeholder="e.g. dgcjamaica@gmail.com"
+                               value="{{ smtp_settings.sender }}">
+                        <p class="text-muted small mt-1 mb-0">
+                            The email address that will appear in the <em>From</em> field.
+                            Defaults to the username if left blank.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Preliminary Review Mode card -->
         <div class="card mb-4">
             <div class="card-header">
@@ -253,6 +341,23 @@
 </div>
 
 <script>
+    /* ── SMTP password visibility toggle ──────────────────── */
+    (function () {
+        var btn = document.getElementById('toggleSmtpPassword');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            var input = document.getElementById('smtp_password');
+            var icon  = document.getElementById('smtpPasswordEyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'bi bi-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'bi bi-eye';
+            }
+        });
+    })();
+
     /* ── Export progress ───────────────────────────────── */
     function startExportProgress(e) {
         showOverlay('Preparing export... this may take a moment.');

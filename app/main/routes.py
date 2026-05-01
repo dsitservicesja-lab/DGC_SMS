@@ -1551,6 +1551,8 @@ def settings():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
+    is_admin = current_user.has_role(Role.ADMIN)
+
     if request.method == 'POST':
         email_enabled = 'email_enabled' in request.form
         Setting.set('email_enabled', str(email_enabled).lower())
@@ -1558,17 +1560,50 @@ def settings():
         Setting.set('preliminary_review_grouped', str(prelim_grouped).lower())
         technical_grouped = 'technical_review_grouped' in request.form
         Setting.set('technical_review_grouped', str(technical_grouped).lower())
+
+        # SMTP settings – admin only
+        if is_admin:
+            smtp_server = request.form.get('smtp_server', '').strip()
+            smtp_port = request.form.get('smtp_port', '587').strip()
+            smtp_use_tls = 'smtp_use_tls' in request.form
+            smtp_username = request.form.get('smtp_username', '').strip()
+            smtp_sender = request.form.get('smtp_sender', '').strip()
+            # Only update password if a value was actually submitted (empty means keep existing)
+            smtp_password_raw = request.form.get('smtp_password', '')
+            Setting.set('smtp_server', smtp_server)
+            Setting.set('smtp_port', smtp_port)
+            Setting.set('smtp_use_tls', str(smtp_use_tls).lower())
+            Setting.set('smtp_username', smtp_username)
+            Setting.set('smtp_sender', smtp_sender)
+            if smtp_password_raw:
+                Setting.set('smtp_password', smtp_password_raw)
+
         db.session.commit()
         flash('Settings updated.', 'success')
         return redirect(url_for('main.settings'))
+
     email_enabled = Setting.get_bool('email_enabled', default=True)
     preliminary_review_grouped = Setting.get_bool('preliminary_review_grouped', default=False)
     technical_review_grouped = Setting.get_bool('technical_review_grouped', default=False)
     sample_count = Sample.query.count()
-    return render_template('settings.html', email_enabled=email_enabled,
+
+    smtp_settings = None
+    if is_admin:
+        smtp_settings = {
+            'server': Setting.get('smtp_server', ''),
+            'port': Setting.get('smtp_port', '587'),
+            'use_tls': Setting.get_bool('smtp_use_tls', default=True),
+            'username': Setting.get('smtp_username', ''),
+            'sender': Setting.get('smtp_sender', ''),
+            'has_password': bool(Setting.get('smtp_password', '')),
+        }
+
+    return render_template('settings.html',
+                           email_enabled=email_enabled,
                            preliminary_review_grouped=preliminary_review_grouped,
                            technical_review_grouped=technical_review_grouped,
-                           sample_count=sample_count)
+                           sample_count=sample_count,
+                           smtp_settings=smtp_settings)
 
 
 @main_bp.route('/settings/test-email', methods=['POST'])
