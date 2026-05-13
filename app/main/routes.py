@@ -3120,18 +3120,41 @@ def admin_dropdown_delete(item_id):
 @main_bp.route('/kpi/monthly')
 @login_required
 def kpi_monthly():
-    """Monthly KPI summary for pharmaceutical tests performed."""
+    """Monthly KPI summary — all labs selectable."""
     if not (current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
                                       Role.DEPUTY, Role.ADMIN)
             or current_user.has_permission(Permission.KPI_VIEW)):
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
+    # Lab groups: key -> (display label, icon, [Branch enum members])
+    LAB_GROUPS = {
+        'pharmaceutical': (
+            'Pharmaceutical', 'bi-capsule',
+            [Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR],
+        ),
+        'toxicology': (
+            'Toxicology', 'bi-droplet',
+            [Branch.TOXICOLOGY],
+        ),
+        'milk': (
+            'Milk (Food)', 'bi-cup-straw',
+            [Branch.FOOD_MILK],
+        ),
+        'alcohol': (
+            'Alcohol (Food)', 'bi-cup',
+            [Branch.FOOD_ALCOHOL],
+        ),
+    }
+
+    lab_key = request.args.get('lab', 'pharmaceutical')
+    if lab_key not in LAB_GROUPS:
+        lab_key = 'pharmaceutical'
+    lab_label, lab_icon, lab_branches = LAB_GROUPS[lab_key]
+
     year = request.args.get('year', type=int, default=_current_fiscal_year())
     available_years = _available_fiscal_years()
-    pharma_branches = [Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]
 
-    months_data = []
     month_names = {
         1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
         7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
@@ -3139,9 +3162,10 @@ def kpi_monthly():
     # Fiscal year spans April of `year` to March of `year+1`
     fiscal_months = [(year, m) for m in range(4, 13)] + [(year + 1, m) for m in range(1, 4)]
 
+    months_data = []
     for cal_year, cal_month in fiscal_months:
         base = Sample.query.filter(
-            Sample.sample_type.in_(pharma_branches),
+            Sample.sample_type.in_(lab_branches),
             db.extract('year', Sample.date_registered) == cal_year,
             db.extract('month', Sample.date_registered) == cal_month,
         )
@@ -3173,5 +3197,9 @@ def kpi_monthly():
         months_data=months_data,
         year=year,
         available_years=available_years,
+        lab_key=lab_key,
+        lab_label=lab_label,
+        lab_icon=lab_icon,
+        lab_groups=LAB_GROUPS,
     )
 
