@@ -77,6 +77,7 @@ class Permission(enum.Enum):
     KPI_VIEW                = 'KPI Viewing'
     INVOICE_GENERATE        = 'Invoice Generation'
     MANAGE_DROPDOWNS        = 'Manage Dropdown Values'
+    MANAGE_SETTINGS         = 'Manage Settings'
 
 
 # ---------------------------------------------------------------------------

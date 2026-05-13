@@ -11,7 +11,8 @@
         <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <!-- Email notifications card -->
+        <!-- Email notifications card (admin/HOD only) -->
+        {% if is_admin_or_hod %}
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Email Notifications</h5>
@@ -31,6 +32,7 @@
                     </p>
             </div>
         </div>
+        {% endif %}
 
         {% if smtp_settings is not none %}
         <!-- SMTP / Mail Server settings card (admin only) -->
@@ -177,7 +179,8 @@
         </div>
         </form>
 
-        <!-- Test email form (outside the settings form) -->
+        <!-- Test email form (outside the settings form, admin/HOD only) -->
+        {% if is_admin_or_hod %}
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-send-check me-2"></i>Test Email Delivery</h5>
@@ -195,6 +198,7 @@
                 </form>
             </div>
         </div>
+        {% endif %}
 
         {% if current_user.has_role(Role.ADMIN) %}
         <!-- Export / Import card -->

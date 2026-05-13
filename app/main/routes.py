@@ -1502,6 +1502,7 @@ def analyst_report():
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     branch_filter = request.args.get('branch', '')
+    analyst_id = request.args.get('analyst_id', type=int, default=0)
 
     # Build base query on assignments
     q = SampleAssignment.query.join(
@@ -1525,6 +1526,7 @@ def analyst_report():
         cid = a.chemist_id
         if cid not in analyst_data:
             analyst_data[cid] = {
+                'id': cid,
                 'name': a.chemist.full_name if a.chemist else 'Unknown',
                 'total': 0,
                 'completed': 0,
@@ -1550,6 +1552,16 @@ def analyst_report():
     else:
         analyst_list = sorted(analyst_data.values(), key=lambda x: x['completed'], reverse=reverse)
 
+    # Pagination for the analyst summary table (Python-level)
+    SUMMARY_PER_PAGE = 20
+    summary_page = request.args.get('summary_page', 1, type=int)
+    total_analyst_count = len(analyst_list)
+    summary_start = (summary_page - 1) * SUMMARY_PER_PAGE
+    summary_end = summary_start + SUMMARY_PER_PAGE
+    analyst_page_items = analyst_list[summary_start:summary_end]
+    total_summary_pages = max(1, (total_analyst_count + SUMMARY_PER_PAGE - 1) // SUMMARY_PER_PAGE)
+    summary_page = max(1, min(summary_page, total_summary_pages))
+
     # Available years (fiscal)
     available_years = _available_fiscal_years()
 
@@ -1557,20 +1569,69 @@ def analyst_report():
     total_assignments = len(assignments)
     total_completed = sum(d['completed'] for d in analyst_data.values())
 
+    # Selected analyst detail view with pagination and sort
+    selected_analyst = None
+    detail_items = []
+    detail_page = request.args.get('detail_page', 1, type=int)
+    detail_sort = request.args.get('detail_sort', 'assigned')
+    detail_dir = request.args.get('detail_dir', 'desc')
+    detail_total_pages = 1
+    DETAIL_PER_PAGE = 25
+
+    if analyst_id and analyst_id in analyst_data:
+        selected_analyst = analyst_data[analyst_id]
+        tests = list(selected_analyst['tests'])
+
+        # Sort the detail tests; nulls always placed at the end of the result
+        detail_reverse = (detail_dir == 'desc')
+        null_date = date.min if detail_reverse else date.max
+        if detail_sort == 'lab':
+            tests.sort(key=lambda t: t.sample.lab_number or '', reverse=detail_reverse)
+        elif detail_sort == 'sample':
+            tests.sort(key=lambda t: t.sample.sample_name or '', reverse=detail_reverse)
+        elif detail_sort == 'lab_type':
+            tests.sort(key=lambda t: t.sample.sample_type.value if t.sample.sample_type else '', reverse=detail_reverse)
+        elif detail_sort == 'test':
+            tests.sort(key=lambda t: t.test_name or '', reverse=detail_reverse)
+        elif detail_sort == 'status':
+            tests.sort(key=lambda t: t.status.value if t.status else '', reverse=detail_reverse)
+        elif detail_sort == 'completed_date':
+            tests.sort(key=lambda t: t.date_completed or null_date, reverse=detail_reverse)
+        else:  # 'assigned' (default)
+            tests.sort(key=lambda t: t.assigned_date or null_date, reverse=detail_reverse)
+
+        total_detail = len(tests)
+        detail_total_pages = max(1, (total_detail + DETAIL_PER_PAGE - 1) // DETAIL_PER_PAGE)
+        detail_page = max(1, min(detail_page, detail_total_pages))
+        d_start = (detail_page - 1) * DETAIL_PER_PAGE
+        detail_items = tests[d_start:d_start + DETAIL_PER_PAGE]
+
     return render_template(
         'analyst_report.html',
-        analyst_list=analyst_list,
+        analyst_list=analyst_page_items,
+        analyst_list_all=analyst_list,
         year=year,
         quarter=quarter,
         branch_filter=branch_filter,
         available_years=available_years,
         total_assignments=total_assignments,
         total_completed=total_completed,
-        total_analysts=len(analyst_data),
+        total_analysts=total_analyst_count,
         Branch=Branch,
         sort_by=sort_by,
         sort_dir=sort_dir,
         AssignmentStatus=AssignmentStatus,
+        # Summary pagination
+        summary_page=summary_page,
+        total_summary_pages=total_summary_pages,
+        # Analyst detail
+        analyst_id=analyst_id,
+        selected_analyst=selected_analyst,
+        detail_items=detail_items,
+        detail_page=detail_page,
+        detail_total_pages=detail_total_pages,
+        detail_sort=detail_sort,
+        detail_dir=detail_dir,
     )
 
 
@@ -1699,36 +1760,43 @@ def delete_non_working_day(nwd_id):
 @main_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    if not current_user.has_any_role(Role.ADMIN, Role.HOD):
+    is_admin_or_hod = current_user.has_any_role(Role.ADMIN, Role.HOD)
+    can_manage_review = (is_admin_or_hod
+                         or current_user.has_permission(Permission.MANAGE_SETTINGS))
+    if not can_manage_review:
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
     is_admin = current_user.has_role(Role.ADMIN)
 
     if request.method == 'POST':
-        email_enabled = 'email_enabled' in request.form
-        Setting.set('email_enabled', str(email_enabled).lower())
+        # Review group settings: any user with settings access may change these
         prelim_grouped = 'preliminary_review_grouped' in request.form
         Setting.set('preliminary_review_grouped', str(prelim_grouped).lower())
         technical_grouped = 'technical_review_grouped' in request.form
         Setting.set('technical_review_grouped', str(technical_grouped).lower())
 
-        # SMTP settings – admin only
-        if is_admin:
-            smtp_server = request.form.get('smtp_server', '').strip()
-            smtp_port = request.form.get('smtp_port', '587').strip()
-            smtp_use_tls = 'smtp_use_tls' in request.form
-            smtp_username = request.form.get('smtp_username', '').strip()
-            smtp_sender = request.form.get('smtp_sender', '').strip()
-            # Only update password if a value was actually submitted (empty means keep existing)
-            smtp_password_raw = request.form.get('smtp_password', '')
-            Setting.set('smtp_server', smtp_server)
-            Setting.set('smtp_port', smtp_port)
-            Setting.set('smtp_use_tls', str(smtp_use_tls).lower())
-            Setting.set('smtp_username', smtp_username)
-            Setting.set('smtp_sender', smtp_sender)
-            if smtp_password_raw:
-                Setting.set('smtp_password', smtp_password_raw)
+        # Email notifications and SMTP: admin/HOD only
+        if is_admin_or_hod:
+            email_enabled = 'email_enabled' in request.form
+            Setting.set('email_enabled', str(email_enabled).lower())
+
+            # SMTP settings – admin only
+            if is_admin:
+                smtp_server = request.form.get('smtp_server', '').strip()
+                smtp_port = request.form.get('smtp_port', '587').strip()
+                smtp_use_tls = 'smtp_use_tls' in request.form
+                smtp_username = request.form.get('smtp_username', '').strip()
+                smtp_sender = request.form.get('smtp_sender', '').strip()
+                # Only update password if a value was actually submitted (empty means keep existing)
+                smtp_password_raw = request.form.get('smtp_password', '')
+                Setting.set('smtp_server', smtp_server)
+                Setting.set('smtp_port', smtp_port)
+                Setting.set('smtp_use_tls', str(smtp_use_tls).lower())
+                Setting.set('smtp_username', smtp_username)
+                Setting.set('smtp_sender', smtp_sender)
+                if smtp_password_raw:
+                    Setting.set('smtp_password', smtp_password_raw)
 
         db.session.commit()
         flash('Settings updated.', 'success')
@@ -1755,7 +1823,8 @@ def settings():
                            preliminary_review_grouped=preliminary_review_grouped,
                            technical_review_grouped=technical_review_grouped,
                            sample_count=sample_count,
-                           smtp_settings=smtp_settings)
+                           smtp_settings=smtp_settings,
+                           is_admin_or_hod=is_admin_or_hod)
 
 
 @main_bp.route('/settings/test-email', methods=['POST'])

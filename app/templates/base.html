@@ -652,6 +652,14 @@
                     </a>
                 </li>
                 {% endif %}
+                {% elif current_user.has_permission(Permission.MANAGE_SETTINGS) %}
+                <li><div class="sidebar-section-label">Admin</div></li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.settings' %}active{% endif %}"
+                       href="{{ url_for('main.settings') }}">
+                        <i class="bi bi-gear"></i> Settings
+                    </a>
+                </li>
                 {% endif %}
             </ul>
         </nav>
