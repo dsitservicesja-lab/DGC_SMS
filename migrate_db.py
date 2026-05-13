@@ -103,9 +103,9 @@ MIGRATIONS = [
     ('samples', 'ward_clinic', 'VARCHAR(255)'),
     ('samples', 'test_requested', 'VARCHAR(500)'),
     ('samples', 'diagnosis_indicated', 'TEXT'),
-    # Feature 7 – pharmaceutical API (active ingredient) dropdown
+    # Feature 4 – pharmaceutical API (active ingredient) dropdown
     ('samples', 'active_ingredient', 'VARCHAR(255)'),
-    # Feature 4 – OOS Investigation flag on assignment
+    # Feature 1 – OOS Investigation flag on assignment
     ('sample_assignments', 'oos_investigation', 'BOOLEAN DEFAULT 0'),
     # Feature 5 – COA decertify / re-issue audit fields
     ('samples', 'coa_version', 'INTEGER NOT NULL DEFAULT 1'),
