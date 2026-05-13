@@ -92,6 +92,13 @@
                     <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Date Completed</dt>
                     <dd class="mb-0">{{ assignment.date_completed.strftime('%d %b %Y %H:%M') }}</dd>
                     {% endif %}
+                    {% if assignment.oos_investigation %}
+                    <dd class="mt-2">
+                        <span class="badge bg-warning text-dark">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>OOS – Out of Specification Investigation
+                        </span>
+                    </dd>
+                    {% endif %}
                 </dl>
             </div>
         </div>

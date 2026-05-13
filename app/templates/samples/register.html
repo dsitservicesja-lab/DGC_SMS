@@ -169,6 +169,15 @@
                         </div>
                         {% endif %}
 
+                        {# Active Pharmaceutical Ingredient / API (Pharmaceutical) Feature 7 #}
+                        {% if form.active_ingredient %}
+                        <div class="col-md-8" id="active_ingredient_field">
+                            {{ form.active_ingredient.label(class="form-label fw-semibold") }}
+                            {{ form.active_ingredient(class="form-select") }}
+                            <div class="form-text">Select the active pharmaceutical ingredient in this product.</div>
+                        </div>
+                        {% endif %}
+
                         {# Lot Number (Pharmaceutical & Milk) #}
                         {% if form.lot_number %}
                         <div class="col-md-4" id="lot_number_field">

@@ -61,15 +61,22 @@ class Permission(enum.Enum):
     These supplement (not replace) role-based access: a user may perform an
     action if their role already allows it OR if they have been explicitly
     granted the corresponding permission by an admin."""
-    REGISTER_SAMPLE    = 'Register Sample'
-    EDIT_SAMPLE        = 'Edit Sample'
-    ASSIGN_SAMPLE      = 'Assign Sample'
-    SUBMIT_REPORT      = 'Submit Report'
-    PRELIMINARY_REVIEW = 'Preliminary Review'
-    TECHNICAL_REVIEW   = 'Technical Review'
-    DEPUTY_REVIEW      = 'Deputy Review'
-    HOD_REVIEW         = 'HOD Review / Sign'
-    MANAGE_USERS       = 'Manage Users'
+    REGISTER_SAMPLE         = 'Register Sample'
+    EDIT_SAMPLE             = 'Edit Sample'
+    ASSIGN_SAMPLE           = 'Assign Sample'
+    SUBMIT_REPORT           = 'Submit Report'
+    PRELIMINARY_REVIEW      = 'Preliminary Review'
+    TECHNICAL_REVIEW        = 'Technical Review'
+    DEPUTY_REVIEW           = 'Deputy Review'
+    HOD_REVIEW              = 'HOD Review / Sign'
+    MANAGE_USERS            = 'Manage Users'
+    # New permissions (Feature 6)
+    MULTI_ANALYST_ASSIGN    = 'Multi-Analyst Assignment'
+    COA_DECERTIFY_REISSUE   = 'COA Decertify / Re-Issue'
+    OOS_FLAG                = 'OOS Flag Usage'
+    KPI_VIEW                = 'KPI Viewing'
+    INVOICE_GENERATE        = 'Invoice Generation'
+    MANAGE_DROPDOWNS        = 'Manage Dropdown Values'
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +417,7 @@ class Sample(db.Model):
 
     # Pharmaceutical specific
     formulation_type = db.Column(db.String(100), nullable=True)
+    active_ingredient = db.Column(db.String(255), nullable=True)  # API dropdown (Feature 7)
 
     # Food (Alcohol) specific
     alcohol_type = db.Column(db.String(100), nullable=True)
@@ -482,6 +490,18 @@ class Sample(db.Model):
         db.Integer, db.ForeignKey('users.id'), nullable=True
     )
 
+    # COA Decertify / Re-Issue (Feature 5) – audit trail
+    coa_version = db.Column(db.Integer, nullable=False, default=1)   # increments on re-issue
+    decertified_at = db.Column(db.DateTime, nullable=True)
+    decertified_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+    decertify_reason = db.Column(db.Text, nullable=True)
+    reissued_at = db.Column(db.DateTime, nullable=True)
+    reissued_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=True
+    )
+
     # Relationships
     assignments = db.relationship(
         'SampleAssignment', backref='sample', lazy='dynamic',
@@ -505,6 +525,12 @@ class Sample(db.Model):
     )
     certifier = db.relationship(
         'User', foreign_keys=[certified_by]
+    )
+    decertifier = db.relationship(
+        'User', foreign_keys=[decertified_by]
+    )
+    reissuer = db.relationship(
+        'User', foreign_keys=[reissued_by]
     )
 
     def __repr__(self):
@@ -554,6 +580,9 @@ class SampleAssignment(db.Model):
 
     # Senior Chemist review flag
     out_of_spec = db.Column(db.Boolean, nullable=True, default=None)
+
+    # OOS Investigation flag set at assignment time (Feature 4)
+    oos_investigation = db.Column(db.Boolean, nullable=False, default=False)
 
     # Preliminary review (by Officer / Senior Chemist Technologist)
     preliminary_review_comments = db.Column(db.Text, nullable=True)
@@ -771,6 +800,9 @@ KPI_METRICS = [
      '# Toxicology samples out of specification'),
     ('out_of_spec_alcohol',
      '# Alcohol samples out of specification'),
+    # Feature 3 – Pharmaceutical Tests Performed
+    ('pharma_tests_performed',
+     '# of Pharmaceutical Tests Performed'),
 ]
 
 # Keys whose "Actual" value is auto-computed from Sample data.
@@ -782,6 +814,7 @@ AUTO_ACTUAL_KEYS = {
     'avg_days_alcohol_det_denatured',
     'out_of_spec_pharma', 'out_of_spec_milk',
     'out_of_spec_toxicology', 'out_of_spec_alcohol',
+    'pharma_tests_performed',
 }
 
 
@@ -1194,3 +1227,138 @@ def fiscal_year_date_range(year, quarter=None):
     else:
         # Full fiscal year: April 1 of year to March 31 of year+1
         return date(year, 4, 1), date(year + 1, 3, 31)
+
+
+# ---------------------------------------------------------------------------
+# Invoice  (Feature 9 – full invoicing system)
+# ---------------------------------------------------------------------------
+
+# Pharmaceutical test pricing table (Feature 10)
+PHARMA_TEST_PRICES = {
+    'Acidity': 3500,
+    'Alcohol Content': 2500,
+    'Assay by HPLC': 4500,
+    'Assay by polarimetry': 3500,
+    'Assay by Titration': 3500,
+    'Assay by UV': 3500,
+    'Assay Potentiometric Titration': 3500,
+    'Conductivity': 1000,
+    'Deliverable Volume': 1000,
+    'Density': 1200,
+    'Disintegration (Tablets and Capsule)': 1500,
+    'Dissolution and HPLC Analysis': 5000,
+    'Dissolution UV Analysis': 5000,
+    'Dose and Uniformity of Dose of Oral Drops': 1000,
+    'Identification by Chemical Reaction': 1000,
+    'Identification by HPLC': 1000,
+    'Identification by IR': 1000,
+    'Identification by Thin Layer Chromatography (TLC)': 1000,
+    'Identification by UV': 1000,
+    'Loss on Drying': 1200,
+    'Minimum Fill': 1000,
+    'Neutralizing Capacity by Titration': 3500,
+    'Non Volatile matter': 1200,
+    'Organic Stabilizer': 1200,
+    'pH': 1000,
+    'Related Substances by Thin Layer Chromatography': 1000,
+    'Residue on Ignition': 2500,
+    'Specific Gravity': 1200,
+    'Uniformity of Content by HPLC': 6750,
+    'Uniformity of Content by UV': 5250,
+    'Uniformity of Delivered Doses from Multidose Containers': 1000,
+    'Weight Variation (Capsules and Tablets)': 1000,
+}
+
+
+class Invoice(db.Model):
+    """Invoice associated with a sample (Feature 9)."""
+    __tablename__ = 'invoices'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sample_id = db.Column(
+        db.Integer, db.ForeignKey('samples.id'), nullable=False
+    )
+    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
+    created_by = db.Column(
+        db.Integer, db.ForeignKey('users.id'), nullable=False
+    )
+    created_at = db.Column(db.DateTime, default=jamaica_now)
+    notes = db.Column(db.Text, nullable=True)
+
+    # Relationships
+    sample = db.relationship('Sample', backref=db.backref(
+        'invoices', lazy='dynamic', cascade='all, delete-orphan'
+    ))
+    creator = db.relationship('User', foreign_keys=[created_by])
+    items = db.relationship(
+        'InvoiceItem', backref='invoice', lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @property
+    def grand_total(self):
+        """Sum of all line item totals."""
+        return sum(item.line_total for item in self.items.all())
+
+    def __repr__(self):
+        return f'<Invoice {self.invoice_number} for Sample {self.sample_id}>'
+
+
+class InvoiceItem(db.Model):
+    """A single line item on an invoice (Feature 9)."""
+    __tablename__ = 'invoice_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(
+        db.Integer, db.ForeignKey('invoices.id'), nullable=False
+    )
+    test_name = db.Column(db.String(255), nullable=False)
+    test_type = db.Column(db.String(100), nullable=True)   # e.g. 'Pharmaceutical'
+    unit_cost = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+
+    @property
+    def line_total(self):
+        return float(self.unit_cost) * self.quantity
+
+    def __repr__(self):
+        return f'<InvoiceItem {self.test_name} x{self.quantity} @ {self.unit_cost}>'
+
+
+# ---------------------------------------------------------------------------
+# Dropdown Configuration  (Feature 11 – admin-managed dropdown values)
+# ---------------------------------------------------------------------------
+
+class DropdownConfig(db.Model):
+    """Admin-configurable dropdown list items.
+
+    *category* groups entries by their use-case (e.g. 'api', 'test_type',
+    'invoice_test', …).  *value* is the stored / form value.
+    *label* is the human-readable display text (defaults to value).
+    *sort_order* controls list order.
+    """
+    __tablename__ = 'dropdown_configs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    category = db.Column(db.String(100), nullable=False, index=True)
+    value = db.Column(db.String(255), nullable=False)
+    label = db.Column(db.String(255), nullable=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=jamaica_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('category', 'value', name='uq_dropdown_cat_value'),
+    )
+
+    @staticmethod
+    def choices_for(category):
+        """Return WTForms-style (value, label) choices for a given category."""
+        rows = DropdownConfig.query.filter_by(
+            category=category, is_active=True
+        ).order_by(DropdownConfig.sort_order, DropdownConfig.label).all()
+        return [(r.value, r.label or r.value) for r in rows]
+
+    def __repr__(self):
+        return f'<DropdownConfig {self.category}:{self.value}>'

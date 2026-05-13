@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Create Invoice – {{ sample.lab_number }} - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-receipt me-1"></i>Create Invoice: {{ sample.lab_number }}</h2>
+    <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-10">
+        <div class="card mb-3">
+            <div class="card-body py-2 px-3 small">
+                <strong>{{ sample.sample_name }}</strong> &mdash;
+                {{ sample.lab_number }} &mdash;
+                <span class="badge bg-secondary">{{ sample.sample_type.value }}</span>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body p-4">
+                <form method="POST" id="invoiceForm">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.notes.label(class="form-label fw-semibold") }}
+                        {{ form.notes(class="form-control", rows=2) }}
+                    </div>
+
+                    <h5 class="mt-4 mb-3">Line Items</h5>
+                    <div id="lineItems">
+                        <!-- Dynamic rows added here -->
+                    </div>
+
+                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addLineItem()">
+                        <i class="bi bi-plus-circle me-1"></i>Add Test Item
+                    </button>
+
+                    <hr>
+                    <div class="text-end">
+                        <strong>Grand Total: $<span id="grandTotal">0.00</span></strong>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        {{ form.submit(class="btn btn-success") }}
+                        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}"
+                           class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const pricing = {{ pricing_json|safe }};
+const testOptions = Object.keys(pricing).sort();
+
+function addLineItem() {
+    const container = document.getElementById('lineItems');
+    const idx = container.children.length;
+    const row = document.createElement('div');
+    row.className = 'row g-2 mb-2 align-items-end line-item';
+    row.innerHTML = `
+        <div class="col-md-4">
+            <label class="form-label small">Test Name</label>
+            <select name="item_test_name" class="form-select form-select-sm test-select"
+                    onchange="autoFillCost(this, ${idx})">
+                <option value="">-- Select Test --</option>
+                ${testOptions.map(t => `<option value="${t}">${t}</option>`).join('')}
+                <option value="__custom__">Other (type below)</option>
+            </select>
+            <input type="text" name="item_test_name_custom" class="form-control form-control-sm mt-1 d-none"
+                   placeholder="Enter test name" id="custom_name_${idx}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Type</label>
+            <select name="item_test_type" class="form-select form-select-sm">
+                <option value="Pharmaceutical">Pharmaceutical</option>
+                <option value="Food (Milk)">Food (Milk)</option>
+                <option value="Food (Alcohol)">Food (Alcohol)</option>
+                <option value="Toxicology">Toxicology</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Unit Cost ($)</label>
+            <input type="number" name="item_unit_cost" class="form-control form-control-sm unit-cost"
+                   min="0" step="0.01" value="0" oninput="recalcTotal()">
+        </div>
+        <div class="col-md-1">
+            <label class="form-label small">Qty</label>
+            <input type="number" name="item_quantity" class="form-control form-control-sm qty"
+                   min="1" value="1" oninput="recalcTotal()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small">Line Total</label>
+            <input type="text" class="form-control form-control-sm line-total" readonly value="$0.00">
+        </div>
+        <div class="col-md-1 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(row);
+    recalcTotal();
+}
+
+function autoFillCost(sel, idx) {
+    const val = sel.value;
+    const row = sel.closest('.line-item');
+    const costInput = row.querySelector('.unit-cost');
+    const customInput = document.getElementById('custom_name_' + idx);
+    if (val === '__custom__') {
+        customInput.classList.remove('d-none');
+    } else {
+        customInput.classList.add('d-none');
+        if (pricing[val] !== undefined) {
+            costInput.value = pricing[val];
+        }
+    }
+    recalcTotal();
+}
+
+function recalcTotal() {
+    let total = 0;
+    document.querySelectorAll('.line-item').forEach(row => {
+        const cost = parseFloat(row.querySelector('.unit-cost').value) || 0;
+        const qty = parseInt(row.querySelector('.qty').value) || 1;
+        const lt = cost * qty;
+        row.querySelector('.line-total').value = '$' + lt.toFixed(2);
+        total += lt;
+    });
+    document.getElementById('grandTotal').textContent = total.toFixed(2);
+}
+
+function removeRow(btn) {
+    btn.closest('.line-item').remove();
+    recalcTotal();
+}
+
+// Pre-populate with one empty row
+addLineItem();
+
+// Before submit: replace custom test name selects with text input value
+document.getElementById('invoiceForm').addEventListener('submit', function() {
+    document.querySelectorAll('.line-item').forEach(row => {
+        const sel = row.querySelector('.test-select');
+        if (sel && sel.value === '__custom__') {
+            // Find the hidden custom text input and copy value to select name
+            const customIn = row.querySelector('[name="item_test_name_custom"]');
+            if (customIn && customIn.value) {
+                sel.innerHTML += `<option value="${customIn.value}" selected>${customIn.value}</option>`;
+                sel.value = customIn.value;
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

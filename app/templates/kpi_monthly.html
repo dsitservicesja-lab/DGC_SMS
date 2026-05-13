@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}KPI Monthly Report - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h2><i class="bi bi-bar-chart-line me-1"></i>Monthly KPI – Pharmaceutical Tests</h2>
+    <a href="{{ url_for('main.kpi_report') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Quarterly KPI
+    </a>
+</div>
+
+<!-- Year filter -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-sm-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Fiscal Year</label>
+                <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}/{{ y + 1 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Monthly data table -->
+<div class="card">
+    <div class="card-header">
+        Pharmaceutical Tests Performed — FY {{ year }}/{{ year + 1 }} by Month
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th class="text-end">Total Registered</th>
+                    <th class="text-end">Certified / Completed</th>
+                    <th class="text-end">Tests Performed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set total_tests = 0 %}
+                {% set total_reg = 0 %}
+                {% set total_cert = 0 %}
+                {% for row in months_data %}
+                {% set total_tests = total_tests + row.tests_performed %}
+                {% set total_reg = total_reg + row.total %}
+                {% set total_cert = total_cert + row.certified %}
+                <tr>
+                    <td>{{ row.month_name }} {{ row.year }}</td>
+                    <td class="text-end">{{ row.total }}</td>
+                    <td class="text-end">{{ row.certified }}</td>
+                    <td class="text-end fw-semibold">
+                        {% if row.tests_performed > 0 %}
+                        <span class="badge bg-primary">{{ row.tests_performed }}</span>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center text-muted py-4">No data found.</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light fw-bold">
+                <tr>
+                    <td>Total</td>
+                    <td class="text-end">{{ months_data | sum(attribute='total') }}</td>
+                    <td class="text-end">{{ months_data | sum(attribute='certified') }}</td>
+                    <td class="text-end">{{ months_data | sum(attribute='tests_performed') }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<!-- Simple bar chart using inline SVG-based progress bars -->
+<div class="card mt-4">
+    <div class="card-header">Tests Performed Per Month</div>
+    <div class="card-body">
+        {% set max_tests = months_data | map(attribute='tests_performed') | max %}
+        {% for row in months_data %}
+        <div class="d-flex align-items-center mb-1 gap-2">
+            <span class="text-muted small" style="width:60px">{{ row.month_name }}</span>
+            <div class="flex-grow-1">
+                {% if max_tests and max_tests > 0 %}
+                <div class="progress" style="height:18px">
+                    <div class="progress-bar bg-primary" role="progressbar"
+                         style="width:{{ ((row.tests_performed / max_tests) * 100) | int }}%">
+                        {% if row.tests_performed > 0 %}{{ row.tests_performed }}{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

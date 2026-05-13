@@ -103,6 +103,17 @@ MIGRATIONS = [
     ('samples', 'ward_clinic', 'VARCHAR(255)'),
     ('samples', 'test_requested', 'VARCHAR(500)'),
     ('samples', 'diagnosis_indicated', 'TEXT'),
+    # Feature 7 – pharmaceutical API (active ingredient) dropdown
+    ('samples', 'active_ingredient', 'VARCHAR(255)'),
+    # Feature 4 – OOS Investigation flag on assignment
+    ('sample_assignments', 'oos_investigation', 'BOOLEAN DEFAULT 0'),
+    # Feature 5 – COA decertify / re-issue audit fields
+    ('samples', 'coa_version', 'INTEGER NOT NULL DEFAULT 1'),
+    ('samples', 'decertified_at', 'DATETIME'),
+    ('samples', 'decertified_by', 'INTEGER REFERENCES users(id)'),
+    ('samples', 'decertify_reason', 'TEXT'),
+    ('samples', 'reissued_at', 'DATETIME'),
+    ('samples', 'reissued_by', 'INTEGER REFERENCES users(id)'),
 ]
 
 NEW_TABLES = [
@@ -272,6 +283,44 @@ NEW_TABLES = [
         '  body TEXT NOT NULL,'
         '  is_read BOOLEAN DEFAULT 0,'
         '  created_at DATETIME'
+        ')',
+    ),
+    # Feature 9 – Invoices
+    (
+        'invoices',
+        'CREATE TABLE IF NOT EXISTS invoices ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  sample_id INTEGER NOT NULL REFERENCES samples(id),'
+        '  invoice_number VARCHAR(50) NOT NULL UNIQUE,'
+        '  created_by INTEGER NOT NULL REFERENCES users(id),'
+        '  created_at DATETIME,'
+        '  notes TEXT'
+        ')',
+    ),
+    (
+        'invoice_items',
+        'CREATE TABLE IF NOT EXISTS invoice_items ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  invoice_id INTEGER NOT NULL REFERENCES invoices(id),'
+        '  test_name VARCHAR(255) NOT NULL,'
+        '  test_type VARCHAR(100),'
+        '  unit_cost NUMERIC(10,2) NOT NULL DEFAULT 0,'
+        '  quantity INTEGER NOT NULL DEFAULT 1'
+        ')',
+    ),
+    # Feature 11 – Dropdown Configuration
+    (
+        'dropdown_configs',
+        'CREATE TABLE IF NOT EXISTS dropdown_configs ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  category VARCHAR(100) NOT NULL,'
+        '  value VARCHAR(255) NOT NULL,'
+        '  label VARCHAR(255),'
+        '  sort_order INTEGER NOT NULL DEFAULT 0,'
+        '  is_active BOOLEAN NOT NULL DEFAULT 1,'
+        '  created_by INTEGER REFERENCES users(id),'
+        '  created_at DATETIME,'
+        '  UNIQUE (category, value)'
         ')',
     ),
 ]

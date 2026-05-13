@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ invoice.invoice_number }} - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2><i class="bi bi-receipt-cutoff me-1"></i>Invoice {{ invoice.invoice_number }}</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to Sample
+        </a>
+        <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-printer me-1"></i>Print
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-9">
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h5>Government Chemist Department</h5>
+                        <p class="text-muted small mb-0">Laboratory Services</p>
+                    </div>
+                    <div class="col-sm-6 text-end">
+                        <h5 class="text-primary">INVOICE</h5>
+                        <p class="mb-0 small">
+                            <strong>Invoice #:</strong> {{ invoice.invoice_number }}<br>
+                            <strong>Date:</strong> {{ invoice.created_at.strftime('%d %b %Y') if invoice.created_at else '—' }}<br>
+                            <strong>Prepared by:</strong> {{ invoice.creator.full_name if invoice.creator else '—' }}
+                        </p>
+                    </div>
+                </div>
+                <hr>
+                <div class="row mb-3">
+                    <div class="col-sm-6">
+                        <strong>Sample:</strong> {{ sample.lab_number }}<br>
+                        <strong>Name:</strong> {{ sample.sample_name }}<br>
+                        <strong>Type:</strong> {{ sample.sample_type.value }}<br>
+                        {% if sample.active_ingredient %}
+                        <strong>API:</strong> {{ sample.active_ingredient }}<br>
+                        {% endif %}
+                    </div>
+                    <div class="col-sm-6">
+                        <strong>Date Received:</strong> {{ sample.date_received.strftime('%d %b %Y') if sample.date_received else '—' }}<br>
+                        <strong>Registered:</strong> {{ sample.date_registered.strftime('%d %b %Y') if sample.date_registered else '—' }}<br>
+                        <strong>Expected Report:</strong> {{ sample.expected_report_date.strftime('%d %b %Y') if sample.expected_report_date else '—' }}<br>
+                        <strong>Certified:</strong> {{ sample.certified_at.strftime('%d %b %Y') if sample.certified_at else '—' }}<br>
+                    </div>
+                </div>
+
+                {% if invoice.notes %}
+                <div class="alert alert-light py-2">
+                    <strong>Notes:</strong> {{ invoice.notes }}
+                </div>
+                {% endif %}
+
+                <table class="table table-bordered table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Test Name</th>
+                            <th>Type</th>
+                            <th class="text-end">Unit Cost ($)</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Line Total ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ item.test_name }}</td>
+                            <td>{{ item.test_type or '—' }}</td>
+                            <td class="text-end">{{ '{:,.2f}'.format(item.unit_cost) }}</td>
+                            <td class="text-end">{{ item.quantity }}</td>
+                            <td class="text-end fw-semibold">{{ '{:,.2f}'.format(item.line_total) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center text-muted">No items.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-primary">
+                            <th colspan="5" class="text-end">Grand Total</th>
+                            <th class="text-end">${{ '{:,.2f}'.format(grand_total) }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -33,6 +33,15 @@
                 </select>
             </div>
             <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Month</label>
+                <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="0" {% if month == 0 %}selected{% endif %}>All Months</option>
+                    {% for m, mn in [(1,'Jan'),(2,'Feb'),(3,'Mar'),(4,'Apr'),(5,'May'),(6,'Jun'),(7,'Jul'),(8,'Aug'),(9,'Sep'),(10,'Oct'),(11,'Nov'),(12,'Dec')] %}
+                    <option value="{{ m }}" {% if month == m %}selected{% endif %}>{{ mn }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-md-2">
                 <label class="form-label small fw-semibold mb-1">Status</label>
                 <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="">All Statuses</option>
@@ -40,6 +49,20 @@
                     <option value="{{ st.value }}" {% if status_filter == st.value %}selected{% endif %}>{{ st.value }}</option>
                     {% endfor %}
                 </select>
+            </div>
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Date Reported From</label>
+                <input type="date" name="date_reported_from" class="form-control form-control-sm"
+                       value="{{ date_reported_from }}">
+            </div>
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Date Reported To</label>
+                <input type="date" name="date_reported_to" class="form-control form-control-sm"
+                       value="{{ date_reported_to }}">
+            </div>
+            <div class="col-sm-auto">
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                <a href="{{ url_for('main.milk_report', year=year) }}" class="btn btn-outline-secondary btn-sm">Clear</a>
             </div>
         </form>
     </div>
@@ -77,7 +100,7 @@
                 <div class="fs-3 fw-bold {% if avg_tat %}text-info{% else %}text-muted{% endif %}">
                     {{ avg_tat if avg_tat else '—' }}
                 </div>
-                <small class="text-muted">Avg. Turnaround (days)</small>
+                <small class="text-muted">Avg. TAT (working days)</small>
             </div>
         </div>
     </div>
@@ -95,11 +118,15 @@
 
 <!-- Sample Table -->
 <div class="card">
-    <div class="card-header">
-        Milk Samples — {{ year }}{% if quarter %} Q{{ quarter }}{% endif %}
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Milk Samples — FY {{ year }}/{{ year + 1 }}{% if quarter %} Q{{ quarter }}{% endif %}{% if month %} (Month {{ month }}){% endif %}</span>
+        <a href="{{ url_for('main.milk_report_download', year=year, quarter=quarter) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-download me-1"></i>Download CSV
+        </a>
     </div>
     <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 table-sm">
             <thead>
                 <tr>
                     <th>Lab Number</th>
@@ -109,8 +136,9 @@
                     <th>Status</th>
                     <th>Date Received</th>
                     <th>Registered</th>
-                    <th>Certified</th>
-                    <th>TAT (days)</th>
+                    <th>Expected Report</th>
+                    <th>Certified Date</th>
+                    <th>TAT (working days)</th>
                 </tr>
             </thead>
             <tbody>
@@ -144,18 +172,17 @@
                     </td>
                     <td>{{ s.date_received.strftime('%d %b %Y') if s.date_received else '—' }}</td>
                     <td>{{ s.date_registered.strftime('%d %b %Y') if s.date_registered else '—' }}</td>
+                    <td>{{ s.expected_report_date.strftime('%d %b %Y') if s.expected_report_date else '—' }}</td>
                     <td>{{ s.certified_at.strftime('%d %b %Y') if s.certified_at else '—' }}</td>
                     <td>
-                        {% if s.certified_at and s.date_registered and s.status.value in ('Certified', 'Completed') %}
-                        {{ (s.certified_at.date() - s.date_registered.date()).days }}
-                        {% else %}
-                        —
-                        {% endif %}
+                        {% if sample_tat[s.id] is not none %}
+                        <span class="badge bg-info text-dark">{{ sample_tat[s.id] }}</span>
+                        {% else %}—{% endif %}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">No milk samples found.</td>
+                    <td colspan="10" class="text-center text-muted py-4">No milk samples found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

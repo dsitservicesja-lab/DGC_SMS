@@ -32,6 +32,15 @@
                 </select>
             </div>
             <div class="col-auto">
+                <label class="form-label fw-semibold small">Month</label>
+                <select name="month" class="form-select form-select-sm">
+                    <option value="0" {% if month == 0 %}selected{% endif %}>All Months</option>
+                    {% for m, mn in [(1,'Jan'),(2,'Feb'),(3,'Mar'),(4,'Apr'),(5,'May'),(6,'Jun'),(7,'Jul'),(8,'Aug'),(9,'Sep'),(10,'Oct'),(11,'Nov'),(12,'Dec')] %}
+                    <option value="{{ m }}" {% if month == m %}selected{% endif %}>{{ mn }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
                 <label class="form-label fw-semibold small">Status</label>
                 <select name="status" class="form-select form-select-sm">
                     <option value="">All</option>
@@ -39,6 +48,16 @@
                     <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.value }}</option>
                     {% endfor %}
                 </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold small">Date Reported From</label>
+                <input type="date" name="date_reported_from" class="form-control form-control-sm"
+                       value="{{ date_reported_from }}">
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold small">Date Reported To</label>
+                <input type="date" name="date_reported_to" class="form-control form-control-sm"
+                       value="{{ date_reported_to }}">
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Filter</button>
@@ -88,7 +107,7 @@
 <!-- Samples Table -->
 <div class="card">
     <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 table-sm">
             <thead>
                 <tr>
                     <th>Lab Number</th>
@@ -98,6 +117,9 @@
                     <th>Status</th>
                     <th>Date Received</th>
                     <th>Registered</th>
+                    <th>Expected Report</th>
+                    <th>Certified Date</th>
+                    <th>TAT (working days)</th>
                 </tr>
             </thead>
             <tbody>
@@ -119,9 +141,16 @@
                     </td>
                     <td>{{ s.date_received.strftime('%d %b %Y') if s.date_received else '' }}</td>
                     <td>{{ s.date_registered.strftime('%d %b %Y') if s.date_registered else '' }}</td>
+                    <td>{{ s.expected_report_date.strftime('%d %b %Y') if s.expected_report_date else '—' }}</td>
+                    <td>{{ s.certified_at.strftime('%d %b %Y') if s.certified_at else '—' }}</td>
+                    <td>
+                        {% if sample_tat[s.id] is not none %}
+                        <span class="badge bg-info text-dark">{{ sample_tat[s.id] }}</span>
+                        {% else %}—{% endif %}
+                    </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7" class="text-center text-muted py-4">No toxicology samples found.</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No toxicology samples found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

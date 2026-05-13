@@ -133,6 +133,25 @@
     <strong>Sample analysis completed.</strong>
     Certificate signed by {{ sample.certifier.full_name if sample.certifier else 'Government Chemist' }}
     {% if sample.certified_at %}on {{ sample.certified_at.strftime('%d %b %Y %H:%M') }}{% endif %}.
+    {% if sample.coa_version and sample.coa_version > 1 %}
+    <span class="badge bg-warning text-dark ms-2">Re-issued v{{ sample.coa_version }}</span>
+    {% endif %}
+    {% if current_user.has_any_role(Role.HOD, Role.ADMIN) or current_user.has_permission(Permission.COA_DECERTIFY_REISSUE) %}
+    <div class="mt-2 d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('samples.coa_decertify', sample_id=sample.id) }}"
+           class="btn btn-danger btn-sm">
+            <i class="bi bi-shield-x me-1"></i>Decertify COA
+        </a>
+        <a href="{{ url_for('samples.coa_reissue', sample_id=sample.id) }}"
+           class="btn btn-warning btn-sm">
+            <i class="bi bi-patch-check me-1"></i>Re-Issue Certificate
+        </a>
+        <a href="{{ url_for('samples.invoice_create', sample_id=sample.id) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-receipt me-1"></i>Generate Invoice
+        </a>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -174,6 +193,14 @@
                             {% if sample.toxicology_sample_type_name %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Sample Type</dt>
                             <dd class="mb-0">{{ sample.toxicology_sample_type_name }}</dd>
+                            {% endif %}
+                            {% if sample.formulation_type %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Formulation</dt>
+                            <dd class="mb-0">{{ sample.formulation_type }}</dd>
+                            {% endif %}
+                            {% if sample.active_ingredient %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">API (Active Ingredient)</dt>
+                            <dd class="mb-0">{{ sample.active_ingredient }}</dd>
                             {% endif %}
                         </dl>
                     </div>
@@ -478,6 +505,54 @@
         </p>
         {% endif %}
     </div>
+</div>
+{% endif %}
+
+<!-- Invoices -->
+{% set sample_invoices = sample.invoices.all() %}
+{% if sample_invoices or (current_user.has_any_role(Role.ADMIN, Role.HOD, Role.OFFICER) or current_user.has_permission(Permission.INVOICE_GENERATE)) %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Invoices</h5>
+        {% if current_user.has_any_role(Role.ADMIN, Role.HOD, Role.OFFICER) or current_user.has_permission(Permission.INVOICE_GENERATE) %}
+        <a href="{{ url_for('samples.invoice_create', sample_id=sample.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-plus me-1"></i>Create Invoice
+        </a>
+        {% endif %}
+    </div>
+    {% if sample_invoices %}
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Invoice #</th>
+                    <th>Date</th>
+                    <th>Prepared By</th>
+                    <th class="text-end">Grand Total ($)</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inv in sample_invoices %}
+                <tr>
+                    <td>{{ inv.invoice_number }}</td>
+                    <td>{{ inv.created_at.strftime('%d %b %Y') if inv.created_at else '—' }}</td>
+                    <td>{{ inv.creator.full_name if inv.creator else '—' }}</td>
+                    <td class="text-end">{{ '{:,.2f}'.format(inv.grand_total) }}</td>
+                    <td>
+                        <a href="{{ url_for('samples.invoice_detail', sample_id=sample.id, invoice_id=inv.id) }}"
+                           class="btn btn-outline-info btn-sm py-0 px-1">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-3">No invoices yet.</div>
+    {% endif %}
 </div>
 {% endif %}
 

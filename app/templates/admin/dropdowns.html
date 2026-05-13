@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Dropdown Configuration - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h2><i class="bi bi-list-ul me-1"></i>Dropdown Configuration</h2>
+</div>
+
+<!-- Filter by category -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-sm-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Filter by Category</label>
+                <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Categories</option>
+                    {% for val, lbl in category_choices if val %}
+                    <option value="{{ val }}" {% if category_filter == val %}selected{% endif %}>{{ lbl }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add new entry form -->
+<div class="card mb-4">
+    <div class="card-header">
+        <strong><i class="bi bi-plus-circle me-1"></i>Add New Dropdown Entry</strong>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('main.admin_dropdown_add') }}">
+            {{ form.hidden_tag() }}
+            <div class="row g-3">
+                <div class="col-md-3">
+                    {{ form.category.label(class="form-label fw-semibold") }}
+                    {{ form.category(class="form-select") }}
+                    {% for error in form.category.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-3">
+                    {{ form.value.label(class="form-label fw-semibold") }}
+                    {{ form.value(class="form-control", placeholder="Stored value") }}
+                    {% for error in form.value.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-3">
+                    {{ form.label.label(class="form-label fw-semibold") }}
+                    {{ form.label(class="form-control", placeholder="Display label (optional)") }}
+                </div>
+                <div class="col-md-1">
+                    {{ form.sort_order.label(class="form-label fw-semibold") }}
+                    {{ form.sort_order(class="form-control") }}
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <div class="form-check ms-1">
+                        {{ form.is_active(class="form-check-input") }}
+                        <label class="form-check-label" for="{{ form.is_active.id }}">Active</label>
+                    </div>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    {{ form.submit(class="btn btn-primary btn-sm") }}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Existing entries table -->
+<div class="card">
+    <div class="card-header">
+        Dropdown Entries ({{ items | length }})
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Category</th>
+                    <th>Value</th>
+                    <th>Label</th>
+                    <th>Sort</th>
+                    <th>Active</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr class="{% if not item.is_active %}table-secondary text-muted{% endif %}">
+                    <td>{{ item.id }}</td>
+                    <td><span class="badge bg-primary">{{ item.category }}</span></td>
+                    <td><code>{{ item.value }}</code></td>
+                    <td>{{ item.label or '—' }}</td>
+                    <td>{{ item.sort_order }}</td>
+                    <td>
+                        {% if item.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('main.admin_dropdown_edit', item_id=item.id) }}"
+                           class="btn btn-outline-primary btn-sm py-0 px-1">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form method="POST" action="{{ url_for('main.admin_dropdown_delete', item_id=item.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('Delete this entry?')">
+                            {{ form.hidden_tag() }}
+                            <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        No dropdown entries found.
+                        {% if category_filter %}Use the form above to add entries for this category.{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

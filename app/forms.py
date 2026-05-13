@@ -7,11 +7,11 @@ from flask_wtf.file import FileField, FileAllowed
 from wtforms import (
     StringField, PasswordField, SelectField, TextAreaField,
     DateField, SubmitField, BooleanField, SelectMultipleField,
-    RadioField, widgets,
+    RadioField, IntegerField, widgets,
 )
 from wtforms.validators import (
     DataRequired, Email, EqualTo, Length, Optional, ValidationError,
-    Regexp,
+    Regexp, NumberRange,
 )
 
 from app.models import Role, Branch, Permission, User
@@ -45,6 +45,119 @@ FORMULATION_TYPE_CHOICES = [
     ('Solution', 'Solution'),
     ('Injection', 'Injection'),
     ('Powder', 'Powder'),
+]
+
+# Active Pharmaceutical Ingredient (API) choices (Feature 7)
+API_CHOICES = [
+    ('', '-- Select API --'),
+    ('Paracetamol', 'Paracetamol'),
+    ('Diphenhydramine Hydrochloride', 'Diphenhydramine Hydrochloride'),
+    ('Aripiprazole', 'Aripiprazole'),
+    ('Sulphur', 'Sulphur'),
+    ('Ethyl Alcohol', 'Ethyl Alcohol'),
+    ('Menthol', 'Menthol'),
+    ('Metformin Hydrochloride', 'Metformin Hydrochloride'),
+    ('Sitagliptin Phosphate', 'Sitagliptin Phosphate'),
+    ('Dabigatran Etexilate', 'Dabigatran Etexilate'),
+    ('Linagliptin', 'Linagliptin'),
+    ('Aspirin', 'Aspirin'),
+    ('Amlodipine Besylate', 'Amlodipine Besylate'),
+    ('Tolperisone Hydrochloride', 'Tolperisone Hydrochloride'),
+    ('Salbutamol Sulphate', 'Salbutamol Sulphate'),
+    ('Azithromycin', 'Azithromycin'),
+    ('Albendazole', 'Albendazole'),
+    ('Monobasic Sodium Phosphate', 'Monobasic Sodium Phosphate'),
+    ('Dibasic Sodium Phosphate', 'Dibasic Sodium Phosphate'),
+    ('Vildagliptin', 'Vildagliptin'),
+    ('Caffeine', 'Caffeine'),
+    ('Pyrilamine Maleate', 'Pyrilamine Maleate'),
+    ('Chlorpheniramine Maleate', 'Chlorpheniramine Maleate'),
+    ('Dextromethorphan Hydrbromide', 'Dextromethorphan Hydrbromide'),
+    ('Guaiphenesin', 'Guaiphenesin'),
+    ('Pseudoephedrine Hydrochloride', 'Pseudoephedrine Hydrochloride'),
+    ('Tetracycline Hydrochloride', 'Tetracycline Hydrochloride'),
+    ('Amozicillin Trihydrate', 'Amozicillin Trihydrate'),
+    ('Hydrogen Peroxide', 'Hydrogen Peroxide'),
+    ('Pirfenidone', 'Pirfenidone'),
+    ('Sodium Chloride', 'Sodium Chloride'),
+    ('Dextrose', 'Dextrose'),
+    ('Codeine Phosphate', 'Codeine Phosphate'),
+    ('Acetaminophen', 'Acetaminophen'),
+    ('Ammonium Chloride', 'Ammonium Chloride'),
+    ('Sodium Citrate', 'Sodium Citrate'),
+    ('Hydrocortisone', 'Hydrocortisone'),
+    ('Phenobarbitine', 'Phenobarbitine'),
+    ('Diclofenac Sodium', 'Diclofenac Sodium'),
+    ('Potassium Sorbate', 'Potassium Sorbate'),
+    ('Sodium Zirconium Cyclosilicate', 'Sodium Zirconium Cyclosilicate'),
+    ('Betamethasone', 'Betamethasone'),
+    ('Losartan Potassium', 'Losartan Potassium'),
+    ('Levamisole', 'Levamisole'),
+    ('Timolol Maleate', 'Timolol Maleate'),
+    ('Brimonidine Tartrate', 'Brimonidine Tartrate'),
+    ('Methyl Salicylate', 'Methyl Salicylate'),
+    ('Glycerol', 'Glycerol'),
+    ('Phenylephrine', 'Phenylephrine'),
+    ('Glycerine', 'Glycerine'),
+    ('Sacubitril', 'Sacubitril'),
+    ('Valsartan', 'Valsartan'),
+    ('Magnesium Trisilicate', 'Magnesium Trisilicate'),
+    ('Brinzolamide', 'Brinzolamide'),
+    ('Thiamine Hydrochloride', 'Thiamine Hydrochloride'),
+    ('Riboglavin', 'Riboglavin'),
+    ('Nicotinamide', 'Nicotinamide'),
+    ('Pyridoxine Hydrochloride', 'Pyridoxine Hydrochloride'),
+    ('Calcium Pantothenate', 'Calcium Pantothenate'),
+    ('Butylated Hydroxytoluene', 'Butylated Hydroxytoluene'),
+    ('Ascorbic Acid', 'Ascorbic Acid'),
+    ('Diazepam', 'Diazepam'),
+    ('Mercurochrome', 'Mercurochrome'),
+    ('Sodium Bicarbonate', 'Sodium Bicarbonate'),
+    ('Magnesium Carbonate', 'Magnesium Carbonate'),
+    ('Fennel Oil', 'Fennel Oil'),
+    ('Dill Oil', 'Dill Oil'),
+    ('Light Magnesium Carbonate', 'Light Magnesium Carbonate'),
+    ('Telmisartan', 'Telmisartan'),
+    ('Rivaroxaban', 'Rivaroxaban'),
+    ('Potassium Iodide', 'Potassium Iodide'),
+    ('Alcohol', 'Alcohol'),
+    ('Iodine', 'Iodine'),
+    ('Hydrochlorothiazide', 'Hydrochlorothiazide'),
+    ('Dapaglifozin', 'Dapaglifozin'),
+    ('Trimethoprim', 'Trimethoprim'),
+    ('Sulfamethoxazole', 'Sulfamethoxazole'),
+    ('Teriflunomide', 'Teriflunomide'),
+    ('Clopidogrel', 'Clopidogrel'),
+    ('Cefixime', 'Cefixime'),
+    ('Dolutegravir', 'Dolutegravir'),
+    ('Emtricitabine', 'Emtricitabine'),
+    ('Tenofovir Alafenamide', 'Tenofovir Alafenamide'),
+    ('Papain- Urea', 'Papain- Urea'),
+    ('Dimenhydrinate', 'Dimenhydrinate'),
+    ('Silver Nitrate', 'Silver Nitrate'),
+    ('Ciprofloxacin', 'Ciprofloxacin'),
+    ('Bromhexine Hydrochloride', 'Bromhexine Hydrochloride'),
+    ('Silver Sulfadiazine', 'Silver Sulfadiazine'),
+    ('Chlorhexidine Gluconate', 'Chlorhexidine Gluconate'),
+    ('Leflunomide', 'Leflunomide'),
+    ('Frusemide', 'Frusemide'),
+    ('Ivermectin', 'Ivermectin'),
+    ('Citric Acid', 'Citric Acid'),
+    ('Tranexamic Acid', 'Tranexamic Acid'),
+    ('Mefenamic Acid', 'Mefenamic Acid'),
+    ('Apixaban', 'Apixaban'),
+    ('Camphorated Opium Tinct', 'Camphorated Opium Tinct'),
+    ('White Pine', 'White Pine'),
+    ('Loratadine', 'Loratadine'),
+    ('Clindamycin', 'Clindamycin'),
+    ('Clotrimazole', 'Clotrimazole'),
+    ('Magnesia', 'Magnesia'),
+    ('Simethicone', 'Simethicone'),
+    ('Alumina', 'Alumina'),
+    ('Gentian Violet', 'Gentian Violet'),
+    ('Benzocaine', 'Benzocaine'),
+    ('Clove Oil', 'Clove Oil'),
+    ('Other', 'Other'),
 ]
 
 # Toxicology sample type choices (replaces Sample Name for Toxicology)
@@ -418,6 +531,11 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
+    active_ingredient = SelectField(
+        'Active Pharmaceutical Ingredient (API)',
+        choices=API_CHOICES,
+        validators=[Optional()],
+    )
     lot_number = StringField(
         'Lot Number',
         validators=[Optional(), Length(max=100)]
@@ -556,6 +674,11 @@ class SampleEditForm(FlaskForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
+    active_ingredient = SelectField(
+        'Active Pharmaceutical Ingredient (API)',
+        choices=API_CHOICES,
+        validators=[Optional()],
+    )
     alcohol_type = SelectField(
         'Alcohol Type',
         choices=[
@@ -655,6 +778,11 @@ class SampleAssignForm(FlaskForm):
     expected_completion = DateField('Expected Completion Date', validators=[Optional()])
     comments = TextAreaField('Comments', validators=[Optional()])
     quantity_volume = StringField('Quantity / Volume', validators=[Optional(), Length(max=100)])
+    # Feature 4 – OOS Investigation
+    oos_investigation = BooleanField(
+        'OOS – Out of Specification Investigation',
+        default=False,
+    )
     submit = SubmitField('Assign Sample')
 
     # Validation removed to allow flexible scheduling: future dates for
@@ -999,3 +1127,97 @@ class DeleteRequestForm(FlaskForm):
                     Length(max=1000)],
     )
     submit = SubmitField('Submit Deletion Request')
+
+
+# ---------------------------------------------------------------------------
+# COA Decertify / Re-Issue (Feature 5)
+# ---------------------------------------------------------------------------
+
+class COADecertifyForm(FlaskForm):
+    """HOD / Government Chemist decertifies a signed COA."""
+    reason = TextAreaField(
+        'Reason for Decertification',
+        validators=[DataRequired(message='Please provide a reason.'), Length(max=1000)],
+    )
+    submit = SubmitField('Decertify COA')
+
+
+class COAReissueForm(FlaskForm):
+    """Re-issue an updated Certificate of Analysis."""
+    certificate_text = TextAreaField('Updated Certificate of Analysis', validators=[DataRequired()])
+    certificate_file = FileField(
+        'Attach Updated Certificate File',
+        validators=[FileAllowed(
+            ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'doc', 'docx'],
+            'Only PDF, image, and Word document files allowed.'
+        )],
+    )
+    coa_reference = StringField('COA Reference Number', validators=[Optional(), Length(max=255)])
+    submit = SubmitField('Re-Issue Certificate')
+
+
+# ---------------------------------------------------------------------------
+# Invoice (Feature 9)
+# ---------------------------------------------------------------------------
+
+# Test types for invoice
+INVOICE_TEST_TYPE_CHOICES = [
+    ('', '-- Select Type --'),
+    ('Pharmaceutical', 'Pharmaceutical'),
+    ('Food (Milk)', 'Food (Milk)'),
+    ('Food (Alcohol)', 'Food (Alcohol)'),
+    ('Toxicology', 'Toxicology'),
+]
+
+# Pharma test price choices (test name → cost) for the invoice dropdown
+from app.models import PHARMA_TEST_PRICES
+
+INVOICE_PHARMA_TEST_CHOICES = (
+    [('', '-- Select Test --')]
+    + [(name, f'{name} (${cost:,})') for name, cost in sorted(PHARMA_TEST_PRICES.items())]
+)
+
+
+class InvoiceItemForm(FlaskForm):
+    """A single invoice line item sub-form."""
+    class Meta:
+        csrf = False
+
+    test_name = StringField('Test Name', validators=[DataRequired(), Length(max=255)])
+    test_type = SelectField('Type of Test', choices=INVOICE_TEST_TYPE_CHOICES, validators=[Optional()])
+    unit_cost = StringField('Unit Cost', validators=[DataRequired()])
+    quantity = IntegerField('Quantity', validators=[DataRequired(), NumberRange(min=1)], default=1)
+
+
+class InvoiceCreateForm(FlaskForm):
+    """Create an invoice for a sample."""
+    notes = TextAreaField('Notes', validators=[Optional()])
+    submit = SubmitField('Create Invoice')
+
+
+# ---------------------------------------------------------------------------
+# Dropdown Configuration (Feature 11)
+# ---------------------------------------------------------------------------
+
+DROPDOWN_CATEGORY_CHOICES = [
+    ('', '-- Select Category --'),
+    ('api', 'API (Active Pharmaceutical Ingredient)'),
+    ('test_type', 'Test Types'),
+    ('invoice_test', 'Invoice Test Items'),
+    ('formulation_type', 'Formulation Types'),
+    ('toxicology_sample_type', 'Toxicology Sample Types'),
+]
+
+
+class DropdownConfigForm(FlaskForm):
+    """Add or edit a dropdown configuration entry."""
+    category = SelectField(
+        'Category',
+        choices=DROPDOWN_CATEGORY_CHOICES,
+        validators=[DataRequired()],
+    )
+    value = StringField('Value', validators=[DataRequired(), Length(max=255)])
+    label = StringField('Display Label', validators=[Optional(), Length(max=255)])
+    sort_order = IntegerField('Sort Order', validators=[Optional()], default=0)
+    is_active = BooleanField('Active', default=True)
+    submit = SubmitField('Save')

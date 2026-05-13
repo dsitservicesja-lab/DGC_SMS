@@ -7,6 +7,7 @@ from datetime import datetime, timezone, date
 import csv
 import enum
 import io
+import json
 
 from app import db
 from app.main import main_bp
@@ -21,6 +22,7 @@ from app.models import (
     SupportingDocument, ReviewHistory, AuditLog,
     user_roles, user_branches, user_permissions,
     DeleteRequest, DirectMessage,
+    Invoice, InvoiceItem, DropdownConfig,
 )
 
 
@@ -455,6 +457,24 @@ def _auto_actuals(year, quarter):
         )
         return q.count()
 
+    def _count_pharma_tests(branch_filter):
+        """Count total pharmaceutical test assignments performed in the period."""
+        sample_ids = [
+            s.id for s in _base(branch_filter).all()
+        ]
+        if not sample_ids:
+            return 0
+        return SampleAssignment.query.filter(
+            SampleAssignment.sample_id.in_(sample_ids),
+            SampleAssignment.status.in_([
+                AssignmentStatus.ACCEPTED,
+                AssignmentStatus.COMPLETED,
+                AssignmentStatus.REPORT_SUBMITTED,
+                AssignmentStatus.UNDER_PRELIMINARY_REVIEW,
+                AssignmentStatus.UNDER_TECHNICAL_REVIEW,
+            ]),
+        ).count()
+
     pharma_branches = [Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]
     return {
         'pharma_coas':                    _count(pharma_branches),
@@ -475,6 +495,8 @@ def _auto_actuals(year, quarter):
         'out_of_spec_milk':               _count_out_of_spec(Branch.FOOD_MILK),
         'out_of_spec_toxicology':         _count_out_of_spec(Branch.TOXICOLOGY),
         'out_of_spec_alcohol':            _count_out_of_spec(Branch.FOOD_ALCOHOL),
+        # Feature 3 – total pharmaceutical tests performed (count of assignments)
+        'pharma_tests_performed':         _count_pharma_tests(pharma_branches),
     }
 
 
@@ -696,13 +718,23 @@ def pharma_report():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
+    month = request.args.get('month', type=int, default=0)       # 0 = all (Feature 8)
     status_filter = request.args.get('status', '')
+    date_reported_from = request.args.get('date_reported_from', '')  # Feature 8
+    date_reported_to = request.args.get('date_reported_to', '')      # Feature 8
+    oos_filter = request.args.get('oos', '')                          # Feature 4
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter else None)
+    # Apply fiscal year / quarter / month filter
+    if month and 1 <= month <= 12:
+        # Filter by specific calendar month within the chosen fiscal year's calendar range
+        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
+        q = q.filter(db.extract('month', Sample.date_registered) == month)
+    else:
+        q = _fiscal_year_filter(q, Sample.date_registered, year,
+                                quarter if quarter else None)
 
     if status_filter:
         try:
@@ -710,6 +742,32 @@ def pharma_report():
             q = q.filter(Sample.status == st)
         except ValueError:
             pass
+
+    # Date Reported filter (Feature 8)
+    if date_reported_from:
+        try:
+            from datetime import date as _date
+            dr_from = _date.fromisoformat(date_reported_from)
+            q = q.filter(Sample.certified_at >= dr_from)
+        except (ValueError, TypeError):
+            pass
+    if date_reported_to:
+        try:
+            from datetime import date as _date
+            dr_to = _date.fromisoformat(date_reported_to)
+            q = q.filter(Sample.certified_at <= dr_to)
+        except (ValueError, TypeError):
+            pass
+
+    # OOS Investigation filter (Feature 4)
+    if oos_filter == '1':
+        from sqlalchemy import exists as sa_exists
+        q = q.filter(
+            sa_exists().where(
+                SampleAssignment.sample_id == Sample.id,
+                SampleAssignment.oos_investigation.is_(True),
+            )
+        )
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -730,12 +788,16 @@ def pharma_report():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
-    tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at, non_working)
-        for s in samples
-        if s.certified_at and s.date_registered
-        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
-    ]
+
+    # Per-sample TAT (Feature 2)
+    sample_tat = {}
+    for s in samples:
+        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        else:
+            sample_tat[s.id] = None
+
+    tat_days = [v for v in sample_tat.values() if v is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
     # Out-of-spec count
@@ -750,7 +812,11 @@ def pharma_report():
         samples=samples,
         year=year,
         quarter=quarter,
+        month=month,
         status_filter=status_filter,
+        date_reported_from=date_reported_from,
+        date_reported_to=date_reported_to,
+        oos_filter=oos_filter,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -758,6 +824,7 @@ def pharma_report():
         rejected=rejected,
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
+        sample_tat=sample_tat,
         SampleStatus=SampleStatus,
     )
 
@@ -774,12 +841,17 @@ def pharma_report_download():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter in (1, 2, 3, 4) else None)
+    if month and 1 <= month <= 12:
+        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
+        q = q.filter(db.extract('month', Sample.date_registered) == month)
+    else:
+        q = _fiscal_year_filter(q, Sample.date_registered, year,
+                                quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -788,7 +860,7 @@ def pharma_report_download():
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
-        'Lab Number', 'Sample Name', 'Type', 'Formulation',
+        'Lab Number', 'Sample Name', 'Type', 'Formulation', 'API',
         'Status', 'Date Received', 'Date Registered',
         'Expected Report Date', 'Certified Date', 'Turnaround (days)',
     ])
@@ -802,6 +874,7 @@ def pharma_report_download():
             s.sample_name,
             s.sample_type.value if s.sample_type else '',
             s.formulation_type or '',
+            s.active_ingredient or '',
             s.status.value if s.status else '',
             s.date_received.isoformat() if s.date_received else '',
             s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
@@ -810,7 +883,7 @@ def pharma_report_download():
             tat,
         ])
 
-    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else (f'_M{month}' if month else '')
     filename = f'Pharmaceutical_Report_{year}{q_label}.csv'
     return Response(
         buf.getvalue(),
@@ -835,19 +908,39 @@ def milk_report():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
+    month = request.args.get('month', type=int, default=0)
     status_filter = request.args.get('status', '')
+    date_reported_from = request.args.get('date_reported_from', '')
+    date_reported_to = request.args.get('date_reported_to', '')
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter else None)
+    if month and 1 <= month <= 12:
+        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
+        q = q.filter(db.extract('month', Sample.date_registered) == month)
+    else:
+        q = _fiscal_year_filter(q, Sample.date_registered, year,
+                                quarter if quarter else None)
 
     if status_filter:
         try:
             st = SampleStatus(status_filter)
             q = q.filter(Sample.status == st)
         except ValueError:
+            pass
+
+    if date_reported_from:
+        try:
+            from datetime import date as _date
+            q = q.filter(Sample.certified_at >= _date.fromisoformat(date_reported_from))
+        except (ValueError, TypeError):
+            pass
+    if date_reported_to:
+        try:
+            from datetime import date as _date
+            q = q.filter(Sample.certified_at <= _date.fromisoformat(date_reported_to))
+        except (ValueError, TypeError):
             pass
 
     samples = q.order_by(Sample.date_registered.desc()).all()
@@ -869,12 +962,15 @@ def milk_report():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
-    tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at, non_working)
-        for s in samples
-        if s.certified_at and s.date_registered
-        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
-    ]
+
+    sample_tat = {}
+    for s in samples:
+        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        else:
+            sample_tat[s.id] = None
+
+    tat_days = [v for v in sample_tat.values() if v is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
     # Out-of-spec count
@@ -889,7 +985,10 @@ def milk_report():
         samples=samples,
         year=year,
         quarter=quarter,
+        month=month,
         status_filter=status_filter,
+        date_reported_from=date_reported_from,
+        date_reported_to=date_reported_to,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -897,6 +996,7 @@ def milk_report():
         rejected=rejected,
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
+        sample_tat=sample_tat,
         SampleStatus=SampleStatus,
     )
 
@@ -978,19 +1078,39 @@ def toxicology_report():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
     status_filter = request.args.get('status', '')
+    date_reported_from = request.args.get('date_reported_from', '')
+    date_reported_to = request.args.get('date_reported_to', '')
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter else None)
+    if month and 1 <= month <= 12:
+        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
+        q = q.filter(db.extract('month', Sample.date_registered) == month)
+    else:
+        q = _fiscal_year_filter(q, Sample.date_registered, year,
+                                quarter if quarter else None)
 
     if status_filter:
         try:
             st = SampleStatus(status_filter)
             q = q.filter(Sample.status == st)
         except ValueError:
+            pass
+
+    if date_reported_from:
+        try:
+            from datetime import date as _date
+            q = q.filter(Sample.certified_at >= _date.fromisoformat(date_reported_from))
+        except (ValueError, TypeError):
+            pass
+    if date_reported_to:
+        try:
+            from datetime import date as _date
+            q = q.filter(Sample.certified_at <= _date.fromisoformat(date_reported_to))
+        except (ValueError, TypeError):
             pass
 
     samples = q.order_by(Sample.date_registered.desc()).all()
@@ -1011,13 +1131,15 @@ def toxicology_report():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
-    tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at, non_working)
-        for s in samples
-        if s.certified_at and s.date_registered
-        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
-    ]
-    tat_days = [d for d in tat_days if d is not None]
+
+    sample_tat = {}
+    for s in samples:
+        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        else:
+            sample_tat[s.id] = None
+
+    tat_days = [v for v in sample_tat.values() if v is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
     # Out-of-spec count
@@ -1031,7 +1153,10 @@ def toxicology_report():
         samples=samples,
         year=year,
         quarter=quarter,
+        month=month,
         status_filter=status_filter,
+        date_reported_from=date_reported_from,
+        date_reported_to=date_reported_to,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -1039,6 +1164,7 @@ def toxicology_report():
         rejected=rejected,
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
+        sample_tat=sample_tat,
         SampleStatus=SampleStatus,
     )
 
@@ -1115,19 +1241,39 @@ def alcohol_report():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
     status_filter = request.args.get('status', '')
+    date_reported_from = request.args.get('date_reported_from', '')
+    date_reported_to = request.args.get('date_reported_to', '')
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_ALCOHOL,
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter else None)
+    if month and 1 <= month <= 12:
+        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
+        q = q.filter(db.extract('month', Sample.date_registered) == month)
+    else:
+        q = _fiscal_year_filter(q, Sample.date_registered, year,
+                                quarter if quarter else None)
 
     if status_filter:
         try:
             st = SampleStatus(status_filter)
             q = q.filter(Sample.status == st)
         except ValueError:
+            pass
+
+    if date_reported_from:
+        try:
+            from datetime import date as _date
+            q = q.filter(Sample.certified_at >= _date.fromisoformat(date_reported_from))
+        except (ValueError, TypeError):
+            pass
+    if date_reported_to:
+        try:
+            from datetime import date as _date
+            q = q.filter(Sample.certified_at <= _date.fromisoformat(date_reported_to))
+        except (ValueError, TypeError):
             pass
 
     samples = q.order_by(Sample.date_registered.desc()).all()
@@ -1148,13 +1294,15 @@ def alcohol_report():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
-    tat_days = [
-        calculate_working_days(s.date_registered, s.certified_at, non_working)
-        for s in samples
-        if s.certified_at and s.date_registered
-        and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
-    ]
-    tat_days = [d for d in tat_days if d is not None]
+
+    sample_tat = {}
+    for s in samples:
+        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        else:
+            sample_tat[s.id] = None
+
+    tat_days = [v for v in sample_tat.values() if v is not None]
     avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
 
     # Out-of-spec count
@@ -1188,7 +1336,10 @@ def alcohol_report():
         samples=samples,
         year=year,
         quarter=quarter,
+        month=month,
         status_filter=status_filter,
+        date_reported_from=date_reported_from,
+        date_reported_to=date_reported_to,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -1196,6 +1347,7 @@ def alcohol_report():
         rejected=rejected,
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
+        sample_tat=sample_tat,
         alcohol_type_tat=alcohol_type_tat,
         SampleStatus=SampleStatus,
     )
@@ -2787,3 +2939,170 @@ def unread_message_count():
         recipient_id=current_user.id, is_read=False
     ).count()
     return jsonify({'count': count})
+
+
+# ---------------------------------------------------------------------------
+# Dropdown Configuration Admin  (Feature 11)
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/admin/dropdowns')
+@login_required
+def admin_dropdowns():
+    """List all dropdown configuration entries."""
+    if not (current_user.has_any_role(Role.ADMIN, Role.HOD)
+            or current_user.has_permission(Permission.MANAGE_DROPDOWNS)):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from app.forms import DropdownConfigForm, DROPDOWN_CATEGORY_CHOICES
+    category_filter = request.args.get('category', '')
+    q = DropdownConfig.query
+    if category_filter:
+        q = q.filter_by(category=category_filter)
+    items = q.order_by(DropdownConfig.category, DropdownConfig.sort_order, DropdownConfig.label).all()
+    form = DropdownConfigForm()
+    return render_template(
+        'admin/dropdowns.html',
+        items=items, form=form,
+        category_filter=category_filter,
+        category_choices=DROPDOWN_CATEGORY_CHOICES,
+    )
+
+
+@main_bp.route('/admin/dropdowns/add', methods=['POST'])
+@login_required
+def admin_dropdown_add():
+    """Add a new dropdown configuration entry."""
+    if not (current_user.has_any_role(Role.ADMIN, Role.HOD)
+            or current_user.has_permission(Permission.MANAGE_DROPDOWNS)):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from app.forms import DropdownConfigForm
+    form = DropdownConfigForm()
+    if form.validate_on_submit():
+        existing = DropdownConfig.query.filter_by(
+            category=form.category.data, value=form.value.data
+        ).first()
+        if existing:
+            flash(f'Entry "{form.value.data}" already exists in category "{form.category.data}".', 'warning')
+        else:
+            db.session.add(DropdownConfig(
+                category=form.category.data,
+                value=form.value.data,
+                label=form.label.data or form.value.data,
+                sort_order=form.sort_order.data or 0,
+                is_active=form.is_active.data,
+                created_by=current_user.id,
+            ))
+            db.session.commit()
+            flash('Dropdown entry added.', 'success')
+    else:
+        for field, errs in form.errors.items():
+            for err in errs:
+                flash(f'{field}: {err}', 'danger')
+    return redirect(url_for('main.admin_dropdowns'))
+
+
+@main_bp.route('/admin/dropdowns/<int:item_id>/edit', methods=['GET', 'POST'])
+@login_required
+def admin_dropdown_edit(item_id):
+    """Edit a dropdown configuration entry."""
+    if not (current_user.has_any_role(Role.ADMIN, Role.HOD)
+            or current_user.has_permission(Permission.MANAGE_DROPDOWNS)):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from app.forms import DropdownConfigForm
+    item = db.get_or_404(DropdownConfig, item_id)
+    form = DropdownConfigForm(obj=item)
+    if form.validate_on_submit():
+        item.category = form.category.data
+        item.value = form.value.data
+        item.label = form.label.data or form.value.data
+        item.sort_order = form.sort_order.data or 0
+        item.is_active = form.is_active.data
+        db.session.commit()
+        flash('Dropdown entry updated.', 'success')
+        return redirect(url_for('main.admin_dropdowns'))
+    return render_template('admin/dropdown_edit.html', form=form, item=item)
+
+
+@main_bp.route('/admin/dropdowns/<int:item_id>/delete', methods=['POST'])
+@login_required
+def admin_dropdown_delete(item_id):
+    """Delete a dropdown configuration entry."""
+    if not (current_user.has_any_role(Role.ADMIN, Role.HOD)
+            or current_user.has_permission(Permission.MANAGE_DROPDOWNS)):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    item = db.get_or_404(DropdownConfig, item_id)
+    db.session.delete(item)
+    db.session.commit()
+    flash('Dropdown entry deleted.', 'success')
+    return redirect(url_for('main.admin_dropdowns'))
+
+
+# ---------------------------------------------------------------------------
+# KPI – Month-level aggregation  (Feature 3)
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/kpi/monthly')
+@login_required
+def kpi_monthly():
+    """Monthly KPI summary for pharmaceutical tests performed."""
+    if not (current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                      Role.DEPUTY, Role.ADMIN)
+            or current_user.has_permission(Permission.KPI_VIEW)):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int, default=_current_fiscal_year())
+    available_years = _available_fiscal_years()
+    pharma_branches = [Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]
+
+    months_data = []
+    month_names = {
+        1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+        7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+    }
+    # Fiscal year spans April of `year` to March of `year+1`
+    fiscal_months = [(year, m) for m in range(4, 13)] + [(year + 1, m) for m in range(1, 4)]
+
+    for cal_year, cal_month in fiscal_months:
+        base = Sample.query.filter(
+            Sample.sample_type.in_(pharma_branches),
+            db.extract('year', Sample.date_registered) == cal_year,
+            db.extract('month', Sample.date_registered) == cal_month,
+        )
+        total = base.count()
+        certified = base.filter(
+            Sample.status.in_([SampleStatus.CERTIFIED, SampleStatus.COMPLETED])
+        ).count()
+        sample_ids = [s.id for s in base.all()]
+        tests_performed = SampleAssignment.query.filter(
+            SampleAssignment.sample_id.in_(sample_ids),
+            SampleAssignment.status.in_([
+                AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED,
+                AssignmentStatus.REPORT_SUBMITTED,
+                AssignmentStatus.UNDER_PRELIMINARY_REVIEW,
+                AssignmentStatus.UNDER_TECHNICAL_REVIEW,
+            ]),
+        ).count() if sample_ids else 0
+        months_data.append({
+            'year': cal_year,
+            'month': cal_month,
+            'month_name': month_names[cal_month],
+            'total': total,
+            'certified': certified,
+            'tests_performed': tests_performed,
+        })
+
+    return render_template(
+        'kpi_monthly.html',
+        months_data=months_data,
+        year=year,
+        available_years=available_years,
+    )
+

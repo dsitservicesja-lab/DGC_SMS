@@ -95,6 +95,20 @@
                             {{ form.chemist_ids() }}
                         </div>
 
+                        <!-- OOS Investigation flag (Feature 4) -->
+                        <div class="col-12">
+                            <div class="form-check border rounded p-3 bg-warning-subtle">
+                                {{ form.oos_investigation(class="form-check-input", id="oos_investigation") }}
+                                <label class="form-check-label fw-semibold text-warning-emphasis" for="oos_investigation">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                    {{ form.oos_investigation.label.text }}
+                                </label>
+                                <div class="form-text text-warning-emphasis">
+                                    Check this box if this assignment involves an Out of Specification investigation.
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="col-12 d-flex gap-2 pt-2">
                             {{ form.submit(class="btn btn-primary") }}
                             <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary">Cancel</a>

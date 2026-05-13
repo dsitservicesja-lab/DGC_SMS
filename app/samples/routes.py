@@ -20,13 +20,15 @@ from app.models import (
     AuditLog, Notification, Setting, DeleteRequest,
     KpiTarget, fiscal_year_for_date, fiscal_quarter_for_date,
     calculate_working_days, fetch_non_working_days, add_working_days,
+    Invoice, InvoiceItem, PHARMA_TEST_PRICES, DropdownConfig,
 )
 from app.forms import (
     SampleRegisterForm, SampleEditForm, SampleAssignForm,
     ReportSubmitForm, PreliminaryReviewForm, ReportReviewForm,
     SubmitToDeputyForm, DeputyReviewForm, CertificateForm, HODReviewForm,
     get_sample_register_form, SupportingDocumentForm, BackDateRequestForm,
-    DeleteRequestForm,
+    DeleteRequestForm, COADecertifyForm, COAReissueForm,
+    InvoiceCreateForm, InvoiceItemForm,
     BRANCH_TEST_NAMES, BRANCH_TEST_REFERENCES,
 )
 from app.notifications import (
@@ -390,6 +392,9 @@ def register():
         ft = _get_field(form, 'formulation_type')
         if ft:
             sample.formulation_type = ft
+        ai = _get_field(form, 'active_ingredient')
+        if ai:
+            sample.active_ingredient = ai
         at = _get_field(form, 'alcohol_type')
         if at:
             sample.alcohol_type = at
@@ -537,6 +542,8 @@ def edit(sample_id):
     if request.method == 'GET' and sample.sample_type:
         form.sample_type.data = sample.sample_type.name
         form.lab_number.data = sample.lab_number
+        if sample.active_ingredient:
+            form.active_ingredient.data = sample.active_ingredient
     if form.validate_on_submit():
         new_lab_number = form.lab_number.data.strip()
         if new_lab_number != sample.lab_number:
@@ -557,6 +564,7 @@ def edit(sample_id):
         sample.patient_name = form.patient_name.data
         sample.source = form.source.data
         sample.formulation_type = form.formulation_type.data
+        sample.active_ingredient = form.active_ingredient.data or None
         sample.alcohol_type = form.alcohol_type.data if form.alcohol_type.data else None
         sample.claim_butt_number = form.claim_butt_number.data
         sample.batch_lot_number = form.batch_lot_number.data or None
@@ -704,6 +712,7 @@ def assign(sample_id):
                     expected_completion=form.expected_completion.data,
                     comments=form.comments.data or None,
                     quantity_volume=form.quantity_volume.data or None,
+                    oos_investigation=bool(form.oos_investigation.data),
                 )
                 db.session.add(assignment)
                 db.session.flush()
@@ -2362,3 +2371,245 @@ def _delete_sample_files(sample):
                     current_app.logger.warning(
                         'Could not remove cached PDF %s during sample deletion', cached_pdf
                     )
+
+
+# ---------------------------------------------------------------------------
+# COA Decertify / Re-Issue  (Feature 5)
+# ---------------------------------------------------------------------------
+
+def _can_manage_coa(user):
+    """Return True if user is authorised to decertify/re-issue COAs."""
+    return (
+        user.has_any_role(Role.HOD, Role.ADMIN)
+        or user.has_permission(Permission.COA_DECERTIFY_REISSUE)
+    )
+
+
+@samples_bp.route('/<int:sample_id>/coa/decertify', methods=['GET', 'POST'])
+@login_required
+def coa_decertify(sample_id):
+    """Decertify a signed COA (HOD / Government Chemist only)."""
+    sample = db.get_or_404(Sample, sample_id)
+    if not _can_manage_coa(current_user):
+        flash('Access denied. Only HOD or Government Chemist can decertify COAs.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    if sample.status != SampleStatus.CERTIFIED:
+        flash('Only certified samples can be decertified.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    form = COADecertifyForm()
+    if form.validate_on_submit():
+        now = jamaica_now()
+        sample.decertified_at = now
+        sample.decertified_by = current_user.id
+        sample.decertify_reason = form.reason.data
+        sample.status = SampleStatus.CERTIFICATE_PREPARATION  # back to prep stage
+
+        _add_history(
+            sample, 'COA Decertified',
+            f'Decertified by {current_user.full_name}: {form.reason.data}',
+            action_type='Decertify',
+            object_affected='COA',
+            change_description=form.reason.data,
+        )
+        db.session.add(AuditLog(
+            action='COA_DECERTIFY',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=f'Reason: {form.reason.data}',
+            performed_by=current_user.id,
+        ))
+        db.session.commit()
+        flash('COA decertified. Sample returned to Certificate Preparation stage.', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    return render_template('samples/coa_decertify.html', form=form, sample=sample)
+
+
+@samples_bp.route('/<int:sample_id>/coa/reissue', methods=['GET', 'POST'])
+@login_required
+def coa_reissue(sample_id):
+    """Re-issue a Certificate of Analysis (HOD / Government Chemist only)."""
+    sample = db.get_or_404(Sample, sample_id)
+    if not _can_manage_coa(current_user):
+        flash('Access denied. Only HOD or Government Chemist can re-issue COAs.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    # Can only re-issue if currently in CERTIFICATE_PREPARATION after a decertify
+    if sample.status not in (SampleStatus.CERTIFICATE_PREPARATION, SampleStatus.CERTIFIED):
+        flash('Sample is not in a state that permits COA re-issue.', 'warning')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    form = COAReissueForm()
+    if form.validate_on_submit():
+        now = jamaica_now()
+        # Archive previous cert details in history before overwriting
+        prev_ref = sample.coa_reference
+        prev_ver = sample.coa_version or 1
+
+        if form.certificate_file.data:
+            stored, original = _save_file(form.certificate_file.data)
+            sample.certificate_file = stored
+            sample.certificate_file_original_name = original
+            existing_versions = DocumentVersion.query.filter_by(
+                sample_id=sample.id, document_type='certificate'
+            ).count()
+            db.session.add(DocumentVersion(
+                sample_id=sample.id,
+                document_type='certificate',
+                version_number=existing_versions + 1,
+                file_path=stored,
+                original_name=original,
+                upload_label='reissued',
+                uploaded_by=current_user.id,
+            ))
+
+        sample.certificate_text = form.certificate_text.data
+        if form.coa_reference.data:
+            sample.coa_reference = form.coa_reference.data
+        sample.coa_version = prev_ver + 1
+        sample.reissued_at = now
+        sample.reissued_by = current_user.id
+        sample.status = SampleStatus.CERTIFIED
+        sample.certified_at = now
+        sample.certified_by = current_user.id
+
+        _add_history(
+            sample, 'COA Re-Issued',
+            (f'Re-issued by {current_user.full_name}. '
+             f'Previous version: {prev_ver}, Previous ref: {prev_ref}. '
+             f'New ref: {sample.coa_reference}'),
+            action_type='Reissue',
+            object_affected='COA',
+        )
+        db.session.add(AuditLog(
+            action='COA_REISSUE',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=f'Version: {sample.coa_version}, Ref: {sample.coa_reference}',
+            performed_by=current_user.id,
+        ))
+        db.session.commit()
+        flash(f'COA re-issued successfully (Version {sample.coa_version}).', 'success')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    # Pre-populate with current certificate text
+    if request.method == 'GET':
+        form.certificate_text.data = sample.certificate_text
+        form.coa_reference.data = sample.coa_reference
+
+    return render_template('samples/coa_reissue.html', form=form, sample=sample)
+
+
+# ---------------------------------------------------------------------------
+# Invoice routes  (Feature 9)
+# ---------------------------------------------------------------------------
+
+def _next_invoice_number():
+    """Generate a sequential invoice number INV-YYYY-NNNN."""
+    from datetime import date
+    year = date.today().year
+    prefix = f'INV-{year}-'
+    last = Invoice.query.filter(
+        Invoice.invoice_number.like(f'{prefix}%')
+    ).order_by(Invoice.id.desc()).first()
+    if last:
+        try:
+            seq = int(last.invoice_number[len(prefix):]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f'{prefix}{seq:04d}'
+
+
+@samples_bp.route('/<int:sample_id>/invoice/new', methods=['GET', 'POST'])
+@login_required
+def invoice_create(sample_id):
+    """Create a new invoice for a sample."""
+    sample = db.get_or_404(Sample, sample_id)
+    if not (
+        current_user.has_any_role(Role.ADMIN, Role.HOD, Role.OFFICER)
+        or current_user.has_permission(Permission.INVOICE_GENERATE)
+    ):
+        flash('Access denied. You are not permitted to generate invoices.', 'danger')
+        return redirect(url_for('samples.detail', sample_id=sample_id))
+
+    form = InvoiceCreateForm()
+    if form.validate_on_submit():
+        invoice = Invoice(
+            sample_id=sample.id,
+            invoice_number=_next_invoice_number(),
+            created_by=current_user.id,
+            notes=form.notes.data or None,
+        )
+        db.session.add(invoice)
+        db.session.flush()
+
+        # Parse line items from form data
+        names = request.form.getlist('item_test_name')
+        types = request.form.getlist('item_test_type')
+        costs = request.form.getlist('item_unit_cost')
+        qtys = request.form.getlist('item_quantity')
+
+        for i, name in enumerate(names):
+            if not name.strip():
+                continue
+            try:
+                unit_cost = float(costs[i]) if i < len(costs) else 0
+            except (ValueError, IndexError):
+                unit_cost = 0
+            try:
+                qty = int(qtys[i]) if i < len(qtys) else 1
+                qty = max(1, qty)
+            except (ValueError, IndexError):
+                qty = 1
+            test_type = types[i] if i < len(types) else ''
+
+            db.session.add(InvoiceItem(
+                invoice_id=invoice.id,
+                test_name=name.strip(),
+                test_type=test_type or None,
+                unit_cost=unit_cost,
+                quantity=qty,
+            ))
+
+        _add_history(
+            sample, 'Invoice Created',
+            f'Invoice {invoice.invoice_number} created by {current_user.full_name}',
+            action_type='Invoice',
+            object_affected='Invoice',
+        )
+        db.session.commit()
+        flash(f'Invoice {invoice.invoice_number} created successfully.', 'success')
+        return redirect(url_for('samples.invoice_detail',
+                                sample_id=sample_id, invoice_id=invoice.id))
+
+    # Build pricing map for JS auto-populate
+    pricing_json = json.dumps(PHARMA_TEST_PRICES)
+    return render_template(
+        'samples/invoice_create.html',
+        form=form, sample=sample,
+        pricing_json=pricing_json,
+    )
+
+
+@samples_bp.route('/<int:sample_id>/invoice/<int:invoice_id>')
+@login_required
+def invoice_detail(sample_id, invoice_id):
+    """View an invoice."""
+    sample = db.get_or_404(Sample, sample_id)
+    invoice = db.get_or_404(Invoice, invoice_id)
+    if invoice.sample_id != sample.id:
+        abort(404)
+    items = invoice.items.all()
+    grand_total = sum(item.line_total for item in items)
+    return render_template(
+        'samples/invoice_detail.html',
+        sample=sample, invoice=invoice, items=items,
+        grand_total=grand_total,
+    )
+
