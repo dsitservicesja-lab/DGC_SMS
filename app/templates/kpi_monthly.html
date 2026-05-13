@@ -1,19 +1,32 @@
 {% extends "base.html" %}
-{% block title %}KPI Monthly Report - DGC SMS{% endblock %}
+{% block title %}Monthly KPI – {{ lab_label }} - DGC SMS{% endblock %}
 
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <h2><i class="bi bi-bar-chart-line me-1"></i>Monthly KPI – Pharmaceutical Tests</h2>
-    <a href="{{ url_for('main.kpi_report') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Quarterly KPI
-    </a>
+    <h2><i class="bi {{ lab_icon }} me-1"></i>Monthly KPI – {{ lab_label }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('main.kpi_report') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Quarterly KPI
+        </a>
+        <a href="{{ url_for('main.kpi') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-bar-chart-line me-1"></i>KPI Dashboard
+        </a>
+    </div>
 </div>
 
-<!-- Year filter -->
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-end">
-            <div class="col-sm-4 col-md-2">
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-sm-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Laboratory</label>
+                <select name="lab" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for key, (label, icon, _) in lab_groups.items() %}
+                    <option value="{{ key }}" {% if key == lab_key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-md-3">
                 <label class="form-label small fw-semibold mb-1">Fiscal Year</label>
                 <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
                     {% for y in available_years %}
@@ -25,33 +38,93 @@
     </div>
 </div>
 
+<!-- Summary stat cards -->
+{% set total_reg   = months_data | sum(attribute='total') %}
+{% set total_cert  = months_data | sum(attribute='certified') %}
+{% set total_tests = months_data | sum(attribute='tests_performed') %}
+{% set active_months = months_data | selectattr('total', 'gt', 0) | list | length %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small fw-semibold text-uppercase mb-1">Total Registered</div>
+                <div class="fs-2 fw-bold text-primary">{{ total_reg }}</div>
+                <small class="text-muted">FY {{ year }}/{{ year + 1 }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small fw-semibold text-uppercase mb-1">Certified / Completed</div>
+                <div class="fs-2 fw-bold text-success">{{ total_cert }}</div>
+                {% if total_reg > 0 %}
+                <small class="text-muted">{{ ((total_cert / total_reg) * 100) | round(1) }}% completion rate</small>
+                {% else %}
+                <small class="text-muted">—</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small fw-semibold text-uppercase mb-1">Tests Performed</div>
+                <div class="fs-2 fw-bold text-info">{{ total_tests }}</div>
+                <small class="text-muted">assignments in FY</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card text-center h-100">
+            <div class="card-body py-3">
+                <div class="text-muted small fw-semibold text-uppercase mb-1">Avg / Active Month</div>
+                <div class="fs-2 fw-bold text-warning">
+                    {% if active_months > 0 %}{{ (total_tests / active_months) | round(1) }}{% else %}—{% endif %}
+                </div>
+                <small class="text-muted">tests per month</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Monthly data table -->
-<div class="card">
-    <div class="card-header">
-        Pharmaceutical Tests Performed — FY {{ year }}/{{ year + 1 }} by Month
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-table me-1"></i>{{ lab_label }} — FY {{ year }}/{{ year + 1 }} by Month</span>
     </div>
     <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
-            <thead>
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Month</th>
                     <th class="text-end">Total Registered</th>
                     <th class="text-end">Certified / Completed</th>
+                    <th class="text-end">Completion %</th>
                     <th class="text-end">Tests Performed</th>
                 </tr>
             </thead>
             <tbody>
-                {% set total_tests = 0 %}
-                {% set total_reg = 0 %}
-                {% set total_cert = 0 %}
                 {% for row in months_data %}
-                {% set total_tests = total_tests + row.tests_performed %}
-                {% set total_reg = total_reg + row.total %}
-                {% set total_cert = total_cert + row.certified %}
-                <tr>
-                    <td>{{ row.month_name }} {{ row.year }}</td>
-                    <td class="text-end">{{ row.total }}</td>
-                    <td class="text-end">{{ row.certified }}</td>
+                <tr {% if row.total == 0 %}class="text-muted"{% endif %}>
+                    <td class="fw-semibold">{{ row.month_name }} {{ row.year }}</td>
+                    <td class="text-end">{{ row.total if row.total > 0 else '—' }}</td>
+                    <td class="text-end {% if row.certified > 0 %}text-success fw-semibold{% endif %}">
+                        {{ row.certified if row.certified > 0 else '—' }}
+                    </td>
+                    <td class="text-end">
+                        {% if row.total > 0 %}
+                        <div class="d-flex align-items-center justify-content-end gap-2">
+                            <div class="progress flex-grow-1" style="height:6px;max-width:80px;">
+                                <div class="progress-bar bg-success" role="progressbar"
+                                     style="width:{{ ((row.certified / row.total) * 100) | int }}%"></div>
+                            </div>
+                            <span class="small">{{ ((row.certified / row.total) * 100) | round(1) }}%</span>
+                        </div>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
                     <td class="text-end fw-semibold">
                         {% if row.tests_performed > 0 %}
                         <span class="badge bg-primary">{{ row.tests_performed }}</span>
@@ -61,41 +134,117 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="4" class="text-center text-muted py-4">No data found.</td></tr>
+                <tr><td colspan="5" class="text-center text-muted py-4">No data found for this period.</td></tr>
                 {% endfor %}
             </tbody>
             <tfoot class="table-light fw-bold">
                 <tr>
                     <td>Total</td>
-                    <td class="text-end">{{ months_data | sum(attribute='total') }}</td>
-                    <td class="text-end">{{ months_data | sum(attribute='certified') }}</td>
-                    <td class="text-end">{{ months_data | sum(attribute='tests_performed') }}</td>
+                    <td class="text-end">{{ total_reg }}</td>
+                    <td class="text-end text-success">{{ total_cert }}</td>
+                    <td class="text-end">
+                        {% if total_reg > 0 %}{{ ((total_cert / total_reg) * 100) | round(1) }}%{% else %}—{% endif %}
+                    </td>
+                    <td class="text-end"><span class="badge bg-primary">{{ total_tests }}</span></td>
                 </tr>
             </tfoot>
         </table>
     </div>
 </div>
 
-<!-- Simple bar chart using inline SVG-based progress bars -->
-<div class="card mt-4">
-    <div class="card-header">Tests Performed Per Month</div>
+<!-- Chart -->
+<div class="card">
+    <div class="card-header"><i class="bi bi-bar-chart-line me-1"></i>Tests Performed &amp; Registered Per Month</div>
     <div class="card-body">
-        {% set max_tests = months_data | map(attribute='tests_performed') | max %}
-        {% for row in months_data %}
-        <div class="d-flex align-items-center mb-1 gap-2">
-            <span class="text-muted small" style="width:60px">{{ row.month_name }}</span>
-            <div class="flex-grow-1">
-                {% if max_tests and max_tests > 0 %}
-                <div class="progress" style="height:18px">
-                    <div class="progress-bar bg-primary" role="progressbar"
-                         style="width:{{ ((row.tests_performed / max_tests) * 100) | int }}%">
-                        {% if row.tests_performed > 0 %}{{ row.tests_performed }}{% endif %}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
+        <canvas id="monthlyChart" height="90"></canvas>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const labels  = {{ months_data | map(attribute='month_name') | list | tojson }};
+    const totals  = {{ months_data | map(attribute='total') | list | tojson }};
+    const certs   = {{ months_data | map(attribute='certified') | list | tojson }};
+    const tests   = {{ months_data | map(attribute='tests_performed') | list | tojson }};
+
+    const isDark = () => document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const gridColor = () => isDark() ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.07)';
+    const textColor = () => isDark() ? '#cbd5e1' : '#475569';
+
+    const ctx = document.getElementById('monthlyChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Total Registered',
+                    data: totals,
+                    backgroundColor: 'rgba(46,134,193,.55)',
+                    borderColor: '#2e86c1',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Certified / Completed',
+                    data: certs,
+                    backgroundColor: 'rgba(26,188,156,.55)',
+                    borderColor: '#1abc9c',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Tests Performed',
+                    data: tests,
+                    type: 'line',
+                    borderColor: '#e74c3c',
+                    backgroundColor: 'rgba(231,76,60,.12)',
+                    pointBackgroundColor: '#e74c3c',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.35,
+                    yAxisID: 'y',
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: textColor(), boxWidth: 14, padding: 18 } },
+                tooltip: { cornerRadius: 6 },
+            },
+            scales: {
+                x: {
+                    ticks: { color: textColor() },
+                    grid: { color: gridColor() },
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: textColor(), precision: 0 },
+                    grid: { color: gridColor() },
+                },
+            },
+        },
+    });
+
+    // Update chart colours when dark-mode is toggled
+    const themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+            setTimeout(() => {
+                chart.options.plugins.legend.labels.color = textColor();
+                chart.options.scales.x.ticks.color = textColor();
+                chart.options.scales.x.grid.color = gridColor();
+                chart.options.scales.y.ticks.color = textColor();
+                chart.options.scales.y.grid.color = gridColor();
+                chart.update();
+            }, 50);
+        });
+    }
+})();
+</script>
 {% endblock %}
