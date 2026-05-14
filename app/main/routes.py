@@ -1950,15 +1950,19 @@ def backdate_requests():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
+    page = request.args.get('page', 1, type=int)
     status_filter = request.args.get('status', 'pending')
     q = BackDateRequest.query
     if status_filter in ('pending', 'approved', 'denied'):
         q = q.filter_by(status=status_filter)
-    requests_list = q.order_by(BackDateRequest.requested_at.desc()).all()
+    pagination = q.order_by(BackDateRequest.requested_at.desc()).paginate(
+        page=page, per_page=25, error_out=False
+    )
 
     return render_template(
         'backdate_requests.html',
-        requests=requests_list,
+        requests=pagination.items,
+        pagination=pagination,
         status_filter=status_filter,
     )
 
@@ -2078,15 +2082,19 @@ def delete_requests():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
+    page = request.args.get('page', 1, type=int)
     status_filter = request.args.get('status', 'pending')
     q = DeleteRequest.query
     if status_filter in ('pending', 'approved', 'denied'):
         q = q.filter_by(status=status_filter)
-    requests_list = q.order_by(DeleteRequest.requested_at.desc()).all()
+    pagination = q.order_by(DeleteRequest.requested_at.desc()).paginate(
+        page=page, per_page=25, error_out=False
+    )
 
     return render_template(
         'delete_requests.html',
-        requests=requests_list,
+        requests=pagination.items,
+        pagination=pagination,
         status_filter=status_filter,
     )
 
@@ -3240,4 +3248,3 @@ def kpi_monthly():
         lab_icon=lab_icon,
         lab_groups=LAB_GROUPS,
     )
-
