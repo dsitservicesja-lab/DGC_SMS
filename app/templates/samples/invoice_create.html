@@ -18,6 +18,39 @@
                 <span class="badge bg-secondary">{{ sample.sample_type.value }}</span>
             </div>
         </div>
+        <div class="card mb-3">
+            <div class="card-header bg-light py-2">
+                <strong class="small text-uppercase text-muted">Test Assignments</strong>
+            </div>
+            <div class="card-body p-0">
+                {% if assignments %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Test Name</th>
+                                <th>Assigned To</th>
+                                <th>Status</th>
+                                <th>Assigned Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in assignments %}
+                            <tr>
+                                <td>{{ a.test_name }}</td>
+                                <td>{{ a.chemist.full_name if a.chemist else '—' }}</td>
+                                <td>{{ a.status.value }}</td>
+                                <td>{{ a.assigned_date.strftime('%d %b %Y') if a.assigned_date else '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-3 small text-muted">No test assignments found for this sample.</div>
+                {% endif %}
+            </div>
+        </div>
         <div class="card">
             <div class="card-body p-4">
                 <form method="POST" id="invoiceForm">

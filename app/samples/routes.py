@@ -2538,6 +2538,9 @@ def invoice_create(sample_id):
         flash('Access denied. You are not permitted to generate invoices.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample_id))
 
+    assignments = sample.assignments.order_by(
+        SampleAssignment.assigned_date.desc()
+    ).all()
     form = InvoiceCreateForm()
     if form.validate_on_submit():
         invoice = Invoice(
@@ -2593,6 +2596,7 @@ def invoice_create(sample_id):
     return render_template(
         'samples/invoice_create.html',
         form=form, sample=sample,
+        assignments=assignments,
         pricing_json=pricing_json,
     )
 
@@ -2606,10 +2610,12 @@ def invoice_detail(sample_id, invoice_id):
     if invoice.sample_id != sample.id:
         abort(404)
     items = invoice.items.all()
+    assignments = sample.assignments.order_by(
+        SampleAssignment.assigned_date.desc()
+    ).all()
     grand_total = sum(item.line_total for item in items)
     return render_template(
         'samples/invoice_detail.html',
-        sample=sample, invoice=invoice, items=items,
+        sample=sample, invoice=invoice, items=items, assignments=assignments,
         grand_total=grand_total,
     )
-

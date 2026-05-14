@@ -1550,3 +1550,60 @@ def test_resubmit_to_deputy_redirects(app, client):
     # Following the redirect should work
     resp2 = client.get(resp.headers['Location'])
     assert resp2.status_code == 200
+
+
+def test_invoice_create_shows_test_assignments(app, client):
+    """Invoice creation page should show sample test assignments for billing."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Assignment Billing Test',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    with app.app_context():
+        sample = Sample.query.first()
+    resp = client.get(f'/samples/{sample.id}/invoice/new')
+    assert resp.status_code == 200
+    assert b'Test Assignments' in resp.data
+    assert b'Assignment Billing Test' in resp.data
+
+
+def test_invoice_detail_shows_test_assignments(app, client):
+    """Invoice detail page should include sample test assignments."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Assignment Detail Only',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    with app.app_context():
+        sample = Sample.query.first()
+    resp = client.post(f'/samples/{sample.id}/invoice/new', data={
+        'notes': 'Billing notes',
+        'item_test_name': ['Invoice Line Item'],
+        'item_test_type': ['Toxicology'],
+        'item_unit_cost': ['100'],
+        'item_quantity': ['1'],
+    }, follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b'Test Assignments' in resp.data
+    assert b'Assignment Detail Only' in resp.data
