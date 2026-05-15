@@ -617,19 +617,22 @@ def test_preliminary_grouped_return_can_return_all_assignments(app, client):
         Setting.set('preliminary_review_grouped', 'true')
         db.session.commit()
 
-    _login(client, 'officer')
-    resp = client.post(f'/samples/assignment/{first_assignment_id}/preliminary-review', data={
-        'action': 'returned',
-        'return_scope': 'all',
-    }, follow_redirects=True)
-    assert resp.status_code == 200
+    try:
+        _login(client, 'officer')
+        resp = client.post(f'/samples/assignment/{first_assignment_id}/preliminary-review', data={
+            'action': 'returned',
+            'return_scope': 'all',
+        }, follow_redirects=True)
+        assert resp.status_code == 200
 
-    with app.app_context():
-        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
-        assert assignments[0].status == AssignmentStatus.RETURNED
-        assert assignments[1].status == AssignmentStatus.RETURNED
-        Setting.set('preliminary_review_grouped', 'false')
-        db.session.commit()
+        with app.app_context():
+            assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+            assert assignments[0].status == AssignmentStatus.RETURNED
+            assert assignments[1].status == AssignmentStatus.RETURNED
+    finally:
+        with app.app_context():
+            Setting.set('preliminary_review_grouped', 'false')
+            db.session.commit()
 
 
 def test_technical_review_return(app, client):
@@ -867,19 +870,22 @@ def test_technical_grouped_return_can_return_all_assignments(app, client):
         Setting.set('technical_review_grouped', 'true')
         db.session.commit()
 
-    _login(client, 'senior')
-    resp = client.post(f'/samples/assignment/{first_assignment_id}/review', data={
-        'action': 'returned',
-        'return_scope': 'all',
-    }, follow_redirects=True)
-    assert resp.status_code == 200
+    try:
+        _login(client, 'senior')
+        resp = client.post(f'/samples/assignment/{first_assignment_id}/review', data={
+            'action': 'returned',
+            'return_scope': 'all',
+        }, follow_redirects=True)
+        assert resp.status_code == 200
 
-    with app.app_context():
-        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
-        assert assignments[0].status == AssignmentStatus.RETURNED
-        assert assignments[1].status == AssignmentStatus.RETURNED
-        Setting.set('technical_review_grouped', 'false')
-        db.session.commit()
+        with app.app_context():
+            assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+            assert assignments[0].status == AssignmentStatus.RETURNED
+            assert assignments[1].status == AssignmentStatus.RETURNED
+    finally:
+        with app.app_context():
+            Setting.set('technical_review_grouped', 'false')
+            db.session.commit()
 
 
 def test_full_workflow(app, client):

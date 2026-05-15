@@ -183,7 +183,7 @@
                         {% if grouped_mode and sibling_assignments|length > 1 %}
                         <div class="col-12 d-none" id="returnScopeContainer">
                             {{ form.return_scope.label(class="form-label fw-semibold") }}
-                            {{ form.return_scope(class="form-select", id="returnScope") }}
+                            {{ form.return_scope(class="form-select") }}
                             <div class="form-text">Choose whether to return only this report or all grouped reports.</div>
                         </div>
                         {% endif %}
