@@ -1319,11 +1319,13 @@ def preliminary_review(assignment_id):
         )
 
         return_scope = (form.return_scope.data or 'single')
-        return_all = action == 'returned' and grouped_mode and return_scope == 'all'
-        target_assignments = (
-            sibling_assignments if return_all
-            else ([assignment] if action == 'returned' and grouped_mode else sibling_assignments)
-        )
+        if action == 'returned' and grouped_mode:
+            if return_scope == 'all':
+                target_assignments = sibling_assignments
+            else:
+                target_assignments = [assignment]
+        else:
+            target_assignments = sibling_assignments
 
         reviewed_names = []
         for a in target_assignments:
@@ -1476,11 +1478,13 @@ def review_report(assignment_id):
         )
 
         return_scope = (form.return_scope.data or 'single')
-        return_all = action == 'returned' and grouped_mode and return_scope == 'all'
-        target_assignments = (
-            sibling_assignments if return_all
-            else ([assignment] if action == 'returned' and grouped_mode else sibling_assignments)
-        )
+        if action == 'returned' and grouped_mode:
+            if return_scope == 'all':
+                target_assignments = sibling_assignments
+            else:
+                target_assignments = [assignment]
+        else:
+            target_assignments = sibling_assignments
 
         reviewed_names = []
         for a in target_assignments:
