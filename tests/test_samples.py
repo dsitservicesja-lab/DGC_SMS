@@ -87,6 +87,7 @@ def test_sample_detail_review_and_activity_pagination(app, client):
 
     with app.app_context():
         sample = Sample.query.first()
+        sample_id = sample.id
         officer = User.query.filter_by(username='officer').first()
         base = datetime(2026, 1, 1, 0, 0, 0)
 
@@ -108,7 +109,7 @@ def test_sample_detail_review_and_activity_pagination(app, client):
             ))
         db.session.commit()
 
-    resp = client.get(f'/samples/{sample.id}')
+    resp = client.get(f'/samples/{sample_id}')
     assert resp.status_code == 200
     assert b'Review 11' in resp.data
     assert b'Review 0' not in resp.data
@@ -117,7 +118,7 @@ def test_sample_detail_review_and_activity_pagination(app, client):
     assert b'review_page=2' in resp.data
     assert b'activity_page=2' in resp.data
 
-    resp = client.get(f'/samples/{sample.id}?review_page=2&activity_page=2')
+    resp = client.get(f'/samples/{sample_id}?review_page=2&activity_page=2')
     assert resp.status_code == 200
     assert b'Review 0' in resp.data
     assert b'Review 11' not in resp.data
@@ -155,14 +156,15 @@ def test_assignment_detail_review_pagination(app, client):
                 comments=f'Assignment Review {i}',
             ))
         db.session.commit()
+        assignment_id = assignment.id
 
-    resp = client.get(f'/samples/assignment/{assignment.id}')
+    resp = client.get(f'/samples/assignment/{assignment_id}')
     assert resp.status_code == 200
     assert b'Assignment Review 11' in resp.data
     assert b'Assignment Review 0' not in resp.data
     assert b'review_page=2' in resp.data
 
-    resp = client.get(f'/samples/assignment/{assignment.id}?review_page=2')
+    resp = client.get(f'/samples/assignment/{assignment_id}?review_page=2')
     assert resp.status_code == 200
     assert b'Assignment Review 0' in resp.data
     assert b'Assignment Review 11' not in resp.data
