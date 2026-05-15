@@ -385,6 +385,7 @@ def test_returned_resubmission_only_updates_target_assignment(app, client):
         returned_assignment = db.session.get(SampleAssignment, returned_id)
         unaffected_assignment = db.session.get(SampleAssignment, unaffected_id)
         assert returned_assignment.status == AssignmentStatus.REPORT_SUBMITTED
+        assert returned_assignment.return_stage is None
         assert unaffected_assignment.status == AssignmentStatus.ASSIGNED
         assert unaffected_assignment.report_submitted_at is None
         assert unaffected_assignment.report_text is None
@@ -554,6 +555,7 @@ def test_technical_review_return(app, client):
     with app.app_context():
         assignment = SampleAssignment.query.first()
         assert assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+        assert assignment.return_stage is None
 
 
 def test_technical_grouped_return_only_returns_selected_assignment(app, client):
