@@ -1318,7 +1318,7 @@ def preliminary_review(assignment_id):
             ).group_by(ReviewHistory.assignment_id).all()
         )
 
-        return_scope = (form.return_scope.data or 'single')
+        return_scope = form.return_scope.data or 'single'
         if action == 'returned' and grouped_mode:
             if return_scope == 'all':
                 target_assignments = sibling_assignments
@@ -1477,7 +1477,7 @@ def review_report(assignment_id):
             ).group_by(ReviewHistory.assignment_id).all()
         )
 
-        return_scope = (form.return_scope.data or 'single')
+        return_scope = form.return_scope.data or 'single'
         if action == 'returned' and grouped_mode:
             if return_scope == 'all':
                 target_assignments = sibling_assignments
