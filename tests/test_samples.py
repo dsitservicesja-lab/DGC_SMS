@@ -875,6 +875,65 @@ def test_deputy_return(app, client):
         assert sample.status == SampleStatus.DEPUTY_REVIEW
 
 
+def test_deputy_reject(app, client):
+    """Test that Deputy can reject submission."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Results.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/review', data={
+        'action': 'accepted',
+    })
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/submit-to-deputy', data={})
+    client.get('/auth/logout')
+
+    _login(client, 'deputy')
+    with app.app_context():
+        sample = Sample.query.first()
+    resp = client.post(f'/samples/{sample.id}/deputy-review', data={
+        'action': 'rejected',
+        'review_comments': 'Not acceptable for release.',
+    }, follow_redirects=True)
+    assert b'Submission has been rejected.' in resp.data
+
+    with app.app_context():
+        sample = Sample.query.first()
+        assert sample.status == SampleStatus.REJECTED
+        assert sample.deputy_review_comments == 'Not acceptable for release.'
+
+
 def test_deputy_return_resubmit_via_form(app, client):
     """Test that lab supervisor can resubmit to deputy via the submit_to_deputy form
     after the deputy returns the submission (DEPUTY_RETURNED status)."""

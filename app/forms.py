@@ -1002,7 +1002,8 @@ class DeputyReviewForm(FlaskForm):
         'Decision',
         choices=[
             ('', '-- Select Action --'),
-            ('approved', 'Approve – Proceed to Certificate'),
+            ('approved', 'Accept Report – Proceed to Certificate'),
+            ('rejected', 'Reject Report'),
             ('returned', 'Return to Senior Chemist'),
         ],
         validators=[DataRequired()],

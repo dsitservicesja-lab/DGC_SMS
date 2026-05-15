@@ -1696,7 +1696,7 @@ def deputy_review(sample_id):
                     f'{current_user.full_name}. '
                     f'Proceeding to Certificate Preparation.'),
             )
-        else:  # returned
+        elif action == 'returned':
             sample.status = SampleStatus.DEPUTY_RETURNED
             _add_history(
                 sample, 'Deputy Review Returned',
@@ -1709,13 +1709,30 @@ def deputy_review(sample_id):
                     f'{current_user.full_name}. '
                     f'Comments: {form.review_comments.data or "N/A"}'),
             )
+        else:  # rejected
+            sample.status = SampleStatus.REJECTED
+            _add_history(
+                sample, 'Deputy Review Rejected',
+                (f'{current_user.full_name} rejected the submission. '
+                 f'Comments: {form.review_comments.data or "N/A"}'),
+                action_type='Deputy Review',
+                object_affected='Sample',
+                change_description=(
+                    f'Rejected by Deputy Government Chemist '
+                    f'{current_user.full_name}. '
+                    f'Comments: {form.review_comments.data or "N/A"}'),
+            )
 
         db.session.commit()
 
         notify_deputy_review_completed(sample, action)
         db.session.commit()
 
-        action_text = 'approved' if action == 'approved' else 'returned to Senior Chemist'
+        action_text = {
+            'approved': 'accepted and forwarded for certificate preparation',
+            'returned': 'returned to Senior Chemist',
+            'rejected': 'rejected',
+        }.get(action, action)
         flash(f'Submission has been {action_text}.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
