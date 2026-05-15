@@ -379,7 +379,11 @@ def notify_submitted_to_deputy(sample):
 
 def notify_deputy_review_completed(sample, action):
     """Called when Deputy completes review."""
-    action_text = 'approved' if action == 'approved' else 'returned to Senior Chemist'
+    action_text = {
+        'approved': 'accepted',
+        'returned': 'returned to Senior Chemist',
+        'rejected': 'rejected',
+    }.get(action, action)
     title = f'Deputy Review – {action_text.title()}: {sample.lab_number}'
     message = (
         f'Sample "{sample.sample_name}" (Lab# {sample.lab_number}) '

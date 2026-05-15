@@ -4,7 +4,7 @@ from datetime import date
 from app import db
 from app.models import (
     Sample, SampleAssignment, User, Role, Branch,
-    SampleStatus, AssignmentStatus,
+    SampleStatus, AssignmentStatus, Setting,
 )
 from tests.conftest import _create_user, _login
 
@@ -343,6 +343,54 @@ def test_preliminary_review_checklist_partial(app, client):
         assert checklist['chk_date_recorded'] == 'na'
 
 
+def test_returned_resubmission_only_updates_target_assignment(app, client):
+    """Resubmitting a returned report must not update other assignments."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Returned Test',
+    }, follow_redirects=True)
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Unaffected Test',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        returned_assignment, unaffected_assignment = assignments
+        returned_assignment.status = AssignmentStatus.RETURNED
+        returned_assignment.return_stage = 'preliminary'
+        unaffected_assignment.status = AssignmentStatus.ASSIGNED
+        db.session.commit()
+        returned_id = returned_assignment.id
+        unaffected_id = unaffected_assignment.id
+
+    _login(client, 'chemist')
+    resp = client.post(f'/samples/assignment/{returned_id}/report', data={
+        'report_text': 'Corrected report for returned test only.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'submitted successfully' in resp.data
+
+    with app.app_context():
+        returned_assignment = db.session.get(SampleAssignment, returned_id)
+        unaffected_assignment = db.session.get(SampleAssignment, unaffected_id)
+        assert returned_assignment.status == AssignmentStatus.REPORT_SUBMITTED
+        assert returned_assignment.return_stage is None
+        assert unaffected_assignment.status == AssignmentStatus.ASSIGNED
+        assert unaffected_assignment.report_submitted_at is None
+        assert unaffected_assignment.report_text is None
+
+
 def test_technical_review(app, client):
     """Test full flow: submit → preliminary approve → technical accept."""
     officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
@@ -394,6 +442,55 @@ def test_technical_review(app, client):
         assert assignment.status == AssignmentStatus.ACCEPTED
         sample = Sample.query.first()
         assert sample.status == SampleStatus.ACCEPTED
+
+
+def test_preliminary_grouped_return_only_returns_selected_assignment(app, client):
+    """Grouped preliminary return must only return the selected report."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test A',
+    }, follow_redirects=True)
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test B',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        first_assignment_id = assignments[0].id
+    client.post(f'/samples/assignment/{first_assignment_id}/report', data={
+        'report_text': 'Initial grouped report.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
+    client.get('/auth/logout')
+
+    with app.app_context():
+        Setting.set('preliminary_review_grouped', 'true')
+        db.session.commit()
+
+    _login(client, 'officer')
+    resp = client.post(f'/samples/assignment/{first_assignment_id}/preliminary-review', data={
+        'action': 'returned',
+        'review_comments': 'Only Test A needs correction.',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        assert assignments[0].status == AssignmentStatus.RETURNED
+        assert assignments[1].status == AssignmentStatus.REPORT_SUBMITTED
+        Setting.set('preliminary_review_grouped', 'false')
+        db.session.commit()
 
 
 def test_technical_review_return(app, client):
@@ -458,6 +555,131 @@ def test_technical_review_return(app, client):
     with app.app_context():
         assignment = SampleAssignment.query.first()
         assert assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+        assert assignment.return_stage is None
+
+
+def test_technical_grouped_return_only_returns_selected_assignment(app, client):
+    """Grouped technical return must only return the selected report."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Tech Test A',
+    }, follow_redirects=True)
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Tech Test B',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        first_assignment_id = assignments[0].id
+        second_assignment_id = assignments[1].id
+    client.post(f'/samples/assignment/{first_assignment_id}/report', data={
+        'report_text': 'Initial report for both tests.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    client.post(f'/samples/assignment/{first_assignment_id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'A ok',
+    }, follow_redirects=True)
+    client.post(f'/samples/assignment/{second_assignment_id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'B ok',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    with app.app_context():
+        Setting.set('technical_review_grouped', 'true')
+        db.session.commit()
+
+    _login(client, 'senior')
+    resp = client.post(f'/samples/assignment/{first_assignment_id}/review', data={
+        'action': 'returned',
+        'review_comments': 'Only Test A needs revision.',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        assert assignments[0].status == AssignmentStatus.RETURNED
+        assert assignments[0].return_stage == 'technical'
+        assert assignments[1].status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+        Setting.set('technical_review_grouped', 'false')
+        db.session.commit()
+
+
+def test_technical_grouped_return_can_return_second_selected_assignment(app, client):
+    """Grouped technical return should work for any selected report, not just the first."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Tech Test A',
+    }, follow_redirects=True)
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Tech Test B',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        first_assignment_id = assignments[0].id
+        second_assignment_id = assignments[1].id
+    client.post(f'/samples/assignment/{first_assignment_id}/report', data={
+        'report_text': 'Initial report for both tests.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    client.post(f'/samples/assignment/{first_assignment_id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'A ok',
+    }, follow_redirects=True)
+    client.post(f'/samples/assignment/{second_assignment_id}/preliminary-review', data={
+        'action': 'approved',
+        'review_comments': 'B ok',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    with app.app_context():
+        Setting.set('technical_review_grouped', 'true')
+        db.session.commit()
+
+    _login(client, 'senior')
+    resp = client.post(f'/samples/assignment/{second_assignment_id}/review', data={
+        'action': 'returned',
+        'review_comments': 'Only Test B needs revision.',
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        assignments = SampleAssignment.query.order_by(SampleAssignment.id).all()
+        assert assignments[0].status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+        assert assignments[1].status == AssignmentStatus.RETURNED
+        assert assignments[1].return_stage == 'technical'
+        Setting.set('technical_review_grouped', 'false')
+        db.session.commit()
 
 
 def test_full_workflow(app, client):
@@ -713,6 +935,65 @@ def test_deputy_return(app, client):
     with app.app_context():
         sample = Sample.query.first()
         assert sample.status == SampleStatus.DEPUTY_REVIEW
+
+
+def test_deputy_reject(app, client):
+    """Test that Deputy can reject submission."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Results.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/review', data={
+        'action': 'accepted',
+    })
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/submit-to-deputy', data={})
+    client.get('/auth/logout')
+
+    _login(client, 'deputy')
+    with app.app_context():
+        sample = Sample.query.first()
+    resp = client.post(f'/samples/{sample.id}/deputy-review', data={
+        'action': 'rejected',
+        'review_comments': 'Not acceptable for release.',
+    }, follow_redirects=True)
+    assert b'Submission has been rejected.' in resp.data
+
+    with app.app_context():
+        sample = Sample.query.first()
+        assert sample.status == SampleStatus.REJECTED
+        assert sample.deputy_review_comments == 'Not acceptable for release.'
 
 
 def test_deputy_return_resubmit_via_form(app, client):

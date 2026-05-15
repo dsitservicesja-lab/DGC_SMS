@@ -1058,17 +1058,20 @@ def submit_report(assignment_id):
         flash('Report cannot be submitted in the current state.', 'warning')
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
-    # Find all sibling assignments for the same sample assigned to this
-    # chemist that are also in a submittable state.
-    sibling_assignments = SampleAssignment.query.filter(
-        SampleAssignment.sample_id == assignment.sample_id,
-        SampleAssignment.chemist_id == current_user.id,
-        SampleAssignment.status.in_([
-            AssignmentStatus.ASSIGNED,
-            AssignmentStatus.IN_PROGRESS,
-            AssignmentStatus.RETURNED,
-        ]),
-    ).all()
+    # For returned reports, resubmit only the specific assignment that was
+    # returned. For fresh submissions, keep grouped chemist submission flow.
+    if assignment.status == AssignmentStatus.RETURNED:
+        sibling_assignments = [assignment]
+    else:
+        sibling_assignments = SampleAssignment.query.filter(
+            SampleAssignment.sample_id == assignment.sample_id,
+            SampleAssignment.chemist_id == current_user.id,
+            SampleAssignment.status.in_([
+                AssignmentStatus.ASSIGNED,
+                AssignmentStatus.IN_PROGRESS,
+                AssignmentStatus.RETURNED,
+            ]),
+        ).all()
 
     today = jamaica_now().date()
     min_test_date = assignment.sample.date_received
@@ -1303,8 +1306,12 @@ def preliminary_review(assignment_id):
             ).group_by(ReviewHistory.assignment_id).all()
         )
 
+        target_assignments = (
+            [assignment] if action == 'returned' and grouped_mode else sibling_assignments
+        )
+
         reviewed_names = []
-        for a in sibling_assignments:
+        for a in target_assignments:
             # Log the review in ReviewHistory BEFORE overwriting fields
             prev_count = existing_counts.get(a.id, 0)
             db.session.add(ReviewHistory(
@@ -1362,7 +1369,7 @@ def preliminary_review(assignment_id):
         _update_sample_status(sample)
         db.session.commit()
 
-        for a in sibling_assignments:
+        for a in target_assignments:
             notify_preliminary_review_completed(a, action)
         db.session.commit()
 
@@ -1453,8 +1460,12 @@ def review_report(assignment_id):
             ).group_by(ReviewHistory.assignment_id).all()
         )
 
+        target_assignments = (
+            [assignment] if action == 'returned' and grouped_mode else sibling_assignments
+        )
+
         reviewed_names = []
-        for a in sibling_assignments:
+        for a in target_assignments:
             prev_count = existing_counts.get(a.id, 0)
             db.session.add(ReviewHistory(
                 sample_id=sample.id,
@@ -1523,7 +1534,7 @@ def review_report(assignment_id):
         _update_sample_status(sample)
         db.session.commit()
 
-        for a in sibling_assignments:
+        for a in target_assignments:
             notify_report_reviewed(a, action)
         db.session.commit()
 
@@ -1685,7 +1696,7 @@ def deputy_review(sample_id):
                     f'{current_user.full_name}. '
                     f'Proceeding to Certificate Preparation.'),
             )
-        else:  # returned
+        elif action == 'returned':
             sample.status = SampleStatus.DEPUTY_RETURNED
             _add_history(
                 sample, 'Deputy Review Returned',
@@ -1698,14 +1709,32 @@ def deputy_review(sample_id):
                     f'{current_user.full_name}. '
                     f'Comments: {form.review_comments.data or "N/A"}'),
             )
+        else:  # rejected
+            sample.status = SampleStatus.REJECTED
+            _add_history(
+                sample, 'Deputy Review Rejected',
+                (f'{current_user.full_name} rejected the submission. '
+                 f'Comments: {form.review_comments.data or "N/A"}'),
+                action_type='Deputy Review',
+                object_affected='Sample',
+                change_description=(
+                    f'Rejected by Deputy Government Chemist '
+                    f'{current_user.full_name}. '
+                    f'Comments: {form.review_comments.data or "N/A"}'),
+            )
 
         db.session.commit()
 
         notify_deputy_review_completed(sample, action)
         db.session.commit()
 
-        action_text = 'approved' if action == 'approved' else 'returned to Senior Chemist'
-        flash(f'Submission has been {action_text}.', 'success')
+        action_text = {
+            'approved': 'accepted and forwarded for certificate preparation',
+            'returned': 'returned to Senior Chemist',
+            'rejected': 'rejected',
+        }.get(action, action)
+        flash_category = 'warning' if action == 'rejected' else 'success'
+        flash(f'Submission has been {action_text}.', flash_category)
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     assignments = sample.assignments.all()
