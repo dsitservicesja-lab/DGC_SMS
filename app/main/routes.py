@@ -211,12 +211,24 @@ def dashboard():
     terminal_statuses = [
         SampleStatus.CERTIFIED, SampleStatus.COMPLETED, SampleStatus.REJECTED,
     ]
-    deadline_samples = Sample.query.filter(
+    deadline_query = Sample.query.filter(
         Sample.expected_report_date.isnot(None),
         Sample.expected_report_date >= today,
         Sample.expected_report_date <= today + timedelta(days=7),
         Sample.status.notin_(terminal_statuses),
-    ).order_by(Sample.expected_report_date.asc()).limit(10).all()
+    ).order_by(Sample.expected_report_date.asc())
+
+    if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN):
+        deadline_samples = deadline_query.limit(10).all()
+    elif current_user.has_role(Role.CHEMIST):
+        assigned_sample_ids = db.select(SampleAssignment.sample_id).where(
+            SampleAssignment.chemist_id == current_user.id
+        ).scalar_subquery()
+        deadline_samples = deadline_query.filter(
+            Sample.id.in_(assigned_sample_ids)
+        ).limit(10).all()
+    else:
+        deadline_samples = []
 
     status_colors = {
         'Registered': 'secondary', 'Assigned': 'primary', 'In Progress': 'info',

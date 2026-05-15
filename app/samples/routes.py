@@ -490,7 +490,11 @@ def register():
 def detail(sample_id):
     sample = db.get_or_404(Sample, sample_id)
     assignments = sample.assignments.all()
-    history = sample.history.all()
+    review_page = request.args.get('review_page', 1, type=int)
+    activity_page = request.args.get('activity_page', 1, type=int)
+    history_pagination = sample.history.paginate(
+        page=activity_page, per_page=10, error_out=False
+    )
     supporting_docs = sample.supporting_documents.order_by(
         SupportingDocument.uploaded_at.desc()
     ).all()
@@ -498,9 +502,11 @@ def detail(sample_id):
     document_versions = sample.document_versions.order_by(
         DocumentVersion.document_type, DocumentVersion.version_number.desc()
     ).all() if hasattr(sample, 'document_versions') else []
-    review_histories = ReviewHistory.query.filter_by(
+    review_pagination = ReviewHistory.query.filter_by(
         sample_id=sample.id
-    ).order_by(ReviewHistory.review_type, ReviewHistory.review_number).all()
+    ).order_by(ReviewHistory.reviewed_at.desc()).paginate(
+        page=review_page, per_page=10, error_out=False
+    )
     pending_backdate = BackDateRequest.query.filter_by(
         sample_id=sample.id, field_name='date_registered', status='pending',
     ).first()
@@ -508,12 +514,14 @@ def detail(sample_id):
         'samples/detail.html',
         sample=sample,
         assignments=assignments,
-        history=history,
+        history=history_pagination.items,
+        history_pagination=history_pagination,
         supporting_docs=supporting_docs,
         supporting_doc_form=supporting_doc_form,
         today_date=date.today(),
         document_versions=document_versions,
-        review_histories=review_histories,
+        review_histories=review_pagination.items,
+        review_pagination=review_pagination,
         pending_backdate=pending_backdate,
     )
 
@@ -767,13 +775,17 @@ def assignment_detail(assignment_id):
     # Access: the assigned chemist, branch heads, officer who uploaded, admin
     if not _can_view_assignment(assignment):
         abort(403)
-    review_histories = ReviewHistory.query.filter_by(
+    review_page = request.args.get('review_page', 1, type=int)
+    review_pagination = ReviewHistory.query.filter_by(
         assignment_id=assignment.id
-    ).order_by(ReviewHistory.review_type, ReviewHistory.review_number).all()
+    ).order_by(ReviewHistory.reviewed_at.desc()).paginate(
+        page=review_page, per_page=10, error_out=False
+    )
     return render_template(
         'samples/assignment_detail.html',
         assignment=assignment,
-        review_histories=review_histories,
+        review_histories=review_pagination.items,
+        review_pagination=review_pagination,
     )
 
 

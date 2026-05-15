@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 
 from app import db
 from app.models import (
-    Sample, User, Role, Branch, SampleStatus, KpiTarget,
+    Sample, SampleAssignment, User, Role, Branch, SampleStatus, KpiTarget,
     KPI_METRICS, AUTO_ACTUAL_KEYS,
 )
 from tests.conftest import _create_user, _login
@@ -317,3 +317,57 @@ def test_sidebar_shows_milk_report_link(app, client):
     _login(client, 'admin')
     resp = client.get('/dashboard')
     assert b'Milk Report' in resp.data
+
+
+def test_dashboard_deadlines_scoped_to_associated_chemist(app, client):
+    with app.app_context():
+        admin = _create_user(Role.ADMIN, username='admin')
+        chem1 = _create_user(Role.CHEMIST, Branch.PHARMACEUTICAL, username='chem1')
+        chem2 = _create_user(Role.CHEMIST, Branch.PHARMACEUTICAL, username='chem2')
+        _create_user(Role.SENIOR_CHEMIST, Branch.PHARMACEUTICAL, username='senior')
+
+        s1 = Sample(
+            lab_number='PH-DUE-1',
+            sample_name='Assoc Sample',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 1, 15),
+            uploaded_by=admin.id,
+            status=SampleStatus.ASSIGNED,
+            expected_report_date=date.today(),
+        )
+        s2 = Sample(
+            lab_number='PH-DUE-2',
+            sample_name='Other Sample',
+            sample_type=Branch.PHARMACEUTICAL,
+            date_received=date(2026, 1, 15),
+            uploaded_by=admin.id,
+            status=SampleStatus.ASSIGNED,
+            expected_report_date=date.today(),
+        )
+        db.session.add_all([s1, s2])
+        db.session.flush()
+
+        db.session.add_all([
+            SampleAssignment(
+                sample_id=s1.id, chemist_id=chem1.id,
+                assigned_by=admin.id, test_name='T1',
+            ),
+            SampleAssignment(
+                sample_id=s2.id, chemist_id=chem2.id,
+                assigned_by=admin.id, test_name='T2',
+            ),
+        ])
+        db.session.commit()
+
+    _login(client, 'chem1')
+    resp = client.get('/dashboard')
+    assert resp.status_code == 200
+    assert b'PH-DUE-1' in resp.data
+    assert b'PH-DUE-2' not in resp.data
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    resp = client.get('/dashboard')
+    assert resp.status_code == 200
+    assert b'PH-DUE-1' in resp.data
+    assert b'PH-DUE-2' in resp.data

@@ -1,10 +1,10 @@
 import io
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from app import db
 from app.models import (
     Sample, SampleAssignment, User, Role, Branch,
-    SampleStatus, AssignmentStatus, Setting,
+    SampleStatus, AssignmentStatus, Setting, SampleHistory, ReviewHistory,
 )
 from tests.conftest import _create_user, _login
 
@@ -78,6 +78,96 @@ def test_sample_detail(app, client):
     resp = client.get(f'/samples/{sample.id}')
     assert resp.status_code == 200
     assert b'Test Substance' in resp.data
+
+
+def test_sample_detail_review_and_activity_pagination(app, client):
+    _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+
+    with app.app_context():
+        sample = Sample.query.first()
+        sample_id = sample.id
+        officer = User.query.filter_by(username='officer').first()
+        base = datetime(2026, 1, 1, 0, 0, 0)
+
+        for i in range(12):
+            db.session.add(SampleHistory(
+                sample_id=sample.id,
+                action=f'Activity {i}',
+                performed_by=officer.id,
+                created_at=base + timedelta(minutes=i),
+            ))
+            db.session.add(ReviewHistory(
+                sample_id=sample.id,
+                review_type='technical',
+                review_number=i + 1,
+                action='approved',
+                reviewer_id=officer.id,
+                reviewed_at=base + timedelta(minutes=i),
+                comments=f'Review {i}',
+            ))
+        db.session.commit()
+
+    resp = client.get(f'/samples/{sample_id}')
+    assert resp.status_code == 200
+    assert b'Review 11' in resp.data
+    assert b'Review 0' not in resp.data
+    assert b'Activity 11' in resp.data
+    assert b'Activity 0' not in resp.data
+    assert b'review_page=2' in resp.data
+    assert b'activity_page=2' in resp.data
+
+    resp = client.get(f'/samples/{sample_id}?review_page=2&activity_page=2')
+    assert resp.status_code == 200
+    assert b'Review 0' in resp.data
+    assert b'Review 11' not in resp.data
+    assert b'Activity 0' in resp.data
+    assert b'Activity 11' not in resp.data
+
+
+def test_assignment_detail_review_pagination(app, client):
+    _, _, chemist_id, _, _ = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+
+    with app.app_context():
+        sample = Sample.query.first()
+        officer = User.query.filter_by(username='officer').first()
+        assignment = SampleAssignment(
+            sample_id=sample.id,
+            chemist_id=chemist_id,
+            assigned_by=officer.id,
+            test_name='Pagination Test',
+        )
+        db.session.add(assignment)
+        db.session.flush()
+
+        base = datetime(2026, 1, 1, 0, 0, 0)
+        for i in range(12):
+            db.session.add(ReviewHistory(
+                sample_id=sample.id,
+                assignment_id=assignment.id,
+                review_type='technical',
+                review_number=i + 1,
+                action='approved',
+                reviewer_id=officer.id,
+                reviewed_at=base + timedelta(minutes=i),
+                comments=f'Assignment Review {i}',
+            ))
+        db.session.commit()
+        assignment_id = assignment.id
+
+    resp = client.get(f'/samples/assignment/{assignment_id}')
+    assert resp.status_code == 200
+    assert b'Assignment Review 11' in resp.data
+    assert b'Assignment Review 0' not in resp.data
+    assert b'review_page=2' in resp.data
+
+    resp = client.get(f'/samples/assignment/{assignment_id}?review_page=2')
+    assert resp.status_code == 200
+    assert b'Assignment Review 0' in resp.data
+    assert b'Assignment Review 11' not in resp.data
 
 
 def test_assign_sample(app, client):
