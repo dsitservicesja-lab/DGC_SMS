@@ -131,7 +131,7 @@
                     <div class="row g-3">
                         <div class="col-12">
                             {{ form.action.label(class="form-label fw-semibold") }}
-                            {{ form.action(class="form-select", id="reviewAction") }}
+                            {{ form.action(class="form-select") }}
                             {% for error in form.action.errors %}
                             <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateRowColors();
     checkNoBlocking();
 
-    var actionSelect = document.getElementById('reviewAction');
+    var actionSelect = document.getElementById('action');
     var returnScopeContainer = document.getElementById('returnScopeContainer');
     function toggleReturnScope() {
         if (!returnScopeContainer || !actionSelect) return;
