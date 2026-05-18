@@ -58,15 +58,37 @@
                         <div class="col-12">
                             <label class="form-label fw-semibold"><i class="bi bi-check2-square me-1"></i>Select Tests to Include in This Report</label>
                             <div class="border rounded p-3 bg-light">
-                                {% for a in available_assignments %}
-                                <div class="form-check">
-                                    <input class="form-check-input test-checkbox" type="checkbox"
-                                           name="assignment_ids" value="{{ a.id }}"
-                                           id="asgn_{{ a.id }}" checked>
-                                    <label class="form-check-label" for="asgn_{{ a.id }}">
-                                        <span class="badge bg-info text-dark me-1">{{ a.test_name }}</span>
-                                        {% if a.test_reference %}<small class="text-muted">— {{ a.test_reference }}</small>{% endif %}
-                                    </label>
+                                <div class="mb-2 d-flex gap-2">
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="select-all-btn">
+                                        <i class="bi bi-check-all me-1"></i>Select All
+                                    </button>
+                                    <span class="text-muted">|</span>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="deselect-all-btn">
+                                        <i class="bi bi-x-square me-1"></i>Deselect All
+                                    </button>
+                                </div>
+                                {% for sample_id, grp in available_assignments|groupby('sample_id') %}
+                                {% set grp = grp|list %}
+                                {% set sample_obj = grp[0].sample %}
+                                <div class="mb-2">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="badge bg-secondary me-2">{{ sample_obj.lab_number }}</span>
+                                        <span class="text-muted small">{{ sample_obj.sample_name }}</span>
+                                        {% if sample_obj.id == assignment.sample_id %}
+                                        <span class="badge bg-primary ms-2" style="font-size:.7rem;">Current</span>
+                                        {% endif %}
+                                    </div>
+                                    {% for a in grp %}
+                                    <div class="form-check ms-3">
+                                        <input class="form-check-input test-checkbox" type="checkbox"
+                                               name="assignment_ids" value="{{ a.id }}"
+                                               id="asgn_{{ a.id }}" checked>
+                                        <label class="form-check-label" for="asgn_{{ a.id }}">
+                                            <span class="badge bg-info text-dark me-1">{{ a.test_name }}</span>
+                                            {% if a.test_reference %}<small class="text-muted">— {{ a.test_reference }}</small>{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
                                 </div>
                                 {% endfor %}
                             </div>
@@ -135,6 +157,7 @@
                                 {% for a in available_assignments %}
                                 <div class="border rounded p-3 mb-2 individual-file-row" data-id="{{ a.id }}">
                                     <div class="fw-semibold mb-2">
+                                        <span class="badge bg-secondary me-1">{{ a.sample.lab_number }}</span>
                                         <span class="badge bg-info text-dark me-1">{{ a.test_name }}</span>
                                     </div>
                                     <input type="file" class="form-control" name="report_file_{{ a.id }}"
@@ -155,6 +178,7 @@
                         {% for sa in sibling_assignments %}
                         <div class="col-12 border rounded p-3 mb-2">
                             <div class="fw-semibold mb-2">
+                                <span class="badge bg-secondary me-1">{{ sa.sample.lab_number }}</span>
                                 <span class="badge bg-info text-dark me-1">{{ sa.test_name }}</span>
                             </div>
                             <div class="row g-2">
@@ -264,6 +288,22 @@
     }
 
     testCheckboxes.forEach(function (cb) { cb.addEventListener('change', syncIndividualRows); });
+
+    // Select All / Deselect All buttons
+    var selectAllBtn = document.getElementById('select-all-btn');
+    var deselectAllBtn = document.getElementById('deselect-all-btn');
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function () {
+            testCheckboxes.forEach(function (cb) { cb.checked = true; });
+            syncIndividualRows();
+        });
+    }
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function () {
+            testCheckboxes.forEach(function (cb) { cb.checked = false; });
+            syncIndividualRows();
+        });
+    }
 
     applyMode();
     syncIndividualRows();

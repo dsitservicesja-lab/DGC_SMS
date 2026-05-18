@@ -1128,8 +1128,9 @@ def submit_report(assignment_id):
         available_assignments = [assignment]
         sibling_assignments = [assignment]
     else:
-        available_assignments = SampleAssignment.query.filter(
-            SampleAssignment.sample_id == assignment.sample_id,
+        # Fetch all pending assignments across ALL samples for this chemist so
+        # they can link one report to tests from different samples in one go.
+        all_pending = SampleAssignment.query.filter(
             SampleAssignment.chemist_id == current_user.id,
             SampleAssignment.status.in_([
                 AssignmentStatus.ASSIGNED,
@@ -1137,6 +1138,13 @@ def submit_report(assignment_id):
                 AssignmentStatus.RETURNED,
             ]),
         ).all()
+        # Sort: current sample first, then by lab number, then test name
+        all_pending.sort(key=lambda a: (
+            0 if a.sample_id == assignment.sample_id else 1,
+            a.sample.lab_number,
+            a.test_name,
+        ))
+        available_assignments = all_pending
         sibling_assignments = list(available_assignments)
 
     today = jamaica_now().date()
@@ -1256,22 +1264,25 @@ def submit_report(assignment_id):
             stored = original = None
             stored, original = _save_file(form.report_file.data)
 
-            existing_versions = DocumentVersion.query.filter_by(
-                sample_id=assignment.sample_id, document_type='report',
-                assignment_id=assignment.id,
-            ).count()
-            version_num = existing_versions + 1
-            upload_label = 'original' if version_num == 1 else 'resubmission'
-            db.session.add(DocumentVersion(
-                sample_id=assignment.sample_id,
-                document_type='report',
-                version_number=version_num,
-                file_path=stored,
-                original_name=original,
-                upload_label=upload_label,
-                uploaded_by=current_user.id,
-                assignment_id=assignment.id,
-            ))
+            # Record a DocumentVersion entry for every selected assignment so
+            # the shared file appears in each assignment's document history.
+            for a in sibling_assignments:
+                existing_versions = DocumentVersion.query.filter_by(
+                    sample_id=a.sample_id, document_type='report',
+                    assignment_id=a.id,
+                ).count()
+                version_num = existing_versions + 1
+                upload_label = 'original' if version_num == 1 else 'resubmission'
+                db.session.add(DocumentVersion(
+                    sample_id=a.sample_id,
+                    document_type='report',
+                    version_number=version_num,
+                    file_path=stored,
+                    original_name=original,
+                    upload_label=upload_label,
+                    uploaded_by=current_user.id,
+                    assignment_id=a.id,
+                ))
 
         # Check if per-test date/spec fields were submitted (multiple selected assignments)
         has_per_test = len(sibling_assignments) > 1
@@ -1334,23 +1345,31 @@ def submit_report(assignment_id):
             a.return_stage = None
             submitted_names.append(a.test_name)
 
-        _add_history(
-            assignment.sample, 'Report Submitted',
-            (f'{current_user.full_name} submitted report for test(s): '
-             f'{", ".join(submitted_names)}'),
-            action_type='Report Submission',
-            object_affected='Report',
-            change_description=(
-                f'Report submitted for: {", ".join(submitted_names)} '
-                f'by {current_user.full_name}'),
-        )
+        # Record history and update status for every unique sample affected
+        affected_samples: dict[int, dict] = {}
+        for a in sibling_assignments:
+            if a.sample_id not in affected_samples:
+                affected_samples[a.sample_id] = {'sample': a.sample, 'names': []}
+            affected_samples[a.sample_id]['names'].append(a.test_name)
 
-        # Update sample status
-        _update_sample_status(assignment.sample)
+        for _sid, info in affected_samples.items():
+            names = info['names']
+            _add_history(
+                info['sample'], 'Report Submitted',
+                (f'{current_user.full_name} submitted report for test(s): '
+                 f'{", ".join(names)}'),
+                action_type='Report Submission',
+                object_affected='Report',
+                change_description=(
+                    f'Report submitted for: {", ".join(names)} '
+                    f'by {current_user.full_name}'),
+            )
+            _update_sample_status(info['sample'])
 
         db.session.commit()
 
-        notify_report_submitted(assignment)
+        for a in sibling_assignments:
+            notify_report_submitted(a)
         db.session.commit()
 
         test_count = len(submitted_names)

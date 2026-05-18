@@ -2155,3 +2155,115 @@ def test_invoice_detail_shows_test_assignments(app, client):
     assert resp.status_code == 200
     assert b'Test Assignments' in resp.data
     assert b'Assignment Detail Only' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Cross-Sample Report Submission Tests
+# ---------------------------------------------------------------------------
+
+def test_submit_report_cross_sample_combined(app, client):
+    """Analyst can submit one combined report covering tests from two different samples."""
+    from app.models import DocumentVersion
+
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    # Register two samples
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-X01', 'Sample Alpha')
+    _register_sample_with_lab(client, 'TOX-X02', 'Sample Beta')
+    client.get('/auth/logout')
+
+    # Assign the same chemist to a test on each sample
+    _login(client, 'senior')
+    with app.app_context():
+        samples = Sample.query.order_by(Sample.id).all()
+        sample_a_id, sample_b_id = samples[0].id, samples[1].id
+
+    client.post(f'/samples/{sample_a_id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Alpha Test',
+    })
+    client.post(f'/samples/{sample_b_id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Beta Test',
+    })
+    client.get('/auth/logout')
+
+    # Chemist submits one combined report covering both tests
+    _login(client, 'chemist')
+    with app.app_context():
+        asgn_a = SampleAssignment.query.filter_by(sample_id=sample_a_id).first()
+        asgn_b = SampleAssignment.query.filter_by(sample_id=sample_b_id).first()
+
+    resp = client.post(
+        f'/samples/assignment/{asgn_a.id}/report',
+        data={
+            'report_text': 'Combined cross-sample findings.',
+            'report_file': _report_file(),
+            'report_mode': 'combined',
+            'assignment_ids': [str(asgn_a.id), str(asgn_b.id)],
+        },
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b'submitted' in resp.data
+
+    # Both assignments should now be REPORT_SUBMITTED
+    with app.app_context():
+        a = SampleAssignment.query.get(asgn_a.id)
+        b = SampleAssignment.query.get(asgn_b.id)
+        assert a.status == AssignmentStatus.REPORT_SUBMITTED
+        assert b.status == AssignmentStatus.REPORT_SUBMITTED
+
+        # Both assignments should share the same report file
+        assert a.report_file is not None
+        assert b.report_file is not None
+        assert a.report_file == b.report_file
+
+        # A DocumentVersion should exist for each assignment
+        dv_a = DocumentVersion.query.filter_by(assignment_id=asgn_a.id).first()
+        dv_b = DocumentVersion.query.filter_by(assignment_id=asgn_b.id).first()
+        assert dv_a is not None
+        assert dv_b is not None
+
+        # Both samples should have their status updated
+        sa = Sample.query.get(sample_a_id)
+        sb = Sample.query.get(sample_b_id)
+        assert sa.status == SampleStatus.REPORT_SUBMITTED
+        assert sb.status == SampleStatus.REPORT_SUBMITTED
+
+
+def test_submit_report_cross_sample_page_shows_other_samples(app, client):
+    """Submit-report page lists pending tests from other samples assigned to the analyst."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-Y01', 'Sample One')
+    _register_sample_with_lab(client, 'TOX-Y02', 'Sample Two')
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        samples = Sample.query.order_by(Sample.id).all()
+        sample_a_id, sample_b_id = samples[0].id, samples[1].id
+    client.post(f'/samples/{sample_a_id}/assign', data={
+        'chemist_ids': [chemist_id], 'test_name': 'Test One',
+    })
+    client.post(f'/samples/{sample_b_id}/assign', data={
+        'chemist_ids': [chemist_id], 'test_name': 'Test Two',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        asgn_a = SampleAssignment.query.filter_by(sample_id=sample_a_id).first()
+
+    resp = client.get(f'/samples/assignment/{asgn_a.id}/report')
+    assert resp.status_code == 200
+    # Both test names should appear in the selection UI
+    assert b'Test One' in resp.data
+    assert b'Test Two' in resp.data
+    # Both lab numbers should appear (grouped by sample)
+    assert b'TOX-Y01' in resp.data
+    assert b'TOX-Y02' in resp.data
