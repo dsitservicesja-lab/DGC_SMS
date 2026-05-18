@@ -71,41 +71,28 @@ def _apply_certified_quarter_filter(q, year, quarter, month=0):
     """
     from sqlalchemy import or_, and_, extract as sa_extract
 
+    # Determine the fiscal period boundaries
     if month and 1 <= month <= 12:
         fy_start, fy_end = fiscal_year_date_range(year, None)
-        q = q.filter(or_(
-            and_(
-                Sample.status.in_(_CERTIFIED_STATUSES),
-                Sample.certified_at.isnot(None),
-                Sample.certified_at >= fy_start,
-                Sample.certified_at <= fy_end,
-                sa_extract('month', Sample.certified_at) == month,
-            ),
-            Sample.status.notin_(_CERTIFIED_STATUSES),
-        ))
     elif quarter in (1, 2, 3, 4):
         fy_start, fy_end = fiscal_year_date_range(year, quarter)
-        q = q.filter(or_(
-            and_(
-                Sample.status.in_(_CERTIFIED_STATUSES),
-                Sample.certified_at.isnot(None),
-                Sample.certified_at >= fy_start,
-                Sample.certified_at <= fy_end,
-            ),
-            Sample.status.notin_(_CERTIFIED_STATUSES),
-        ))
     else:
         fy_start, fy_end = fiscal_year_date_range(year, None)
-        q = q.filter(or_(
-            and_(
-                Sample.status.in_(_CERTIFIED_STATUSES),
-                Sample.certified_at.isnot(None),
-                Sample.certified_at >= fy_start,
-                Sample.certified_at <= fy_end,
-            ),
-            Sample.status.notin_(_CERTIFIED_STATUSES),
-        ))
-    return q
+
+    # Build the certified-within-period condition
+    cert_conditions = [
+        Sample.status.in_(_CERTIFIED_STATUSES),
+        Sample.certified_at.isnot(None),
+        Sample.certified_at >= fy_start,
+        Sample.certified_at <= fy_end,
+    ]
+    if month and 1 <= month <= 12:
+        cert_conditions.append(sa_extract('month', Sample.certified_at) == month)
+
+    return q.filter(or_(
+        and_(*cert_conditions),
+        Sample.status.notin_(_CERTIFIED_STATUSES),
+    ))
 
 
 def _maybe_send_report_reminders():
@@ -804,9 +791,9 @@ def pharma_report():
     if date_reported_from:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
+            from sqlalchemy import or_
             dr_from = _date.fromisoformat(date_reported_from)
-            q = q.filter(_or(
+            q = q.filter(or_(
                 Sample.certified_at >= dr_from,
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -815,9 +802,9 @@ def pharma_report():
     if date_reported_to:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
+            from sqlalchemy import or_
             dr_to = _date.fromisoformat(date_reported_to)
-            q = q.filter(_or(
+            q = q.filter(or_(
                 Sample.certified_at <= dr_to,
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -997,8 +984,8 @@ def milk_report():
     if date_reported_from:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
-            q = q.filter(_or(
+            from sqlalchemy import or_
+            q = q.filter(or_(
                 Sample.certified_at >= _date.fromisoformat(date_reported_from),
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -1007,8 +994,8 @@ def milk_report():
     if date_reported_to:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
-            q = q.filter(_or(
+            from sqlalchemy import or_
+            q = q.filter(or_(
                 Sample.certified_at <= _date.fromisoformat(date_reported_to),
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -1178,8 +1165,8 @@ def toxicology_report():
     if date_reported_from:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
-            q = q.filter(_or(
+            from sqlalchemy import or_
+            q = q.filter(or_(
                 Sample.certified_at >= _date.fromisoformat(date_reported_from),
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -1188,8 +1175,8 @@ def toxicology_report():
     if date_reported_to:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
-            q = q.filter(_or(
+            from sqlalchemy import or_
+            q = q.filter(or_(
                 Sample.certified_at <= _date.fromisoformat(date_reported_to),
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -1352,8 +1339,8 @@ def alcohol_report():
     if date_reported_from:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
-            q = q.filter(_or(
+            from sqlalchemy import or_
+            q = q.filter(or_(
                 Sample.certified_at >= _date.fromisoformat(date_reported_from),
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
@@ -1362,8 +1349,8 @@ def alcohol_report():
     if date_reported_to:
         try:
             from datetime import date as _date
-            from sqlalchemy import or_ as _or
-            q = q.filter(_or(
+            from sqlalchemy import or_
+            q = q.filter(or_(
                 Sample.certified_at <= _date.fromisoformat(date_reported_to),
                 Sample.status.notin_(_CERTIFIED_STATUSES),
             ))
