@@ -1355,10 +1355,10 @@ class DropdownConfig(db.Model):
 
     @staticmethod
     def choices_for(category):
-        """Return WTForms-style (value, label) choices for a given category."""
+        """Return WTForms-style (value, label) choices for a given category, sorted A-Z."""
         rows = DropdownConfig.query.filter_by(
             category=category, is_active=True
-        ).order_by(DropdownConfig.sort_order, DropdownConfig.label).all()
+        ).order_by(db.func.lower(DropdownConfig.label), DropdownConfig.label).all()
         return [(r.value, r.label or r.value) for r in rows]
 
     def __repr__(self):

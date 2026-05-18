@@ -3120,20 +3120,21 @@ def admin_dropdowns():
         flash('Access denied.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    from app.forms import DropdownConfigForm, DROPDOWN_CATEGORY_CHOICES
+    from app.forms import DropdownConfigForm, DropdownBulkAddForm, DROPDOWN_CATEGORY_CHOICES
     category_filter = request.args.get('category', '')
     q = DropdownConfig.query
     if category_filter:
         q = q.filter_by(category=category_filter)
-    items = q.order_by(DropdownConfig.category, DropdownConfig.sort_order, DropdownConfig.label).all()
+    items = q.order_by(DropdownConfig.category, db.func.lower(DropdownConfig.label), DropdownConfig.label).all()
     # All items (unfiltered) used by the JS category preview in the add form
     all_items = DropdownConfig.query.order_by(
-        DropdownConfig.category, DropdownConfig.sort_order, DropdownConfig.label
+        DropdownConfig.category, db.func.lower(DropdownConfig.label), DropdownConfig.label
     ).all()
     form = DropdownConfigForm()
+    bulk_form = DropdownBulkAddForm()
     return render_template(
         'admin/dropdowns.html',
-        items=items, form=form,
+        items=items, form=form, bulk_form=bulk_form,
         category_filter=category_filter,
         category_choices=DROPDOWN_CATEGORY_CHOICES,
         all_items=all_items,
@@ -3168,6 +3169,64 @@ def admin_dropdown_add():
             ))
             db.session.commit()
             flash('Dropdown entry added.', 'success')
+    else:
+        for field, errs in form.errors.items():
+            for err in errs:
+                flash(f'{field}: {err}', 'danger')
+    return redirect(url_for('main.admin_dropdowns'))
+
+
+@main_bp.route('/admin/dropdowns/bulk_add', methods=['POST'])
+@login_required
+def admin_dropdown_bulk_add():
+    """Bulk-add multiple dropdown entries for a single category."""
+    if not (current_user.has_any_role(Role.ADMIN, Role.HOD)
+            or current_user.has_permission(Permission.MANAGE_DROPDOWNS)):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    from app.forms import DropdownBulkAddForm
+    form = DropdownBulkAddForm()
+    if form.validate_on_submit():
+        category = form.category.data
+        is_active = form.is_active.data
+        lines = [l.strip() for l in form.bulk_values.data.splitlines() if l.strip()]
+        added = 0
+        skipped = 0
+        for line in lines:
+            if '|' in line:
+                value, _, label = line.partition('|')
+                value = value.strip()
+                label = label.strip() or value
+            else:
+                value = line
+                label = line
+            if not value:
+                continue
+            existing = DropdownConfig.query.filter_by(
+                category=category, value=value
+            ).first()
+            if existing:
+                skipped += 1
+            else:
+                db.session.add(DropdownConfig(
+                    category=category,
+                    value=value,
+                    label=label,
+                    sort_order=0,
+                    is_active=is_active,
+                    created_by=current_user.id,
+                ))
+                added += 1
+        if added:
+            db.session.commit()
+        parts = []
+        if added:
+            parts.append(f'{added} entr{"y" if added == 1 else "ies"} added')
+        if skipped:
+            parts.append(f'{skipped} duplicate{"s" if skipped > 1 else ""} skipped')
+        if parts:
+            flash(', '.join(parts).capitalize() + '.', 'success' if added else 'warning')
     else:
         for field, errs in form.errors.items():
             for err in errs:

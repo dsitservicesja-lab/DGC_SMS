@@ -74,6 +74,46 @@
     </div>
 </div>
 
+<!-- Bulk-add entries form -->
+<div class="card mb-4">
+    <div class="card-header">
+        <strong><i class="bi bi-list-check me-1"></i>Bulk Add Dropdown Entries</strong>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Enter one value per line. To set a separate display label, use a pipe separator:
+            <code>value | Display Label</code>
+        </p>
+        <form method="POST" action="{{ url_for('main.admin_dropdown_bulk_add') }}">
+            {{ bulk_form.hidden_tag() }}
+            <div class="row g-3">
+                <div class="col-md-3">
+                    {{ bulk_form.category.label(class="form-label fw-semibold") }}
+                    {{ bulk_form.category(class="form-select") }}
+                    {% for error in bulk_form.category.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-7">
+                    {{ bulk_form.bulk_values.label(class="form-label fw-semibold") }}
+                    {{ bulk_form.bulk_values(class="form-control font-monospace", rows=6,
+                        placeholder="Paracetamol\nAspirin\nMetformin Hydrochloride | Metformin HCl") }}
+                    {% for error in bulk_form.bulk_values.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="col-md-2 d-flex flex-column justify-content-end gap-2">
+                    <div class="form-check">
+                        {{ bulk_form.is_active(class="form-check-input") }}
+                        <label class="form-check-label" for="{{ bulk_form.is_active.id }}">Active</label>
+                    </div>
+                    {{ bulk_form.submit(class="btn btn-success btn-sm") }}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Existing entries table -->
 <div class="card">
     <div class="card-header">

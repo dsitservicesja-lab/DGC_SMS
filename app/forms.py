@@ -34,7 +34,15 @@ def _strong_password(form, field):
             'Password must contain at least: ' + ', '.join(errors) + '.'
         )
 
-FORMULATION_TYPE_CHOICES = [
+
+def _sort_choices(choices):
+    """Return a choices list sorted A-Z by label, keeping blank option(s) first."""
+    blank = [c for c in choices if not c[0]]
+    rest = sorted([c for c in choices if c[0]], key=lambda c: c[1].lower())
+    return blank + rest
+
+
+FORMULATION_TYPE_CHOICES = _sort_choices([
     ('', '-- Select Formulation --'),
     ('Capsule', 'Capsule'),
     ('Tablet', 'Tablet'),
@@ -45,10 +53,10 @@ FORMULATION_TYPE_CHOICES = [
     ('Solution', 'Solution'),
     ('Injection', 'Injection'),
     ('Powder', 'Powder'),
-]
+])
 
 # Active Pharmaceutical Ingredient (API) choices (Feature 7)
-API_CHOICES = [
+API_CHOICES = _sort_choices([
     ('', '-- Select API --'),
     ('Paracetamol', 'Paracetamol'),
     ('Diphenhydramine Hydrochloride', 'Diphenhydramine Hydrochloride'),
@@ -158,10 +166,10 @@ API_CHOICES = [
     ('Benzocaine', 'Benzocaine'),
     ('Clove Oil', 'Clove Oil'),
     ('Other', 'Other'),
-]
+])
 
 # Toxicology sample type choices (replaces Sample Name for Toxicology)
-TOXICOLOGY_SAMPLE_TYPE_CHOICES = [
+TOXICOLOGY_SAMPLE_TYPE_CHOICES = _sort_choices([
     ('', '-- Select Sample Type --'),
     ('Blood', 'Blood'),
     ('Urine', 'Urine'),
@@ -176,10 +184,10 @@ TOXICOLOGY_SAMPLE_TYPE_CHOICES = [
     ('24 Hour Urine', '24 Hour Urine'),
     ('Gastric Content', 'Gastric Content'),
     ('Vitreous Humor', 'Vitreous Humor'),
-]
+])
 
 # Predefined test names per sample type (Branch)
-TOXICOLOGY_TEST_NAMES = [
+TOXICOLOGY_TEST_NAMES = _sort_choices([
     ('Salicylate Test- Direct', 'Salicylate Test- Direct'),
     ('Salicylate Test- Confirmatory', 'Salicylate Test- Confirmatory'),
     ('Test for Phenothiazine', 'Test for Phenothiazine'),
@@ -194,7 +202,7 @@ TOXICOLOGY_TEST_NAMES = [
     ('Investigation for Paraquat/ Diquat', 'Investigation for Paraquat/ Diquat'),
     ('Analysis of Unknown/ Food Samples', 'Analysis of Unknown/ Food Samples'),
     ('Test for Arsenic, Antimony, Bismuth and Mercury', 'Test for Arsenic, Antimony, Bismuth and Mercury'),
-]
+])
 
 TOXICOLOGY_TEST_REFERENCES = [
     ("Clarke's Isolation and Identification of Drugs, 2nd Edition",
@@ -202,12 +210,12 @@ TOXICOLOGY_TEST_REFERENCES = [
     ('DGC SOP', 'DGC SOP'),
 ]
 
-FOOD_MILK_TEST_NAMES = [
+FOOD_MILK_TEST_NAMES = _sort_choices([
     ('% Fats', '% Fats'),
     ('% SNF', '% SNF'),
     ('% Total Solids', '% Total Solids'),
     ('Other', 'Other'),
-]
+])
 
 FOOD_MILK_TEST_REFERENCES = [
     ('Chemical Analysis of Foods, Eighth Edition, Pearson',
@@ -216,10 +224,10 @@ FOOD_MILK_TEST_REFERENCES = [
      'DGC Standard Operating Procedure, FAP-002 Revision 01'),
 ]
 
-FOOD_ALCOHOL_TEST_NAMES = [
+FOOD_ALCOHOL_TEST_NAMES = _sort_choices([
     ('Assay for Denatonium Benzoate', 'Assay for Denatonium Benzoate'),
     ('Alcohol Content/ Determination', 'Alcohol Content/ Determination'),
-]
+])
 
 FOOD_ALCOHOL_TEST_REFERENCES = [
     ('DGC SOP', 'DGC SOP'),
@@ -227,7 +235,7 @@ FOOD_ALCOHOL_TEST_REFERENCES = [
     ('Other', 'Other'),
 ]
 
-PHARMACEUTICAL_TEST_NAMES = [
+PHARMACEUTICAL_TEST_NAMES = _sort_choices([
     ('Acidity', 'Acidity'),
     ('Alcohol Content/ Determination', 'Alcohol Content/ Determination'),
     ('Assay by HPLC', 'Assay by HPLC'),
@@ -270,16 +278,16 @@ PHARMACEUTICAL_TEST_NAMES = [
     ('Weight Variation', 'Weight Variation'),
     ('Weight per mL', 'Weight per mL'),
     ('Other', 'Other'),
-]
+])
 
-PHARMACEUTICAL_TEST_REFERENCES = [
+PHARMACEUTICAL_TEST_REFERENCES = _sort_choices([
     ('U.S.P.', 'U.S.P.'),
     ('B.P.', 'B.P.'),
     ('Manufacturers method', 'Manufacturers method'),
     ('J.P.', 'J.P.'),
     ('I.P.', 'I.P.'),
     ('DGC SOP', 'DGC SOP'),
-]
+])
 
 # Map Branch enum names to their predefined test names/references
 BRANCH_TEST_NAMES = {
@@ -1218,14 +1226,14 @@ class InvoiceCreateForm(FlaskForm):
 # Dropdown Configuration (Feature 11)
 # ---------------------------------------------------------------------------
 
-DROPDOWN_CATEGORY_CHOICES = [
+DROPDOWN_CATEGORY_CHOICES = _sort_choices([
     ('', '-- Select Category --'),
     ('api', 'API (Active Pharmaceutical Ingredient)'),
     ('test_type', 'Test Types'),
     ('invoice_test', 'Invoice Test Items'),
     ('formulation_type', 'Formulation Types'),
     ('toxicology_sample_type', 'Toxicology Sample Types'),
-]
+])
 
 
 class DropdownConfigForm(FlaskForm):
@@ -1240,3 +1248,23 @@ class DropdownConfigForm(FlaskForm):
     sort_order = IntegerField('Sort Order', validators=[Optional()], default=0)
     is_active = BooleanField('Active', default=True)
     submit = SubmitField('Save')
+
+
+class DropdownBulkAddForm(FlaskForm):
+    """Bulk-add multiple dropdown entries for a single category."""
+    category = SelectField(
+        'Category',
+        choices=DROPDOWN_CATEGORY_CHOICES,
+        validators=[DataRequired()],
+    )
+    bulk_values = TextAreaField(
+        'Values (one per line)',
+        validators=[DataRequired()],
+        description=(
+            'Enter one value per line. '
+            'Optionally separate value and display label with a pipe: '
+            'value | Display Label'
+        ),
+    )
+    is_active = BooleanField('Active', default=True)
+    submit = SubmitField('Add All')
