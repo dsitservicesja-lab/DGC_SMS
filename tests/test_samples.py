@@ -1083,7 +1083,7 @@ def test_submit_to_deputy_after_correction_when_sample_status_stale(app, client)
         sample = Sample.query.first()
     client.post(f'/samples/{sample.id}/assign', data={
         'chemist_ids': [chemist_id],
-        'test_name': 'Correction Loop Test',
+        'test_name': 'Deputy Submission with Stale Status',
     })
     client.get('/auth/logout')
 

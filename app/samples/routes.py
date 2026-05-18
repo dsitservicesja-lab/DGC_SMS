@@ -1635,7 +1635,7 @@ def submit_to_deputy(sample_id):
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     if not _can_submit_to_deputy(sample):
-        flash('Sample must have all reports accepted before submitting to Deputy.', 'warning')
+        flash('Sample is not ready for Deputy submission.', 'warning')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     is_resubmission = sample.status == SampleStatus.DEPUTY_RETURNED
