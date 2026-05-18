@@ -59,6 +59,43 @@ def _fiscal_year_filter(query, date_column, year, quarter=None):
     return query.filter(date_column >= start, date_column <= end)
 
 
+def _report_period_filter(query, year, quarter=None, month=None):
+    """Filter a lab-report query by certification date (not received date).
+
+    Certified samples (those with a ``certified_at`` value) are placed in the
+    period when they were **certified**.  Uncertified samples (no
+    ``certified_at``) are always included so they carry forward into whatever
+    period is currently being viewed.
+
+    Args:
+        query: SQLAlchemy query already scoped to the correct sample type.
+        year: Fiscal year integer (April of *year* → March of *year+1*).
+        quarter: 1-4 or None (whole fiscal year).
+        month: Calendar month 1-12 or None.  When provided, *quarter* is
+               ignored and the month is matched within the full fiscal year.
+    """
+    from sqlalchemy import or_, and_
+
+    if month and 1 <= month <= 12:
+        fy_start, fy_end = fiscal_year_date_range(year, None)
+        in_period = and_(
+            Sample.certified_at.isnot(None),
+            Sample.certified_at >= fy_start,
+            Sample.certified_at <= fy_end,
+            db.extract('month', Sample.certified_at) == month,
+        )
+    else:
+        start, end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+        in_period = and_(
+            Sample.certified_at.isnot(None),
+            Sample.certified_at >= start,
+            Sample.certified_at <= end,
+        )
+
+    # Samples with no certified_at date are uncertified – always carry forward.
+    return query.filter(or_(in_period, Sample.certified_at.is_(None)))
+
+
 def _maybe_send_report_reminders():
     """Run report-date reminders at most once per calendar day.
 
@@ -741,14 +778,8 @@ def pharma_report():
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
     )
-    # Apply fiscal year / quarter / month filter
-    if month and 1 <= month <= 12:
-        # Filter by specific calendar month within the chosen fiscal year's calendar range
-        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
-        q = q.filter(db.extract('month', Sample.date_registered) == month)
-    else:
-        q = _fiscal_year_filter(q, Sample.date_registered, year,
-                                quarter if quarter else None)
+    # Apply period filter: certified samples by certified_at; uncertified carry forward
+    q = _report_period_filter(q, year, quarter if quarter else None, month if month else None)
 
     if status_filter:
         try:
@@ -869,12 +900,7 @@ def pharma_report_download():
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
     )
-    if month and 1 <= month <= 12:
-        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
-        q = q.filter(db.extract('month', Sample.date_registered) == month)
-    else:
-        q = _fiscal_year_filter(q, Sample.date_registered, year,
-                                quarter if quarter in (1, 2, 3, 4) else None)
+    q = _report_period_filter(q, year, quarter if quarter in (1, 2, 3, 4) else None, month if month else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -939,12 +965,7 @@ def milk_report():
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
     )
-    if month and 1 <= month <= 12:
-        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
-        q = q.filter(db.extract('month', Sample.date_registered) == month)
-    else:
-        q = _fiscal_year_filter(q, Sample.date_registered, year,
-                                quarter if quarter else None)
+    q = _report_period_filter(q, year, quarter if quarter else None, month if month else None)
 
     if status_filter:
         try:
@@ -1049,8 +1070,7 @@ def milk_report_download():
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter in (1, 2, 3, 4) else None)
+    q = _report_period_filter(q, year, quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -1118,12 +1138,7 @@ def toxicology_report():
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
     )
-    if month and 1 <= month <= 12:
-        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
-        q = q.filter(db.extract('month', Sample.date_registered) == month)
-    else:
-        q = _fiscal_year_filter(q, Sample.date_registered, year,
-                                quarter if quarter else None)
+    q = _report_period_filter(q, year, quarter if quarter else None, month if month else None)
 
     if status_filter:
         try:
@@ -1226,8 +1241,7 @@ def toxicology_report_download():
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter in (1, 2, 3, 4) else None)
+    q = _report_period_filter(q, year, quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -1290,12 +1304,7 @@ def alcohol_report():
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_ALCOHOL,
     )
-    if month and 1 <= month <= 12:
-        q = _fiscal_year_filter(q, Sample.date_registered, year, None)
-        q = q.filter(db.extract('month', Sample.date_registered) == month)
-    else:
-        q = _fiscal_year_filter(q, Sample.date_registered, year,
-                                quarter if quarter else None)
+    q = _report_period_filter(q, year, quarter if quarter else None, month if month else None)
 
     if status_filter:
         try:
@@ -1419,8 +1428,7 @@ def alcohol_report_download():
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_ALCOHOL,
     )
-    q = _fiscal_year_filter(q, Sample.date_registered, year,
-                            quarter if quarter in (1, 2, 3, 4) else None)
+    q = _report_period_filter(q, year, quarter if quarter in (1, 2, 3, 4) else None)
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -3088,11 +3096,23 @@ def admin_dropdowns():
         q = q.filter_by(category=category_filter)
     items = q.order_by(DropdownConfig.category, DropdownConfig.sort_order, DropdownConfig.label).all()
     form = DropdownConfigForm()
+
+    # Count entries per category for the summary row
+    from sqlalchemy import func as sa_func
+    cat_counts = {
+        row.category: row.cnt
+        for row in db.session.query(
+            DropdownConfig.category,
+            sa_func.count(DropdownConfig.id).label('cnt'),
+        ).group_by(DropdownConfig.category).all()
+    }
+
     return render_template(
         'admin/dropdowns.html',
         items=items, form=form,
         category_filter=category_filter,
         category_choices=DROPDOWN_CATEGORY_CHOICES,
+        cat_counts=cat_counts,
     )
 
 
@@ -3108,16 +3128,25 @@ def admin_dropdown_add():
     from app.forms import DropdownConfigForm
     form = DropdownConfigForm()
     if form.validate_on_submit():
-        existing = DropdownConfig.query.filter_by(
+        label_val = form.label.data or form.value.data
+        # Check duplicate value
+        existing_val = DropdownConfig.query.filter_by(
             category=form.category.data, value=form.value.data
         ).first()
-        if existing:
-            flash(f'Entry "{form.value.data}" already exists in category "{form.category.data}".', 'warning')
+        # Check duplicate label
+        existing_lbl = DropdownConfig.query.filter(
+            DropdownConfig.category == form.category.data,
+            db.func.lower(DropdownConfig.label) == db.func.lower(label_val),
+        ).first()
+        if existing_val:
+            flash(f'Entry with value "{form.value.data}" already exists in category "{form.category.data}".', 'warning')
+        elif existing_lbl:
+            flash(f'Entry with label "{label_val}" already exists in category "{form.category.data}".', 'warning')
         else:
             db.session.add(DropdownConfig(
                 category=form.category.data,
                 value=form.value.data,
-                label=form.label.data or form.value.data,
+                label=label_val,
                 sort_order=form.sort_order.data or 0,
                 is_active=form.is_active.data,
                 created_by=current_user.id,

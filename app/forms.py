@@ -508,6 +508,18 @@ class ToxicologySampleRegisterForm(SampleRegisterForm):
         validators=[Optional(), Length(max=100)]
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from app.models import DropdownConfig
+            db_choices = DropdownConfig.choices_for('toxicology_sample_type')
+            if db_choices:
+                self.toxicology_sample_type_name.choices = [
+                    ('', '-- Select Sample Type --')
+                ] + db_choices
+        except Exception:
+            pass
+
 
 class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
     """Registration form for Pharmaceutical samples.
@@ -552,6 +564,23 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
             existing = Sample.query.filter_by(lab_number=field.data).first()
             if existing:
                 raise ValidationError('Lab number already exists.')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from app.models import DropdownConfig
+            db_ft = DropdownConfig.choices_for('formulation_type')
+            if db_ft:
+                self.formulation_type.choices = [
+                    ('', '-- Select Formulation --')
+                ] + db_ft
+            db_api = DropdownConfig.choices_for('api')
+            if db_api:
+                self.active_ingredient.choices = [
+                    ('', '-- Select API --')
+                ] + db_api
+        except Exception:
+            pass
 
 
 class FoodMilkSampleRegisterForm(SampleRegisterForm):
@@ -731,6 +760,28 @@ class SampleEditForm(FlaskForm):
         )],
     )
     submit = SubmitField('Update Sample')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from app.models import DropdownConfig
+            db_ft = DropdownConfig.choices_for('formulation_type')
+            if db_ft:
+                self.formulation_type.choices = [
+                    ('', '-- Select Formulation --')
+                ] + db_ft
+            db_api = DropdownConfig.choices_for('api')
+            if db_api:
+                self.active_ingredient.choices = [
+                    ('', '-- Select API --')
+                ] + db_api
+            db_tst = DropdownConfig.choices_for('toxicology_sample_type')
+            if db_tst:
+                self.toxicology_sample_type_name.choices = [
+                    ('', '-- Select Sample Type --')
+                ] + db_tst
+        except Exception:
+            pass
 
 
 class CheckboxSelectMultiple(widgets.ListWidget):

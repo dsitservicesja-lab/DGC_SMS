@@ -39,7 +39,8 @@ def _register_pharma_sample(app, lab, name='Test Drug', certified=False):
             status=SampleStatus.CERTIFIED if certified else SampleStatus.REGISTERED,
         )
         if certified:
-            s.certified_at = datetime(2026, 2, 15, tzinfo=timezone.utc)
+            # FY2026 Q1 (Apr-Jun 2026) so the sample appears in year=2026 reports
+            s.certified_at = datetime(2026, 5, 15, tzinfo=timezone.utc)
         db.session.add(s)
         db.session.commit()
         return s.id
@@ -189,12 +190,12 @@ def test_pharma_report_quarter_filter(app, client):
     _setup_admin(app)
     _register_pharma_sample(app, 'PH-Q01')
     _login(client, 'admin')
-    # Q1 should include January samples
+    # Q1 (Apr-Jun) should include the uncertified sample (carry forward)
     resp = client.get('/reports/pharma?year=2026&quarter=1')
     assert b'PH-Q01' in resp.data
-    # Q3 should not include January samples
+    # Q3 should also include uncertified samples (carry forward regardless of quarter)
     resp = client.get('/reports/pharma?year=2026&quarter=3')
-    assert b'PH-Q01' not in resp.data
+    assert b'PH-Q01' in resp.data
 
 
 def test_pharma_report_download_csv(app, client):
@@ -249,7 +250,8 @@ def _register_milk_sample(app, lab, name='Test Milk', certified=False):
             volume='500ml',
         )
         if certified:
-            s.certified_at = datetime(2026, 2, 15, tzinfo=timezone.utc)
+            # FY2026 Q1 (Apr-Jun 2026) so the sample appears in year=2026 reports
+            s.certified_at = datetime(2026, 5, 15, tzinfo=timezone.utc)
         db.session.add(s)
         db.session.commit()
         return s.id
@@ -283,12 +285,12 @@ def test_milk_report_quarter_filter(app, client):
     _setup_admin(app)
     _register_milk_sample(app, 'MILK-Q01')
     _login(client, 'admin')
-    # Q1 should include January samples
+    # Q1 (Apr-Jun) should include the uncertified sample (carry forward)
     resp = client.get('/reports/milk?year=2026&quarter=1')
     assert b'MILK-Q01' in resp.data
-    # Q3 should not include January samples
+    # Q3 should also include uncertified samples (carry forward regardless of quarter)
     resp = client.get('/reports/milk?year=2026&quarter=3')
-    assert b'MILK-Q01' not in resp.data
+    assert b'MILK-Q01' in resp.data
 
 
 def test_milk_report_download_csv(app, client):

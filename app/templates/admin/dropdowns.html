@@ -6,6 +6,23 @@
     <h2><i class="bi bi-list-ul me-1"></i>Dropdown Configuration</h2>
 </div>
 
+<!-- Category summary badges (counts) -->
+{% if cat_counts %}
+<div class="mb-3 d-flex flex-wrap gap-2">
+    {% for val, lbl in category_choices if val %}
+    <a href="{{ url_for('main.admin_dropdowns', category=val) }}"
+       class="badge text-decoration-none {% if category_filter == val %}bg-primary{% else %}bg-secondary{% endif %} fs-6">
+        {{ lbl }} <span class="badge bg-light text-dark ms-1">{{ cat_counts.get(val, 0) }}</span>
+    </a>
+    {% endfor %}
+    {% if category_filter %}
+    <a href="{{ url_for('main.admin_dropdowns') }}" class="badge bg-light text-dark text-decoration-none fs-6 border">
+        <i class="bi bi-x-circle me-1"></i>Clear filter
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Filter by category -->
 <div class="card mb-3">
     <div class="card-body py-2">
@@ -34,7 +51,7 @@
             <div class="row g-3">
                 <div class="col-md-3">
                     {{ form.category.label(class="form-label fw-semibold") }}
-                    {{ form.category(class="form-select") }}
+                    {{ form.category(class="form-select", id="add_category_select") }}
                     {% for error in form.category.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
@@ -68,10 +85,19 @@
     </div>
 </div>
 
+{% if category_filter %}
+<!-- Available values in selected category -->
+<div class="alert alert-info py-2 mb-3">
+    <strong><i class="bi bi-info-circle me-1"></i>{{ items | length }} entr{{ 'y' if items | length == 1 else 'ies' }}
+    in category "{{ category_filter }}".</strong>
+    Values listed below are the options users will see in the corresponding form field.
+</div>
+{% endif %}
+
 <!-- Existing entries table -->
 <div class="card">
     <div class="card-header">
-        Dropdown Entries ({{ items | length }})
+        Dropdown Entries ({{ items | length }}{% if category_filter %} — filtered by <strong>{{ category_filter }}</strong>{% endif %})
     </div>
     <div class="table-responsive">
         <table class="table table-hover table-sm mb-0">
