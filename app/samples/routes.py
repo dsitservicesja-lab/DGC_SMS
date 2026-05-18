@@ -1157,7 +1157,12 @@ def submit_report(assignment_id):
         if not is_returned and len(available_assignments) > 1:
             selected_ids_raw = request.form.getlist('assignment_ids')
             if selected_ids_raw:
-                selected_ids = {int(x) for x in selected_ids_raw if x.isdigit()}
+                selected_ids = set()
+                for x in selected_ids_raw:
+                    try:
+                        selected_ids.add(int(x))
+                    except (ValueError, TypeError):
+                        pass
                 sibling_assignments = [a for a in available_assignments if a.id in selected_ids]
             if not sibling_assignments:
                 flash('Please select at least one test to submit a report for.', 'danger')
@@ -1171,8 +1176,8 @@ def submit_report(assignment_id):
         else:
             report_mode = 'combined'
 
-        # Validate test_date bounds (single-test / combined mode)
-        if test_date and report_mode == 'combined' and len(sibling_assignments) == 1:
+        # Validate test_date bounds for combined mode (single date applies to all selected tests)
+        if test_date and report_mode == 'combined':
             if test_date > today:
                 flash('Test date cannot be in the future.', 'danger')
                 return render_template(
