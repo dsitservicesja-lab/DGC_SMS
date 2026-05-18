@@ -71,6 +71,19 @@
         <i class="bi bi-send me-1"></i>Submit to Deputy
     </a>
 </div>
+{% elif sv == 'Senior Chemist Review' and sample.all_reports_ready_for_deputy() and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
+<div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <i class="bi bi-check-circle me-1"></i>
+        <strong>Corrected reports received.</strong> Submit to Deputy Government Chemist for review.
+        {% if sample.sample_type.value == 'Pharmaceutical' %}
+        <br><small class="text-muted">A summary report is required for pharmaceutical samples.</small>
+        {% endif %}
+    </div>
+    <a href="{{ url_for('samples.submit_to_deputy', sample_id=sample.id) }}" class="btn btn-primary btn-sm text-nowrap">
+        <i class="bi bi-send me-1"></i>Submit to Deputy
+    </a>
+</div>
 {% elif sv == 'Deputy Review' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>

@@ -2094,3 +2094,83 @@ def test_invoice_detail_shows_test_assignments(app, client):
     assert resp.status_code == 200
     assert b'Test Assignments' in resp.data
     assert b'Assignment Detail Only' in resp.data
+
+
+def test_submit_to_deputy_after_technical_return_and_resubmit(app, client):
+    """Senior chemist can submit to Deputy after returning a report for correction
+    and the analyst resubmitting without requiring an extra technical review step."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    # Register and assign
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Test A',
+    })
+    client.get('/auth/logout')
+
+    # Chemist submits
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Initial report.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    # Officer does preliminary review (approve)
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+    })
+    client.get('/auth/logout')
+
+    # Senior chemist returns report via technical review
+    _login(client, 'senior')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/review', data={
+        'action': 'returned',
+        'review_comments': 'Please correct the methodology section.',
+    })
+    client.get('/auth/logout')
+
+    # Chemist resubmits corrected report
+    _login(client, 'chemist')
+    resp = client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Corrected report.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data', follow_redirects=True)
+    client.get('/auth/logout')
+
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+        sample = Sample.query.first()
+        # Assignment should be back in UNDER_TECHNICAL_REVIEW, with reviewed_by set
+        assert assignment.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+        assert assignment.reviewed_by is not None
+        assert sample.status == SampleStatus.UNDER_TECHNICAL_REVIEW
+
+    # Senior chemist submits directly to Deputy without a second technical review
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    resp = client.post(f'/samples/{sample.id}/submit-to-deputy', data={},
+                       follow_redirects=True)
+    assert b'submitted to Deputy' in resp.data
+
+    with app.app_context():
+        sample = Sample.query.first()
+        assignment = SampleAssignment.query.first()
+        # Corrected report should have been auto-accepted and sample submitted
+        assert assignment.status == AssignmentStatus.ACCEPTED
+        assert sample.status == SampleStatus.DEPUTY_REVIEW

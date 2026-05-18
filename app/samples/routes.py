@@ -1613,6 +1613,37 @@ def submit_to_deputy(sample_id):
         flash('Only Senior Chemists can submit to Deputy.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
+    # When all assignments have been through at least one technical review and
+    # the analyst has resubmitted corrections, the assignments are in
+    # UNDER_TECHNICAL_REVIEW even though the senior chemist already reviewed
+    # them.  Accept those corrected assignments automatically so the senior
+    # chemist can proceed to submit to the Deputy without an extra review step.
+    if (sample.status == SampleStatus.UNDER_TECHNICAL_REVIEW
+            and sample.all_reports_ready_for_deputy()):
+        now = jamaica_now()
+        for a in sample.assignments.all():
+            if (a.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+                    and a.reviewed_by is not None):
+                a.status = AssignmentStatus.ACCEPTED
+                a.date_completed = now
+                prev_count = ReviewHistory.query.filter_by(
+                    sample_id=sample.id,
+                    assignment_id=a.id,
+                    review_type='technical',
+                ).count()
+                db.session.add(ReviewHistory(
+                    sample_id=sample.id,
+                    assignment_id=a.id,
+                    review_type='technical',
+                    review_number=prev_count + 1,
+                    action='accepted',
+                    reviewer_id=current_user.id,
+                    reviewed_at=now,
+                    comments='Accepted on submission to Deputy Government Chemist.',
+                ))
+        _update_sample_status(sample)
+        db.session.flush()
+
     if sample.status not in (SampleStatus.ACCEPTED, SampleStatus.DEPUTY_RETURNED):
         flash('Sample must have all reports accepted before submitting to Deputy.', 'warning')
         return redirect(url_for('samples.detail', sample_id=sample.id))

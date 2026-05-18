@@ -534,6 +534,27 @@ class Sample(db.Model):
         'User', foreign_keys=[reissued_by]
     )
 
+    def all_reports_ready_for_deputy(self):
+        """Return True when every assignment is either ACCEPTED/COMPLETED or
+        is in UNDER_TECHNICAL_REVIEW and has already been through at least one
+        technical review (reviewed_by is set).  This covers the case where the
+        senior chemist returned a report for correction and the analyst
+        resubmitted it – the assignment is back in UNDER_TECHNICAL_REVIEW but
+        the correction has been verified and the senior chemist can proceed to
+        submit directly to the Deputy without performing an explicit second
+        technical-review step."""
+        assignments = self.assignments.all()
+        if not assignments:
+            return False
+        for a in assignments:
+            if a.status in (AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED):
+                continue
+            if (a.status == AssignmentStatus.UNDER_TECHNICAL_REVIEW
+                    and a.reviewed_by is not None):
+                continue
+            return False
+        return True
+
     def __repr__(self):
         return f'<Sample {self.lab_number} - {self.sample_name}>'
 
