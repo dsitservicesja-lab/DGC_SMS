@@ -517,8 +517,12 @@ class ToxicologySampleRegisterForm(SampleRegisterForm):
                 self.toxicology_sample_type_name.choices = [
                     ('', '-- Select Sample Type --')
                 ] + db_choices
-        except Exception:
-            pass
+        except Exception as exc:
+            # Silently fall back to static choices if DB is unavailable
+            import logging
+            logging.getLogger(__name__).debug(
+                'Could not load toxicology_sample_type from DropdownConfig: %s', exc
+            )
 
 
 class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
@@ -579,8 +583,12 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
                 self.active_ingredient.choices = [
                     ('', '-- Select API --')
                 ] + db_api
-        except Exception:
-            pass
+        except Exception as exc:
+            # Silently fall back to static choices if DB is unavailable
+            import logging
+            logging.getLogger(__name__).debug(
+                'Could not load formulation/api choices from DropdownConfig: %s', exc
+            )
 
 
 class FoodMilkSampleRegisterForm(SampleRegisterForm):
@@ -780,8 +788,12 @@ class SampleEditForm(FlaskForm):
                 self.toxicology_sample_type_name.choices = [
                     ('', '-- Select Sample Type --')
                 ] + db_tst
-        except Exception:
-            pass
+        except Exception as exc:
+            # Silently fall back to static choices if DB is unavailable
+            import logging
+            logging.getLogger(__name__).debug(
+                'Could not load choices from DropdownConfig: %s', exc
+            )
 
 
 class CheckboxSelectMultiple(widgets.ListWidget):
