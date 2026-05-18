@@ -1649,7 +1649,7 @@ def submit_to_deputy(sample_id):
                 action='accepted',
                 reviewer_id=current_user.id,
                 reviewed_at=now,
-                comments='Accepted on submission to Deputy Government Chemist.',
+                comments='Auto-accepted corrected report on submission to Deputy Government Chemist.',
             ))
         _update_sample_status(sample)
         db.session.flush()

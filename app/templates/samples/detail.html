@@ -20,7 +20,7 @@
     'Rejected': 'danger',
     'Completed': 'success',
 } %}
-{% set sv = sample.status.value %}
+{% set status_value = sample.status.value %}
 
 <div class="page-header">
     <div>
@@ -28,8 +28,8 @@
         <p class="text-muted mb-0 mt-1">{{ sample.sample_name }}</p>
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-center">
-        <span class="badge bg-{{ status_colors.get(sv, 'secondary') }}" style="font-size:.85rem; padding:.4em .65em;">
-            {{ sv }}
+        <span class="badge bg-{{ status_colors.get(status_value, 'secondary') }}" style="font-size:.85rem; padding:.4em .65em;">
+            {{ status_value }}
         </span>
         {% if current_user.has_any_role(Role.OFFICER, Role.ADMIN, Role.HOD, Role.SENIOR_CHEMIST) or current_user.has_permission(Permission.EDIT_SAMPLE) or current_user.id == sample.uploaded_by %}
         <a href="{{ url_for('samples.edit', sample_id=sample.id) }}" class="btn btn-outline-primary btn-sm">
@@ -58,7 +58,7 @@
 </div>
 
 <!-- Workflow action banners -->
-{% if sv == 'Accepted' and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
+{% if status_value == 'Accepted' and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-check-circle me-1"></i>
@@ -71,7 +71,7 @@
         <i class="bi bi-send me-1"></i>Submit to Deputy
     </a>
 </div>
-{% elif sv == 'Senior Chemist Review' and sample.all_reports_ready_for_deputy() and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
+{% elif status_value == 'Senior Chemist Review' and sample.all_reports_ready_for_deputy() and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-check-circle me-1"></i>
@@ -84,7 +84,7 @@
         <i class="bi bi-send me-1"></i>Submit to Deputy
     </a>
 </div>
-{% elif sv == 'Deputy Review' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
+{% elif status_value == 'Deputy Review' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-clipboard-check me-1"></i>
@@ -94,7 +94,7 @@
         <i class="bi bi-clipboard-check me-1"></i>Review Submission
     </a>
 </div>
-{% elif sv == 'Returned by Deputy' and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
+{% elif status_value == 'Returned by Deputy' and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
 <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-exclamation-triangle me-1"></i>
@@ -107,7 +107,7 @@
         <i class="bi bi-arrow-repeat me-1"></i>Resubmit to Deputy
     </a>
 </div>
-{% elif sv == 'Certificate Preparation' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
+{% elif status_value == 'Certificate Preparation' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-file-earmark-medical me-1"></i>
@@ -117,7 +117,7 @@
         <i class="bi bi-file-earmark-medical me-1"></i>Prepare Certificate
     </a>
 </div>
-{% elif sv == 'HOD Review' and current_user.has_any_role(Role.HOD, Role.ADMIN) %}
+{% elif status_value == 'HOD Review' and current_user.has_any_role(Role.HOD, Role.ADMIN) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-pen me-1"></i>
@@ -127,7 +127,7 @@
         <i class="bi bi-pen me-1"></i>Review &amp; Sign
     </a>
 </div>
-{% elif sv == 'Returned by HOD' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
+{% elif status_value == 'Returned by HOD' and current_user.has_any_role(Role.DEPUTY, Role.HOD, Role.ADMIN) %}
 <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-exclamation-triangle me-1"></i>
@@ -140,7 +140,7 @@
         <i class="bi bi-pencil me-1"></i>Revise Certificate
     </a>
 </div>
-{% elif sv == 'Certified' %}
+{% elif status_value == 'Certified' %}
 <div class="alert alert-success mb-4">
     <i class="bi bi-patch-check-fill me-1"></i>
     <strong>Sample analysis completed.</strong>
@@ -241,7 +241,7 @@
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Expected Report Date</dt>
                             <dd class="mb-3">
                                 {{ sample.expected_report_date.strftime('%d %b %Y') }}
-                                {% if sv not in ['Certified', 'Completed', 'Rejected'] %}
+                                {% if status_value not in ['Certified', 'Completed', 'Rejected'] %}
                                     {% set days_left = (sample.expected_report_date - today_date).days if today_date else none %}
                                     {% if days_left is not none and days_left <= 0 %}
                                     <span class="badge bg-danger ms-1" style="font-size:.68rem;"><i class="bi bi-exclamation-circle me-1"></i>Due Today / Overdue</span>
