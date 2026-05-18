@@ -58,7 +58,7 @@
 </div>
 
 <!-- Workflow action banners -->
-{% if sv == 'Accepted' and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
+{% if can_submit_to_deputy and (current_user.is_branch_head() or current_user.has_role(Role.ADMIN)) %}
 <div class="alert alert-info d-flex justify-content-between align-items-center gap-3 mb-4">
     <div>
         <i class="bi bi-check-circle me-1"></i>

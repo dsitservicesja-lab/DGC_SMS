@@ -105,6 +105,28 @@ def _add_history(sample, action, details=None, action_type=None,
     db.session.add(entry)
 
 
+def _assignments_ready_for_deputy(sample):
+    """Return True when every assignment is in an accepted/completed state."""
+    assignments = sample.assignments.all()
+    return bool(assignments) and all(
+        a.status in (AssignmentStatus.ACCEPTED, AssignmentStatus.COMPLETED)
+        for a in assignments
+    )
+
+
+def _can_submit_to_deputy(sample):
+    """Return True when a sample is valid for Deputy submission/resubmission."""
+    return (
+        sample.status in (SampleStatus.ACCEPTED, SampleStatus.DEPUTY_RETURNED)
+        or _assignments_ready_for_deputy(sample)
+    )
+
+
+def _can_show_submit_to_deputy(sample):
+    """Return True when the detail page should show the primary submit action."""
+    return _can_submit_to_deputy(sample) and sample.status != SampleStatus.DEPUTY_RETURNED
+
+
 # ---------------------------------------------------------------------------
 # List / Dashboard views
 # ---------------------------------------------------------------------------
@@ -514,6 +536,7 @@ def register():
 def detail(sample_id):
     sample = db.get_or_404(Sample, sample_id)
     assignments = sample.assignments.all()
+    can_submit_to_deputy = _can_show_submit_to_deputy(sample)
     review_page = request.args.get('review_page', 1, type=int)
     activity_page = request.args.get('activity_page', 1, type=int)
     history_pagination = sample.history.paginate(
@@ -547,6 +570,7 @@ def detail(sample_id):
         review_histories=review_pagination.items,
         review_pagination=review_pagination,
         pending_backdate=pending_backdate,
+        can_submit_to_deputy=can_submit_to_deputy,
     )
 
 
@@ -1613,8 +1637,8 @@ def submit_to_deputy(sample_id):
         flash('Only Senior Chemists can submit to Deputy.', 'danger')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
-    if sample.status not in (SampleStatus.ACCEPTED, SampleStatus.DEPUTY_RETURNED):
-        flash('Sample must have all reports accepted before submitting to Deputy.', 'warning')
+    if not _can_submit_to_deputy(sample):
+        flash('Sample is not ready for Deputy submission.', 'warning')
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     is_resubmission = sample.status == SampleStatus.DEPUTY_RETURNED

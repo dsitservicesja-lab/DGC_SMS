@@ -1071,6 +1071,67 @@ def test_full_workflow_pharma_with_summary(app, client):
         assert sample.summary_report is not None
 
 
+def test_submit_to_deputy_after_correction_when_sample_status_stale(app, client):
+    """Senior chemist can still submit to Deputy after correction loop if sample status is stale."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    _login(client, 'officer')
+    _register_sample(client)
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        sample = Sample.query.first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Deputy Submission with Stale Status',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Initial report.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        assignment = SampleAssignment.query.first()
+    client.post(f'/samples/assignment/{assignment.id}/review', data={
+        'action': 'accepted',
+    })
+
+    with app.app_context():
+        sample = Sample.query.first()
+        assignment = SampleAssignment.query.first()
+        # Simulate stale sample status while assignment is already accepted.
+        sample.status = SampleStatus.RETURNED
+        assignment.status = AssignmentStatus.ACCEPTED
+        db.session.commit()
+        sample_id = sample.id
+
+    resp = client.get(f'/samples/{sample_id}')
+    assert b'Submit to Deputy' in resp.data
+
+    resp = client.post(f'/samples/{sample_id}/submit-to-deputy', data={},
+                       follow_redirects=True)
+    assert b'submitted to Deputy' in resp.data
+
+    with app.app_context():
+        sample = db.session.get(Sample, sample_id)
+        assert sample.status == SampleStatus.DEPUTY_REVIEW
+
+
 def test_deputy_return(app, client):
     """Test that Deputy can return submission to Senior Chemist."""
     officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
