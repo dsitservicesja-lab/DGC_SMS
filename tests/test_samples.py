@@ -2508,3 +2508,100 @@ def test_submit_report_pre_selected_honours_selection(app, client):
     assert f'value="{asgn1.id}"'.encode() in resp.data
     # The checked state for asgn1 is included
     assert b'checked' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# Summary Report Document Version Tests
+# ---------------------------------------------------------------------------
+
+def test_summary_report_file_creates_document_version(app, client):
+    """Uploading a summary report file during submit-to-deputy creates a
+    DocumentVersion entry with document_type='summary_report'."""
+    from app.models import DocumentVersion
+
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    # Register a pharma sample
+    _login(client, 'officer')
+    client.post('/samples/register', data={
+        'lab_number': 'PHARMA-DV-001',
+        'sample_name': 'Summary Version Drug',
+        'sample_type': 'PHARMACEUTICAL',
+        'date_received': '2026-01-15',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+
+    # Create pharma senior chemist and chemist
+    with app.app_context():
+        sc_pharma = _create_user(
+            Role.SENIOR_CHEMIST, Branch.PHARMACEUTICAL, username='sc_pharma_dv'
+        )
+        chem_pharma = _create_user(
+            Role.CHEMIST, Branch.PHARMACEUTICAL, username='chem_pharma_dv'
+        )
+        sc_pharma_id = sc_pharma.id
+        chem_pharma_id = chem_pharma.id
+
+    # Assign
+    _login(client, 'sc_pharma_dv')
+    with app.app_context():
+        sample = Sample.query.filter_by(lab_number='PHARMA-DV-001').first()
+    client.post(f'/samples/{sample.id}/assign', data={
+        'chemist_ids': [chem_pharma_id],
+        'test_name': 'Purity Test DV',
+    })
+    client.get('/auth/logout')
+
+    # Submit report
+    _login(client, 'chem_pharma_dv')
+    with app.app_context():
+        assignment = SampleAssignment.query.filter_by(
+            sample_id=sample.id
+        ).first()
+    client.post(f'/samples/assignment/{assignment.id}/report', data={
+        'report_text': 'Drug meets purity standards.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+    client.get('/auth/logout')
+
+    # Preliminary review
+    _login(client, 'officer')
+    with app.app_context():
+        assignment = SampleAssignment.query.filter_by(
+            sample_id=sample.id
+        ).first()
+    client.post(f'/samples/assignment/{assignment.id}/preliminary-review', data={
+        'action': 'approved',
+    })
+    client.get('/auth/logout')
+
+    # Technical review (accept)
+    _login(client, 'sc_pharma_dv')
+    with app.app_context():
+        assignment = SampleAssignment.query.filter_by(
+            sample_id=sample.id
+        ).first()
+    client.post(f'/samples/assignment/{assignment.id}/review', data={
+        'action': 'accepted',
+    })
+
+    # Submit to Deputy with summary report text AND file
+    with app.app_context():
+        sample = Sample.query.filter_by(lab_number='PHARMA-DV-001').first()
+
+    resp = client.post(f'/samples/{sample.id}/submit-to-deputy', data={
+        'summary_report': 'Summary: all standards met.',
+        'summary_report_file': (io.BytesIO(_MINIMAL_PDF), 'summary.pdf'),
+    }, content_type='multipart/form-data', follow_redirects=True)
+    assert b'submitted to Deputy' in resp.data
+
+    # Verify a DocumentVersion was created for the summary report file
+    with app.app_context():
+        sample = Sample.query.filter_by(lab_number='PHARMA-DV-001').first()
+        dv = DocumentVersion.query.filter_by(
+            sample_id=sample.id, document_type='summary_report'
+        ).first()
+        assert dv is not None, 'DocumentVersion for summary_report was not created'
+        assert dv.version_number == 1
+        assert dv.upload_label == 'original'
+        assert dv.original_name == 'summary.pdf'

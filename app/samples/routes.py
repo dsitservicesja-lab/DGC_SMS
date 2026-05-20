@@ -1866,6 +1866,23 @@ def submit_to_deputy(sample_id):
             sample.summary_report_file = stored
             sample.summary_report_file_original_name = original
 
+            # Flush to obtain sample.id for the DocumentVersion FK
+            db.session.flush()
+            existing_versions = DocumentVersion.query.filter_by(
+                sample_id=sample.id, document_type='summary_report'
+            ).count()
+            version_num = existing_versions + 1
+            upload_label = 'original' if version_num == 1 else 'revised'
+            db.session.add(DocumentVersion(
+                sample_id=sample.id,
+                document_type='summary_report',
+                version_number=version_num,
+                file_path=stored,
+                original_name=original,
+                upload_label=upload_label,
+                uploaded_by=current_user.id,
+            ))
+
         sample.status = SampleStatus.DEPUTY_REVIEW
 
         if is_resubmission:
