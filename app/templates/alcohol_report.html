@@ -227,7 +227,8 @@
                     </td>
                     <td>
                         {% if s.coa_version and s.coa_version > 1 %}
-                        <span class="badge bg-warning text-dark" title="COA re-issued {{ s.coa_version - 1 }} time{{ 's' if s.coa_version - 1 != 1 else '' }}">
+                        {% set coa_reissues = s.coa_version - 1 %}
+                        <span class="badge bg-warning text-dark" title="COA re-issued {{ coa_reissues }} time{{ 's' if coa_reissues != 1 else '' }}">
                             v{{ s.coa_version }}
                         </span>
                         {% else %}v1{% endif %}
