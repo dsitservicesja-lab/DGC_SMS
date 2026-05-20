@@ -126,6 +126,7 @@
                     <th>Expected Report</th>
                     <th>Certified Date</th>
                     <th>TAT (working days)</th>
+                    <th>Resubmissions</th>
                 </tr>
             </thead>
             <tbody>
@@ -154,9 +155,17 @@
                         <span class="badge bg-info text-dark">{{ sample_tat[s.id] }}</span>
                         {% else %}—{% endif %}
                     </td>
+                    <td>
+                        {% set resub = sample_resubmissions.get(s.id, 0) %}
+                        {% if resub > 0 %}
+                        <span class="badge bg-secondary" title="{{ resub }} resubmission{{ 's' if resub != 1 else '' }}">
+                            {{ resub }}
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="10" class="text-center text-muted py-4">No toxicology samples found.</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-4">No toxicology samples found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

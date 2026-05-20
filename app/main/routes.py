@@ -564,6 +564,47 @@ def _out_of_spec_count_for_samples(sample_ids):
     ).count()
 
 
+def _resubmission_counts_for_samples(sample_ids):
+    """Return a dict of {sample_id: resubmission_count} for the given samples.
+
+    Counts DocumentVersion rows with document_type='report' and
+    upload_label='resubmission', which are created every time a chemist
+    resubmits a report after it has been returned for correction.
+    """
+    if not sample_ids:
+        return {}
+    from sqlalchemy import func
+    rows = db.session.query(
+        DocumentVersion.sample_id,
+        func.count(DocumentVersion.id),
+    ).filter(
+        DocumentVersion.sample_id.in_(sample_ids),
+        DocumentVersion.document_type == 'report',
+        DocumentVersion.upload_label == 'resubmission',
+    ).group_by(DocumentVersion.sample_id).all()
+    return {sid: cnt for sid, cnt in rows}
+
+
+def _resubmission_counts_for_assignments(assignment_ids):
+    """Return a dict of {assignment_id: resubmission_count} for the given assignments.
+
+    Counts DocumentVersion rows with document_type='report' and
+    upload_label='resubmission' linked to each assignment_id.
+    """
+    if not assignment_ids:
+        return {}
+    from sqlalchemy import func
+    rows = db.session.query(
+        DocumentVersion.assignment_id,
+        func.count(DocumentVersion.id),
+    ).filter(
+        DocumentVersion.assignment_id.in_(assignment_ids),
+        DocumentVersion.document_type == 'report',
+        DocumentVersion.upload_label == 'resubmission',
+    ).group_by(DocumentVersion.assignment_id).all()
+    return {aid: cnt for aid, cnt in rows}
+
+
 @main_bp.route('/kpi/report')
 @login_required
 def kpi_report():
@@ -856,6 +897,9 @@ def pharma_report():
     sample_ids = [s.id for s in samples]
     out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
 
+    # Resubmission counts per sample
+    sample_resubmissions = _resubmission_counts_for_samples(sample_ids)
+
     # Available years (fiscal)
     available_years = _available_fiscal_years()
 
@@ -884,6 +928,7 @@ def pharma_report():
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
         sample_tat=sample_tat,
+        sample_resubmissions=sample_resubmissions,
         SampleStatus=SampleStatus,
         page=page,
         total_pages=total_pages,
@@ -913,12 +958,15 @@ def pharma_report_download():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
+    sample_ids = [s.id for s in samples]
+    resubmissions = _resubmission_counts_for_samples(sample_ids)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         'Lab Number', 'Sample Name', 'Type', 'Formulation', 'API',
         'Status', 'Date Received', 'Date Registered',
         'Expected Report Date', 'Certified Date', 'Turnaround (days)',
+        'Report Resubmissions', 'COA Version',
     ])
     for s in samples:
         tat = ''
@@ -937,6 +985,8 @@ def pharma_report_download():
             s.expected_report_date.isoformat() if s.expected_report_date else '',
             s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
             tat,
+            resubmissions.get(s.id, 0),
+            s.coa_version if s.coa_version else 1,
         ])
 
     q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else (f'_M{month}' if month else '')
@@ -1036,6 +1086,9 @@ def milk_report():
     sample_ids = [s.id for s in samples]
     out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
 
+    # Resubmission counts per sample
+    sample_resubmissions = _resubmission_counts_for_samples(sample_ids)
+
     # Available years (fiscal)
     available_years = _available_fiscal_years()
 
@@ -1063,6 +1116,7 @@ def milk_report():
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
         sample_tat=sample_tat,
+        sample_resubmissions=sample_resubmissions,
         SampleStatus=SampleStatus,
         page=page,
         total_pages=total_pages,
@@ -1091,12 +1145,14 @@ def milk_report_download():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
+    sample_ids = [s.id for s in samples]
+    resubmissions = _resubmission_counts_for_samples(sample_ids)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         'Lab Number', 'Source', 'Milk Type', 'Volume',
         'Status', 'Date Received', 'Date Registered',
-        'Certified Date', 'Turnaround (days)',
+        'Certified Date', 'Turnaround (days)', 'Report Resubmissions', 'COA Version',
     ])
     for s in samples:
         tat = ''
@@ -1118,6 +1174,8 @@ def milk_report_download():
             s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
             s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
             tat,
+            resubmissions.get(s.id, 0),
+            s.coa_version if s.coa_version else 1,
         ])
 
     q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
@@ -1216,6 +1274,9 @@ def toxicology_report():
     sample_ids = [s.id for s in samples]
     out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
 
+    # Resubmission counts per sample
+    sample_resubmissions = _resubmission_counts_for_samples(sample_ids)
+
     available_years = _available_fiscal_years()
 
     # Pagination
@@ -1242,6 +1303,7 @@ def toxicology_report():
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
         sample_tat=sample_tat,
+        sample_resubmissions=sample_resubmissions,
         SampleStatus=SampleStatus,
         page=page,
         total_pages=total_pages,
@@ -1270,12 +1332,14 @@ def toxicology_report_download():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
+    sample_ids = [s.id for s in samples]
+    resubmissions = _resubmission_counts_for_samples(sample_ids)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         'Lab Number', 'Sample Name', 'Sample Type', 'Patient Name',
         'Status', 'Date Received', 'Date Registered',
-        'Certified Date', 'Turnaround (working days)',
+        'Certified Date', 'Turnaround (working days)', 'Report Resubmissions',
     ])
     for s in samples:
         tat = ''
@@ -1292,6 +1356,7 @@ def toxicology_report_download():
             s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
             s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
             tat,
+            resubmissions.get(s.id, 0),
         ])
 
     q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
@@ -1390,6 +1455,9 @@ def alcohol_report():
     sample_ids = [s.id for s in samples]
     out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
 
+    # Resubmission counts per sample
+    sample_resubmissions = _resubmission_counts_for_samples(sample_ids)
+
     # Avg TAT breakdown by alcohol type
     alcohol_type_tat = {}
     alcohol_type_labels = [
@@ -1436,6 +1504,7 @@ def alcohol_report():
         avg_tat=avg_tat,
         out_of_spec_count=out_of_spec_count,
         sample_tat=sample_tat,
+        sample_resubmissions=sample_resubmissions,
         alcohol_type_tat=alcohol_type_tat,
         SampleStatus=SampleStatus,
         page=page,
@@ -1465,12 +1534,14 @@ def alcohol_report_download():
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
     non_working = fetch_non_working_days(fy_start, fy_end)
+    sample_ids = [s.id for s in samples]
+    resubmissions = _resubmission_counts_for_samples(sample_ids)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         'Lab Number', 'Sample Name', 'Alcohol Type', 'Claim/Butt #',
         'Batch/Lot #', 'Status', 'Date Received', 'Date Registered',
-        'Certified Date', 'Turnaround (working days)',
+        'Certified Date', 'Turnaround (working days)', 'Report Resubmissions', 'COA Version',
     ])
     for s in samples:
         tat = ''
@@ -1488,6 +1559,8 @@ def alcohol_report_download():
             s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
             s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
             tat,
+            resubmissions.get(s.id, 0),
+            s.coa_version if s.coa_version else 1,
         ])
 
     q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
@@ -1695,6 +1768,10 @@ def analyst_report():
         d_start = (detail_page - 1) * DETAIL_PER_PAGE
         detail_items = tests[d_start:d_start + DETAIL_PER_PAGE]
 
+    # Resubmission counts per assignment for the detail view
+    detail_assignment_ids = [a.id for a in detail_items]
+    assignment_resubmissions = _resubmission_counts_for_assignments(detail_assignment_ids)
+
     return render_template(
         'analyst_report.html',
         analyst_list=analyst_page_items,
@@ -1721,6 +1798,7 @@ def analyst_report():
         detail_total_pages=detail_total_pages,
         detail_sort=detail_sort,
         detail_dir=detail_dir,
+        assignment_resubmissions=assignment_resubmissions,
     )
 
 
@@ -1755,11 +1833,13 @@ def analyst_report_download():
 
     assignments = q.order_by(User.last_name, SampleAssignment.assigned_date.desc()).all()
 
+    assignment_ids = [a.id for a in assignments]
+    resubmissions = _resubmission_counts_for_assignments(assignment_ids)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         'Analyst', 'Lab Number', 'Sample Name', 'Laboratory',
-        'Test Name', 'Status', 'Assigned Date', 'Date Completed',
+        'Test Name', 'Status', 'Assigned Date', 'Date Completed', 'Report Resubmissions',
     ])
     for a in assignments:
         writer.writerow([
@@ -1771,6 +1851,7 @@ def analyst_report_download():
             a.status.value if a.status else '',
             a.assigned_date.strftime('%Y-%m-%d') if a.assigned_date else '',
             a.date_completed.strftime('%Y-%m-%d') if a.date_completed else '',
+            resubmissions.get(a.id, 0),
         ])
 
     q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''

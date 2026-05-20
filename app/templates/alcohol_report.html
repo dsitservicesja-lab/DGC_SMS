@@ -178,6 +178,8 @@
                     <th>Expected Report</th>
                     <th>Certified Date</th>
                     <th>TAT (working days)</th>
+                    <th>Resubmissions</th>
+                    <th>COA Version</th>
                 </tr>
             </thead>
             <tbody>
@@ -215,10 +217,26 @@
                         <span class="badge bg-info text-dark">{{ sample_tat[s.id] }}</span>
                         {% else %}—{% endif %}
                     </td>
+                    <td>
+                        {% set resub = sample_resubmissions.get(s.id, 0) %}
+                        {% if resub > 0 %}
+                        <span class="badge bg-secondary" title="{{ resub }} resubmission{{ 's' if resub != 1 else '' }}">
+                            {{ resub }}
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if s.coa_version and s.coa_version > 1 %}
+                        {% set coa_reissues = s.coa_version - 1 %}
+                        <span class="badge bg-warning text-dark" title="COA re-issued {{ coa_reissues }} time{{ 's' if coa_reissues != 1 else '' }}">
+                            v{{ s.coa_version }}
+                        </span>
+                        {% else %}v1{% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="11" class="text-center text-muted py-4">No alcohol samples found.</td>
+                    <td colspan="13" class="text-center text-muted py-4">No alcohol samples found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

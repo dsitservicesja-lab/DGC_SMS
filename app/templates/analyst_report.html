@@ -284,6 +284,7 @@
                             {% if detail_sort == 'completed_date' %}<i class="bi bi-caret-{{ 'up' if detail_dir == 'asc' else 'down' }}-fill small"></i>{% endif %}
                         </a>
                     </th>
+                    <th class="text-center">Resubmissions</th>
                 </tr>
             </thead>
             <tbody>
@@ -303,10 +304,18 @@
                     </td>
                     <td>{{ a.assigned_date.strftime('%d %b %Y') if a.assigned_date else '—' }}</td>
                     <td>{{ a.date_completed.strftime('%d %b %Y') if a.date_completed else '—' }}</td>
+                    <td class="text-center">
+                        {% set resub = assignment_resubmissions.get(a.id, 0) %}
+                        {% if resub > 0 %}
+                        <span class="badge bg-secondary" title="{{ resub }} resubmission{{ 's' if resub != 1 else '' }}">
+                            {{ resub }}
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-3">No tests found.</td>
+                    <td colspan="8" class="text-center text-muted py-3">No tests found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
