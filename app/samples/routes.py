@@ -944,22 +944,26 @@ def return_to_analyst(assignment_id):
         return redirect(url_for('samples.detail', sample_id=sample.id))
 
     old_status = assignment.status.value
+    return_comment = request.form.get('return_comment', '').strip() or None
+
     assignment.status = AssignmentStatus.RETURNED
     assignment.return_stage = 'technical'
     assignment.date_completed = None
+    assignment.review_comments = return_comment
 
     chemist_name = assignment.chemist.full_name if assignment.chemist else 'Unknown'
+    comment_suffix = f' Comments: {return_comment}' if return_comment else ''
     _add_history(
         sample,
         'Returned to Analyst',
         (f'{current_user.full_name} returned assignment for test '
          f'"{assignment.test_name}" to analyst {chemist_name} '
-         f'(was: {old_status}).'),
+         f'(was: {old_status}).{comment_suffix}'),
         action_type='Return to Analyst',
         object_affected='Sample Assignment',
         change_description=(
             f'Test "{assignment.test_name}" returned to {chemist_name} '
-            f'by {current_user.full_name} (from {old_status})'),
+            f'by {current_user.full_name} (from {old_status}){comment_suffix}'),
     )
 
     _update_sample_status(sample)
@@ -967,12 +971,17 @@ def return_to_analyst(assignment_id):
 
     # Notify the analyst
     from app.notifications import create_notification
+    notif_message = (
+        f'Your assignment for test "{assignment.test_name}" on sample '
+        f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
+        f'returned to you for correction by {current_user.full_name}.'
+    )
+    if return_comment:
+        notif_message += f'\n\nComments: {return_comment}'
     create_notification(
         assignment.chemist_id,
         f'Assignment Returned: {sample.lab_number}',
-        (f'Your assignment for test "{assignment.test_name}" on sample '
-         f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
-         f'returned to you for correction by {current_user.full_name}.'),
+        notif_message,
         f'/samples/assignment/{assignment.id}',
     )
     db.session.commit()

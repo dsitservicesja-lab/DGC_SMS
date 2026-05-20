@@ -282,17 +282,19 @@ def notify_preliminary_review_completed(assignment, action):
     sample = assignment.sample
     action_text = 'approved' if action == 'approved' else 'returned for correction'
 
-    # Notify the chemist
-    title = f'Preliminary Review – {action_text.title()}: {sample.lab_number}'
-    message = (
-        f'Your report for test "{assignment.test_name}" on sample '
-        f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
-        f'{action_text} during preliminary review.'
-    )
-    if assignment.preliminary_review_comments:
-        message += f'\n\nComments: {assignment.preliminary_review_comments}'
     link = f'/samples/assignment/{assignment.id}'
-    create_notification(assignment.chemist_id, title, message, link)
+
+    # Only notify the chemist when they need to resubmit (report returned)
+    if action != 'approved':
+        title = f'Preliminary Review – {action_text.title()}: {sample.lab_number}'
+        message = (
+            f'Your report for test "{assignment.test_name}" on sample '
+            f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
+            f'{action_text} during preliminary review.'
+        )
+        if assignment.preliminary_review_comments:
+            message += f'\n\nComments: {assignment.preliminary_review_comments}'
+        create_notification(assignment.chemist_id, title, message, link)
 
     # If approved, notify Senior Chemist for Senior Chemist review
     if action == 'approved':
@@ -317,16 +319,18 @@ def notify_report_reviewed(assignment, action):
     }.get(action, action)
 
     title = f'Senior Chemist Review – {action_text.title()}: {sample.lab_number}'
-    message = (
-        f'Your report for test "{assignment.test_name}" on sample '
-        f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
-        f'{action_text} during Senior Chemist review.'
-    )
-    if assignment.review_comments:
-        message += f'\n\nComments: {assignment.review_comments}'
-
     link = f'/samples/assignment/{assignment.id}'
-    create_notification(assignment.chemist_id, title, message, link)
+
+    # Only notify the chemist when they need to resubmit (report returned)
+    if action == 'returned':
+        message = (
+            f'Your report for test "{assignment.test_name}" on sample '
+            f'"{sample.sample_name}" (Lab# {sample.lab_number}) has been '
+            f'{action_text} during Senior Chemist review.'
+        )
+        if assignment.review_comments:
+            message += f'\n\nComments: {assignment.review_comments}'
+        create_notification(assignment.chemist_id, title, message, link)
 
     # Also notify the uploading officer
     create_notification(
