@@ -82,7 +82,12 @@
                                     <div class="form-check ms-3">
                                         <input class="form-check-input test-checkbox" type="checkbox"
                                                name="assignment_ids" value="{{ a.id }}"
-                                               id="asgn_{{ a.id }}" checked>
+                                               id="asgn_{{ a.id }}"
+                                               {% if pre_selected_ids %}
+                                               {% if a.id in pre_selected_ids %}checked{% endif %}
+                                               {% else %}
+                                               checked
+                                               {% endif %}>
                                         <label class="form-check-label" for="asgn_{{ a.id }}">
                                             <span class="badge bg-info text-dark me-1">{{ a.test_name }}</span>
                                             {% if a.test_reference %}<small class="text-muted">— {{ a.test_reference }}</small>{% endif %}

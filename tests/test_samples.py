@@ -2342,3 +2342,169 @@ def test_update_sample_status_does_not_override_deputy_review(app, client):
             f'Expected DEPUTY_REVIEW but got {sample.status.value!r}; '
             '_update_sample_status incorrectly overrode the post-deputy status'
         )
+
+
+# ---------------------------------------------------------------------------
+# API: /api/my-pending-assignments
+# ---------------------------------------------------------------------------
+
+def _register_sample_for_api_tests(app, client, lab='TOX-API-01', name='API Sample'):
+    _login(client, 'officer')
+    client.post('/samples/register', data={
+        'lab_number': lab,
+        'sample_name': name,
+        'sample_type': 'TOXICOLOGY',
+        'date_received': '2026-01-15',
+        'description': 'API test sample',
+        'quantity': '10ml',
+    }, follow_redirects=True)
+    client.get('/auth/logout')
+    with app.app_context():
+        return Sample.query.filter_by(lab_number=lab).first().id
+
+
+def test_api_pending_assignments_requires_login(app, client):
+    """Unauthenticated request to the API endpoint should redirect to login."""
+    resp = client.get('/samples/api/my-pending-assignments')
+    assert resp.status_code == 302
+    assert 'login' in resp.headers.get('Location', '').lower()
+
+
+def test_api_pending_assignments_returns_json(app, client):
+    """Authenticated request returns JSON with an 'assignments' list."""
+    _setup_users(app)
+    _login(client, 'chemist')
+    resp = client.get('/samples/api/my-pending-assignments')
+    assert resp.status_code == 200
+    assert resp.content_type.startswith('application/json')
+    data = json.loads(resp.data)
+    assert 'assignments' in data
+    assert isinstance(data['assignments'], list)
+
+
+def test_api_pending_assignments_empty_for_no_tests(app, client):
+    """Chemist with no assignments gets an empty list."""
+    _setup_users(app)
+    _login(client, 'chemist')
+    resp = client.get('/samples/api/my-pending-assignments')
+    data = json.loads(resp.data)
+    assert data['assignments'] == []
+
+
+def test_api_pending_assignments_includes_assigned_tests(app, client):
+    """API returns tests that are assigned to the current chemist."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    sample_id = _register_sample_for_api_tests(app, client)
+
+    _login(client, 'senior')
+    client.post(f'/samples/{sample_id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'API Test 1',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    resp = client.get('/samples/api/my-pending-assignments')
+    data = json.loads(resp.data)
+    assert len(data['assignments']) == 1
+    item = data['assignments'][0]
+    assert item['test_name'] == 'API Test 1'
+    assert item['lab_number'] == 'TOX-API-01'
+    assert 'id' in item
+    assert 'sample_id' in item
+    assert item['status'] in ('Assigned', 'In Progress', 'Returned for Correction')
+
+
+def test_api_pending_assignments_excludes_submitted(app, client):
+    """Assignments with REPORT_SUBMITTED status are excluded from the API response."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    sample_id = _register_sample_for_api_tests(app, client, lab='TOX-API-02', name='API Sample 2')
+
+    _login(client, 'senior')
+    client.post(f'/samples/{sample_id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Submitted Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        asgn = SampleAssignment.query.filter_by(sample_id=sample_id).first()
+        asgn_id = asgn.id
+
+    # Submit the report
+    client.post(f'/samples/assignment/{asgn_id}/report', data={
+        'report_text': 'Done.',
+        'report_file': _report_file(),
+    }, content_type='multipart/form-data')
+
+    resp = client.get('/samples/api/my-pending-assignments')
+    data = json.loads(resp.data)
+    ids = [a['id'] for a in data['assignments']]
+    assert asgn_id not in ids
+
+
+def test_api_pending_assignments_not_visible_to_other_chemist(app, client):
+    """A different chemist does not see another chemist's assignments."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+    with app.app_context():
+        other = _create_user(Role.CHEMIST, Branch.TOXICOLOGY, username='chemist2')
+        other_id = other.id
+
+    sample_id = _register_sample_for_api_tests(app, client, lab='TOX-API-03', name='API Sample 3')
+
+    _login(client, 'senior')
+    client.post(f'/samples/{sample_id}/assign', data={
+        'chemist_ids': [chemist_id],
+        'test_name': 'Exclusive Test',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist2')
+    resp = client.get('/samples/api/my-pending-assignments')
+    data = json.loads(resp.data)
+    assert data['assignments'] == []
+
+
+# ---------------------------------------------------------------------------
+# pre_selected query param for submit_report
+# ---------------------------------------------------------------------------
+
+def test_submit_report_pre_selected_honours_selection(app, client):
+    """When pre_selected IDs are passed, only those assignments are pre-checked."""
+    officer_id, sc_id, chemist_id, deputy_id, hod_id = _setup_users(app)
+
+    _login(client, 'officer')
+    _register_sample_with_lab(client, 'TOX-PS-01', 'PreSelect Alpha')
+    _register_sample_with_lab(client, 'TOX-PS-02', 'PreSelect Beta')
+    client.get('/auth/logout')
+
+    _login(client, 'senior')
+    with app.app_context():
+        samples = Sample.query.filter(
+            Sample.lab_number.in_(['TOX-PS-01', 'TOX-PS-02'])
+        ).order_by(Sample.id).all()
+        s1_id, s2_id = samples[0].id, samples[1].id
+
+    client.post(f'/samples/{s1_id}/assign', data={
+        'chemist_ids': [chemist_id], 'test_name': 'PS Test One',
+    })
+    client.post(f'/samples/{s2_id}/assign', data={
+        'chemist_ids': [chemist_id], 'test_name': 'PS Test Two',
+    })
+    client.get('/auth/logout')
+
+    _login(client, 'chemist')
+    with app.app_context():
+        asgn1 = SampleAssignment.query.filter_by(sample_id=s1_id).first()
+        asgn2 = SampleAssignment.query.filter_by(sample_id=s2_id).first()
+
+    # Request with only asgn1 pre-selected
+    resp = client.get(
+        f'/samples/assignment/{asgn1.id}/report?pre_selected={asgn1.id}'
+    )
+    assert resp.status_code == 200
+    # asgn1 checkbox must be present and checked; asgn2 must NOT be checked
+    assert f'value="{asgn1.id}"'.encode() in resp.data
+    # The checked state for asgn1 is included
+    assert b'checked' in resp.data

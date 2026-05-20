@@ -1113,6 +1113,57 @@ def upload_supporting_document(sample_id):
 
 
 # ---------------------------------------------------------------------------
+# API: pending assignments for the current analyst (used by the test-selection
+# modal on the report-submission workflow)
+# ---------------------------------------------------------------------------
+
+@samples_bp.route('/api/my-pending-assignments')
+@login_required
+def api_my_pending_assignments():
+    """Return the current user's pending assignments as JSON.
+
+    Response shape::
+
+        {
+            "assignments": [
+                {
+                    "id": 42,
+                    "test_name": "Alcohol Content",
+                    "test_reference": "AOAC 2016.12",
+                    "sample_id": 7,
+                    "lab_number": "FA-2026-001",
+                    "sample_name": "Rum Sample A",
+                    "status": "Assigned"
+                },
+                ...
+            ]
+        }
+    """
+    pending = SampleAssignment.query.filter(
+        SampleAssignment.chemist_id == current_user.id,
+        SampleAssignment.status.in_([
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.IN_PROGRESS,
+            AssignmentStatus.RETURNED,
+        ]),
+    ).all()
+    pending.sort(key=lambda a: (a.sample.lab_number, a.test_name))
+    data = [
+        {
+            'id': a.id,
+            'test_name': a.test_name,
+            'test_reference': a.test_reference or '',
+            'sample_id': a.sample_id,
+            'lab_number': a.sample.lab_number,
+            'sample_name': a.sample.sample_name,
+            'status': a.status.value,
+        }
+        for a in pending
+    ]
+    return jsonify({'assignments': data})
+
+
+# ---------------------------------------------------------------------------
 # Submit report (chemist)
 # ---------------------------------------------------------------------------
 
@@ -1133,6 +1184,17 @@ def submit_report(assignment_id):
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     is_returned = assignment.status == AssignmentStatus.RETURNED
+
+    # Parse optional pre_selected IDs passed from the test-selection modal
+    # (comma-separated assignment IDs in the query string, e.g. ?pre_selected=3,7,12)
+    pre_selected_ids: set[int] = set()
+    pre_selected_raw = request.args.get('pre_selected', '')
+    if pre_selected_raw:
+        for _x in pre_selected_raw.split(','):
+            try:
+                pre_selected_ids.add(int(_x.strip()))
+            except (ValueError, TypeError):
+                pass
 
     # For returned reports, resubmit only the specific assignment that was
     # returned (no test selection UI). For fresh submissions, load all pending
@@ -1158,7 +1220,15 @@ def submit_report(assignment_id):
             a.test_name,
         ))
         available_assignments = all_pending
-        sibling_assignments = list(available_assignments)
+        # When pre-selected IDs were passed (from the test-selection modal),
+        # use them as the initial sibling selection; otherwise default to all.
+        if pre_selected_ids:
+            sibling_assignments = [a for a in available_assignments if a.id in pre_selected_ids]
+            # Always keep at least the current assignment
+            if not sibling_assignments:
+                sibling_assignments = [assignment]
+        else:
+            sibling_assignments = list(available_assignments)
 
     today = jamaica_now().date()
     min_test_date = assignment.sample.date_received
@@ -1406,6 +1476,7 @@ def submit_report(assignment_id):
         'samples/submit_report.html', form=form, assignment=assignment,
         available_assignments=available_assignments,
         sibling_assignments=sibling_assignments,
+        pre_selected_ids=pre_selected_ids,
         report_mode='combined', is_returned=is_returned,
         today=today.isoformat(), min_test_date=min_test_date.isoformat(),
     )

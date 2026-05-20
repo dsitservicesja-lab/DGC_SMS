@@ -28,9 +28,18 @@
             {{ assignment.status.value }}
         </span>
         {% if current_user.id == assignment.chemist_id and assignment.status.value in ['Assigned', 'In Progress', 'Returned for Correction'] %}
+        {% if assignment.status.value == 'Returned for Correction' %}
         <a href="{{ url_for('samples.submit_report', assignment_id=assignment.id) }}" class="btn btn-success btn-sm">
             <i class="bi bi-upload me-1"></i>Submit Report
         </a>
+        {% else %}
+        <button type="button" class="btn btn-success btn-sm"
+                id="openSubmitModalBtn"
+                data-assignment-id="{{ assignment.id }}"
+                data-bs-toggle="modal" data-bs-target="#testSelectionModal">
+            <i class="bi bi-upload me-1"></i>Submit Report
+        </button>
+        {% endif %}
         {% endif %}
         {% if current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) and assignment.status.value == 'Report Submitted' %}
         <a href="{{ url_for('samples.preliminary_review', assignment_id=assignment.id) }}" class="btn btn-info btn-sm">
@@ -392,4 +401,314 @@
 <a href="{{ url_for('samples.detail', sample_id=sample.id) }}" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i>Back to Sample
 </a>
+{% endblock %}
+
+{% block modals %}
+{# ── Test-selection modal (shown when analyst clicks "Submit Report") ── #}
+<div class="modal fade" id="testSelectionModal" tabindex="-1"
+     aria-labelledby="testSelectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--dgc-primary); color: #fff;">
+                <h5 class="modal-title" id="testSelectionModalLabel">
+                    <i class="bi bi-check2-square me-2"></i>Select Tests to Submit
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {# Search / filter #}
+                <div class="mb-3">
+                    <input type="text" id="testSearchInput" class="form-control form-control-sm"
+                           placeholder="Search by test name or lab number…"
+                           aria-label="Search tests">
+                </div>
+                {# Loading spinner #}
+                <div id="testLoadingSpinner" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading…</span>
+                    </div>
+                    <p class="mt-2 text-muted small">Loading your assigned tests…</p>
+                </div>
+                {# No tests message #}
+                <div id="testNoAssignments" class="alert alert-info d-none" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>You have no pending tests to submit a report for.
+                </div>
+                {# No search results message #}
+                <div id="testNoResults" class="alert alert-warning d-none" role="alert">
+                    <i class="bi bi-search me-2"></i>No tests match your search.
+                </div>
+                {# Test list #}
+                <div id="testListContainer" class="d-none">
+                    <div class="d-flex gap-2 mb-3">
+                        <button type="button" id="modalSelectAll"
+                                class="btn btn-link btn-sm p-0 text-decoration-none">
+                            <i class="bi bi-check-all me-1"></i>Select All
+                        </button>
+                        <span class="text-muted">|</span>
+                        <button type="button" id="modalDeselectAll"
+                                class="btn btn-link btn-sm p-0 text-decoration-none">
+                            <i class="bi bi-x-square me-1"></i>Deselect All
+                        </button>
+                        <span class="ms-auto text-muted small" id="modalSelectionCount"></span>
+                    </div>
+                    <div id="testGroupList"></div>
+                </div>
+                {# Error message #}
+                <div id="testLoadError" class="alert alert-danger d-none" role="alert">
+                    <i class="bi bi-exclamation-circle me-2"></i>
+                    <span id="testLoadErrorMsg">Failed to load tests. Please try again.</span>
+                </div>
+                {# Validation error (no test selected) #}
+                <div id="testValidationError" class="alert alert-danger d-none" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Please select at least one test.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x me-1"></i>Cancel
+                </button>
+                <button type="button" id="testSelectionConfirm" class="btn btn-success" disabled>
+                    <i class="bi bi-arrow-right me-1"></i>Continue to Report Form
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var ASSIGNMENTS_URL = '{{ url_for("samples.api_my_pending_assignments") }}';
+    var REPORT_URL_TEMPLATE = '{{ url_for("samples.submit_report", assignment_id=assignment.id) }}';
+    var CURRENT_ASSIGNMENT_ID = {{ assignment.id }};
+
+    var modal           = document.getElementById('testSelectionModal');
+    var spinner         = document.getElementById('testLoadingSpinner');
+    var noAssignments   = document.getElementById('testNoAssignments');
+    var noResults       = document.getElementById('testNoResults');
+    var listContainer   = document.getElementById('testListContainer');
+    var groupList       = document.getElementById('testGroupList');
+    var loadError       = document.getElementById('testLoadError');
+    var loadErrorMsg    = document.getElementById('testLoadErrorMsg');
+    var validationError = document.getElementById('testValidationError');
+    var confirmBtn      = document.getElementById('testSelectionConfirm');
+    var searchInput     = document.getElementById('testSearchInput');
+    var selectAllBtn    = document.getElementById('modalSelectAll');
+    var deselectAllBtn  = document.getElementById('modalDeselectAll');
+    var selectionCount  = document.getElementById('modalSelectionCount');
+
+    var allAssignments = [];  // full list from API
+    var fetched = false;      // prevent re-fetching on every modal open
+
+    function setVisible(el, visible) {
+        el.classList.toggle('d-none', !visible);
+    }
+
+    function updateSelectionCount() {
+        var checked = 0;
+        var total = 0;
+        groupList.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            var item = cb.closest('.test-modal-item');
+            if (!item || item.style.display !== 'none') {
+                total++;
+                if (cb.checked) { checked++; }
+            }
+        });
+        selectionCount.textContent = checked + ' of ' + total + ' selected';
+        confirmBtn.disabled = (checked === 0);
+        setVisible(validationError, false);
+    }
+
+    function getCheckedIds() {
+        var ids = [];
+        groupList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
+            ids.push(cb.value);
+        });
+        return ids;
+    }
+
+    function renderAssignments(list) {
+        groupList.innerHTML = '';
+        if (!list || list.length === 0) {
+            setVisible(noAssignments, true);
+            setVisible(listContainer, false);
+            return;
+        }
+        // Group by sample
+        var groups = {};
+        list.forEach(function (a) {
+            if (!groups[a.sample_id]) {
+                groups[a.sample_id] = { lab: a.lab_number, name: a.sample_name, items: [] };
+            }
+            groups[a.sample_id].items.push(a);
+        });
+
+        Object.values(groups).forEach(function (grp) {
+            var groupDiv = document.createElement('div');
+            groupDiv.className = 'mb-3';
+
+            var header = document.createElement('div');
+            header.className = 'd-flex align-items-center mb-2';
+            header.innerHTML = '<span class="badge bg-secondary me-2">' + grp.lab + '</span>'
+                             + '<span class="text-muted small">' + grp.name + '</span>';
+            groupDiv.appendChild(header);
+
+            grp.items.forEach(function (a) {
+                var itemDiv = document.createElement('div');
+                itemDiv.className = 'form-check ms-3 test-modal-item';
+                itemDiv.dataset.testName = (a.test_name || '').toLowerCase();
+                itemDiv.dataset.labNumber = (a.lab_number || '').toLowerCase();
+
+                var cb = document.createElement('input');
+                cb.className = 'form-check-input modal-test-checkbox';
+                cb.type = 'checkbox';
+                cb.value = a.id;
+                cb.id = 'modal_asgn_' + a.id;
+                // Pre-check the current assignment; uncheck others by default
+                cb.checked = (a.id === CURRENT_ASSIGNMENT_ID);
+                cb.addEventListener('change', updateSelectionCount);
+
+                var label = document.createElement('label');
+                label.className = 'form-check-label';
+                label.htmlFor = 'modal_asgn_' + a.id;
+                label.innerHTML = '<span class="badge bg-info text-dark me-1">' + a.test_name + '</span>';
+                if (a.test_reference) {
+                    label.innerHTML += '<small class="text-muted">— ' + a.test_reference + '</small>';
+                }
+                var statusBadge = document.createElement('span');
+                statusBadge.className = 'badge bg-light text-dark border ms-1';
+                statusBadge.style.fontSize = '.7rem';
+                statusBadge.textContent = a.status;
+                label.appendChild(statusBadge);
+
+                itemDiv.appendChild(cb);
+                itemDiv.appendChild(label);
+                groupDiv.appendChild(itemDiv);
+            });
+            groupList.appendChild(groupDiv);
+        });
+
+        setVisible(listContainer, true);
+        setVisible(noAssignments, false);
+        updateSelectionCount();
+    }
+
+    function applySearch(term) {
+        if (!term) {
+            groupList.querySelectorAll('.test-modal-item').forEach(function (el) {
+                el.style.display = '';
+            });
+            // Show/hide group headers based on whether they have visible children
+            groupList.querySelectorAll('.mb-3').forEach(function (grpEl) {
+                grpEl.style.display = '';
+            });
+        } else {
+            var lo = term.toLowerCase();
+            var anyVisible = false;
+            groupList.querySelectorAll('.mb-3').forEach(function (grpEl) {
+                var items = grpEl.querySelectorAll('.test-modal-item');
+                var grpAny = false;
+                items.forEach(function (item) {
+                    var matches = item.dataset.testName.includes(lo)
+                               || item.dataset.labNumber.includes(lo);
+                    item.style.display = matches ? '' : 'none';
+                    if (matches) { grpAny = true; anyVisible = true; }
+                });
+                grpEl.style.display = grpAny ? '' : 'none';
+            });
+            setVisible(noResults, !anyVisible);
+            if (!anyVisible) {
+                setVisible(listContainer, anyVisible);
+                return;
+            }
+        }
+        setVisible(noResults, false);
+        setVisible(listContainer, true);
+        updateSelectionCount();
+    }
+
+    function loadAssignments() {
+        if (fetched) return;
+        setVisible(spinner, true);
+        setVisible(noAssignments, false);
+        setVisible(listContainer, false);
+        setVisible(loadError, false);
+        setVisible(validationError, false);
+        confirmBtn.disabled = true;
+
+        fetch(ASSIGNMENTS_URL, { credentials: 'same-origin' })
+            .then(function (resp) {
+                if (!resp.ok) { throw new Error('HTTP ' + resp.status); }
+                return resp.json();
+            })
+            .then(function (data) {
+                allAssignments = data.assignments || [];
+                fetched = true;
+                setVisible(spinner, false);
+                renderAssignments(allAssignments);
+            })
+            .catch(function (err) {
+                setVisible(spinner, false);
+                loadErrorMsg.textContent = 'Failed to load tests: ' + err.message + '. Please refresh and try again.';
+                setVisible(loadError, true);
+            });
+    }
+
+    // Load assignments on first modal open
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function () {
+            loadAssignments();
+        });
+        // Reset search on close
+        modal.addEventListener('hidden.bs.modal', function () {
+            if (searchInput) { searchInput.value = ''; applySearch(''); }
+            setVisible(validationError, false);
+        });
+    }
+
+    // Search input
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            applySearch(this.value.trim());
+        });
+    }
+
+    // Select/deselect all (visible items only)
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function () {
+            groupList.querySelectorAll('.test-modal-item').forEach(function (item) {
+                if (item.style.display !== 'none') {
+                    var cb = item.querySelector('.modal-test-checkbox');
+                    if (cb) { cb.checked = true; }
+                }
+            });
+            updateSelectionCount();
+        });
+    }
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function () {
+            groupList.querySelectorAll('.modal-test-checkbox').forEach(function (cb) {
+                cb.checked = false;
+            });
+            updateSelectionCount();
+        });
+    }
+
+    // Confirm: navigate to submit_report with pre_selected IDs
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function () {
+            var ids = getCheckedIds();
+            if (ids.length === 0) {
+                setVisible(validationError, true);
+                return;
+            }
+            setVisible(validationError, false);
+            // Build URL: keep current assignment_id, append pre_selected param
+            var url = REPORT_URL_TEMPLATE + '?pre_selected=' + ids.join(',');
+            window.location.href = url;
+        });
+    }
+})();
+</script>
 {% endblock %}
