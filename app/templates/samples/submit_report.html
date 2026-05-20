@@ -53,8 +53,8 @@
 
                     <div class="row g-3">
 
-                        {# ── Test Selection (only when multiple tests are available and not a resubmission) ── #}
-                        {% if not is_returned and available_assignments and available_assignments|length > 1 %}
+                        {# ── Test Selection (only when multiple tests are available) ── #}
+                        {% if available_assignments and available_assignments|length > 1 %}
                         <div class="col-12">
                             <label class="form-label fw-semibold"><i class="bi bi-check2-square me-1"></i>Select Tests to Include in This Report</label>
                             <div class="border rounded p-3 bg-light">
@@ -136,7 +136,7 @@
 
                         {# ── Combined mode file upload (default) ── #}
                         <div class="col-12" id="combined-file-section"
-                             {% if not is_returned and available_assignments and available_assignments|length > 1 and report_mode == 'individual' %}style="display:none;"{% endif %}>
+                             {% if available_assignments and available_assignments|length > 1 and report_mode == 'individual' %}style="display:none;"{% endif %}>
                             {{ form.report_file.label(class="form-label fw-semibold") }}
                             <span class="text-danger ms-1">*</span>
                             {{ form.report_file(class="form-control") }}
@@ -153,7 +153,7 @@
                         </div>
 
                         {# ── Individual mode: per-test file uploads ── #}
-                        {% if not is_returned and available_assignments and available_assignments|length > 1 %}
+                        {% if available_assignments and available_assignments|length > 1 %}
                         <div class="col-12" id="individual-file-section"
                              {% if report_mode != 'individual' %}style="display:none;"{% endif %}>
                             <label class="form-label fw-semibold"><i class="bi bi-file-earmark-arrow-up me-1"></i>Report Files (one per test)</label>

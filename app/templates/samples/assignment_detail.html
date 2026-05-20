@@ -28,18 +28,12 @@
             {{ assignment.status.value }}
         </span>
         {% if current_user.id == assignment.chemist_id and assignment.status.value in ['Assigned', 'In Progress', 'Returned for Correction'] %}
-        {% if assignment.status.value == 'Returned for Correction' %}
-        <a href="{{ url_for('samples.submit_report', assignment_id=assignment.id) }}" class="btn btn-success btn-sm">
-            <i class="bi bi-upload me-1"></i>Submit Report
-        </a>
-        {% else %}
         <button type="button" class="btn btn-success btn-sm"
                 id="openSubmitModalBtn"
                 data-assignment-id="{{ assignment.id }}"
                 data-bs-toggle="modal" data-bs-target="#testSelectionModal">
             <i class="bi bi-upload me-1"></i>Submit Report
         </button>
-        {% endif %}
         {% endif %}
         {% if current_user.has_any_role(Role.OFFICER, Role.SENIOR_CHEMIST, Role.DEPUTY, Role.HOD, Role.ADMIN) and assignment.status.value == 'Report Submitted' %}
         <a href="{{ url_for('samples.preliminary_review', assignment_id=assignment.id) }}" class="btn btn-info btn-sm">

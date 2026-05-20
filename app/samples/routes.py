@@ -1196,39 +1196,38 @@ def submit_report(assignment_id):
             except (ValueError, TypeError):
                 pass
 
-    # For returned reports, resubmit only the specific assignment that was
-    # returned (no test selection UI). For fresh submissions, load all pending
-    # assignments so the analyst can select which tests to include.
-    if is_returned:
-        available_assignments = [assignment]
+    # Fetch all pending assignments across ALL samples for this chemist so
+    # they can link one report to tests from different samples in one go.
+    # This applies to both fresh submissions and returned-for-correction resubmissions
+    # so the analyst/chemist can always choose which tests to include via the modal.
+    all_pending = SampleAssignment.query.filter(
+        SampleAssignment.chemist_id == current_user.id,
+        SampleAssignment.status.in_([
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.IN_PROGRESS,
+            AssignmentStatus.RETURNED,
+        ]),
+    ).all()
+    # Sort: current sample first, then by lab number, then test name
+    all_pending.sort(key=lambda a: (
+        0 if a.sample_id == assignment.sample_id else 1,
+        a.sample.lab_number,
+        a.test_name,
+    ))
+    available_assignments = all_pending
+    # When pre-selected IDs were passed (from the test-selection modal),
+    # use them as the initial sibling selection.
+    if pre_selected_ids:
+        sibling_assignments = [a for a in available_assignments if a.id in pre_selected_ids]
+        # Always keep at least the current assignment
+        if not sibling_assignments:
+            sibling_assignments = [assignment]
+    elif is_returned:
+        # For returned assignments without explicit pre-selection,
+        # default to just this assignment (the one being corrected).
         sibling_assignments = [assignment]
     else:
-        # Fetch all pending assignments across ALL samples for this chemist so
-        # they can link one report to tests from different samples in one go.
-        all_pending = SampleAssignment.query.filter(
-            SampleAssignment.chemist_id == current_user.id,
-            SampleAssignment.status.in_([
-                AssignmentStatus.ASSIGNED,
-                AssignmentStatus.IN_PROGRESS,
-                AssignmentStatus.RETURNED,
-            ]),
-        ).all()
-        # Sort: current sample first, then by lab number, then test name
-        all_pending.sort(key=lambda a: (
-            0 if a.sample_id == assignment.sample_id else 1,
-            a.sample.lab_number,
-            a.test_name,
-        ))
-        available_assignments = all_pending
-        # When pre-selected IDs were passed (from the test-selection modal),
-        # use them as the initial sibling selection; otherwise default to all.
-        if pre_selected_ids:
-            sibling_assignments = [a for a in available_assignments if a.id in pre_selected_ids]
-            # Always keep at least the current assignment
-            if not sibling_assignments:
-                sibling_assignments = [assignment]
-        else:
-            sibling_assignments = list(available_assignments)
+        sibling_assignments = list(available_assignments)
 
     today = jamaica_now().date()
     min_test_date = assignment.sample.date_received
@@ -1243,9 +1242,9 @@ def submit_report(assignment_id):
         meets_spec = form.meets_specifications.data or None
         report_comments = form.report_comments.data or None
 
-        # Resolve which assignments the analyst selected (non-returned only)
+        # Resolve which assignments were selected via the test-selection form
         report_mode = request.form.get('report_mode', 'combined')
-        if not is_returned and len(available_assignments) > 1:
+        if len(available_assignments) > 1:
             selected_ids_raw = request.form.getlist('assignment_ids')
             if selected_ids_raw:
                 selected_ids = set()
@@ -1256,14 +1255,18 @@ def submit_report(assignment_id):
                         pass
                 sibling_assignments = [a for a in available_assignments if a.id in selected_ids]
             if not sibling_assignments:
-                flash('Please select at least one test to submit a report for.', 'danger')
-                return render_template(
-                    'samples/submit_report.html', form=form, assignment=assignment,
-                    available_assignments=available_assignments,
-                    sibling_assignments=sibling_assignments,
-                    report_mode=report_mode, is_returned=is_returned,
-                    today=today.isoformat(), min_test_date=min_test_date.isoformat(),
-                )
+                if is_returned:
+                    # Safe fallback for returned assignments: only resubmit this one
+                    sibling_assignments = [assignment]
+                else:
+                    flash('Please select at least one test to submit a report for.', 'danger')
+                    return render_template(
+                        'samples/submit_report.html', form=form, assignment=assignment,
+                        available_assignments=available_assignments,
+                        sibling_assignments=sibling_assignments,
+                        report_mode=report_mode, is_returned=is_returned,
+                        today=today.isoformat(), min_test_date=min_test_date.isoformat(),
+                    )
         else:
             report_mode = 'combined'
 
