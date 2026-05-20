@@ -688,12 +688,15 @@
                             </a>
                             {% endif %}
                             {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.ADMIN) and a.status.value not in ['Assigned', 'Returned for Correction'] %}
-                            <form method="POST" action="{{ url_for('samples.return_to_analyst', assignment_id=a.id) }}" class="d-inline" onsubmit="return confirm('Return this assignment to the analyst?')">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-outline-warning" title="Return to Analyst">
-                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                </button>
-                            </form>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-warning open-return-modal"
+                                    title="Return to Analyst"
+                                    data-assignment-id="{{ a.id }}"
+                                    data-test-name="{{ a.test_name }}"
+                                    data-analyst-name="{{ a.chemist.full_name if a.chemist else 'Analyst' }}"
+                                    data-action-url="{{ url_for('samples.return_to_analyst', assignment_id=a.id) }}">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
                             {% endif %}
                             {% if (current_user.has_any_role(Role.ADMIN, Role.HOD) or current_user.id == a.assigned_by) and a.status.value in ['Assigned', 'In Progress'] %}
                             <form method="POST" action="{{ url_for('samples.remove_assignment', assignment_id=a.id) }}" class="d-inline" onsubmit="return confirm('Remove this assignment?')">
@@ -942,6 +945,40 @@
 {% endblock %}
 
 {% block modals %}
+{# ── Return to Analyst modal ── #}
+<div class="modal fade" id="returnToAnalystModal" tabindex="-1"
+     aria-labelledby="returnToAnalystModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--dgc-primary); color: #fff;">
+                <h5 class="modal-title" id="returnToAnalystModalLabel">
+                    <i class="bi bi-arrow-counterclockwise me-2"></i>Return to Analyst
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="returnToAnalystForm" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <p class="mb-3">Return test <strong id="returnTestName"></strong> to analyst <strong id="returnAnalystName"></strong> for correction?</p>
+                    <div class="mb-3">
+                        <label for="returnComment" class="form-label">Comment <span class="text-muted">(optional)</span></label>
+                        <textarea id="returnComment" name="return_comment" class="form-control" rows="3"
+                                  placeholder="Add a comment for the analyst (optional)…"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Return to Analyst
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {# ── Test-selection modal (shown when analyst clicks "Submit Report") ── #}
 <div class="modal fade" id="testSelectionModal" tabindex="-1"
      aria-labelledby="testSelectionModalLabel" aria-hidden="true">
@@ -1230,6 +1267,27 @@
             window.location.href = baseUrl + '?pre_selected=' + ids.join(',');
         });
     }
+})();
+</script>
+
+<script>
+(function () {
+    'use strict';
+    var returnModal = document.getElementById('returnToAnalystModal');
+    var returnForm  = document.getElementById('returnToAnalystForm');
+    var returnTestNameEl   = document.getElementById('returnTestName');
+    var returnAnalystNameEl = document.getElementById('returnAnalystName');
+    var returnCommentEl = document.getElementById('returnComment');
+
+    document.querySelectorAll('.open-return-modal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            returnTestNameEl.textContent   = this.dataset.testName   || '';
+            returnAnalystNameEl.textContent = this.dataset.analystName || 'Analyst';
+            returnForm.action = this.dataset.actionUrl;
+            returnCommentEl.value = '';
+            bootstrap.Modal.getOrCreateInstance(returnModal).show();
+        });
+    });
 })();
 </script>
 {% endblock %}

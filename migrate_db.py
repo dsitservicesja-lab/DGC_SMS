@@ -114,6 +114,8 @@ MIGRATIONS = [
     ('samples', 'decertify_reason', 'TEXT'),
     ('samples', 'reissued_at', 'DATETIME'),
     ('samples', 'reissued_by', 'INTEGER REFERENCES users(id)'),
+    # return-to-analyst comment (ad-hoc return from sample detail page)
+    ('sample_assignments', 'return_to_analyst_comments', 'TEXT'),
 ]
 
 NEW_TABLES = [

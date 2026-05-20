@@ -605,6 +605,11 @@ class SampleAssignment(db.Model):
     comments = db.Column(db.Text, nullable=True)
     quantity_volume = db.Column(db.String(100), nullable=True)
 
+    # Optional comment left when a Senior Chemist returns the assignment from
+    # the sample detail page (distinct from review_comments set during the
+    # formal Senior Chemist review form).
+    return_to_analyst_comments = db.Column(db.Text, nullable=True)
+
     # Relationships
     assigner = db.relationship(
         'User', foreign_keys=[assigned_by], backref='made_assignments'
