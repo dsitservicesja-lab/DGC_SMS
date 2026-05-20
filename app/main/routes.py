@@ -3122,10 +3122,13 @@ def admin_dropdowns():
 
     from app.forms import DropdownConfigForm, DropdownBulkAddForm, DROPDOWN_CATEGORY_CHOICES
     category_filter = request.args.get('category', '')
+    page = request.args.get('page', 1, type=int)
     q = DropdownConfig.query
     if category_filter:
         q = q.filter_by(category=category_filter)
-    items = q.order_by(DropdownConfig.category, db.func.lower(DropdownConfig.label), DropdownConfig.label).all()
+    pagination = q.order_by(
+        DropdownConfig.category, db.func.lower(DropdownConfig.label), DropdownConfig.label
+    ).paginate(page=page, per_page=25, error_out=False)
     # All items (unfiltered) used by the JS category preview in the add form
     all_items = DropdownConfig.query.order_by(
         DropdownConfig.category, db.func.lower(DropdownConfig.label), DropdownConfig.label
@@ -3134,10 +3137,11 @@ def admin_dropdowns():
     bulk_form = DropdownBulkAddForm()
     return render_template(
         'admin/dropdowns.html',
-        items=items, form=form, bulk_form=bulk_form,
+        items=pagination.items, form=form, bulk_form=bulk_form,
         category_filter=category_filter,
         category_choices=DROPDOWN_CATEGORY_CHOICES,
         all_items=all_items,
+        pagination=pagination,
     )
 
 
