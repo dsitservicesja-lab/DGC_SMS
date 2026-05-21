@@ -60,6 +60,8 @@ def _save_file(file_storage):
     return stored, original
 
 
+from wtforms import SelectMultipleField as _SelectMultipleField
+
 _DROPDOWN_FIELD_CATEGORIES = [
     ('formulation_type', 'formulation_type', '-- Select Formulation --'),
     ('active_ingredient', 'api', '-- Select API --'),
@@ -80,7 +82,10 @@ def _apply_dropdown_choices(form):
             continue
         db_choices = DropdownConfig.choices_for(category)
         if db_choices:
-            field.choices = [('', blank_label)] + db_choices
+            if isinstance(field, _SelectMultipleField):
+                field.choices = db_choices
+            else:
+                field.choices = [('', blank_label)] + db_choices
 
 
 def _get_field(form, name):
@@ -89,6 +94,16 @@ def _get_field(form, name):
     if field is None:
         return None
     return field.data or None
+
+
+def _serialize_apis(value):
+    """Convert a list of API strings (from SelectMultipleField) or a plain string
+    to a comma-separated string suitable for storage, or None if empty.
+    """
+    if isinstance(value, list):
+        joined = ', '.join(v for v in value if v)
+        return joined or None
+    return value or None
 
 
 def _add_history(sample, action, details=None, action_type=None,
@@ -453,7 +468,7 @@ def register():
             sample.formulation_type = ft
         ai = _get_field(form, 'active_ingredient')
         if ai:
-            sample.active_ingredient = ai
+            sample.active_ingredient = _serialize_apis(ai)
         at = _get_field(form, 'alcohol_type')
         if at:
             sample.alcohol_type = at
@@ -613,7 +628,12 @@ def edit(sample_id):
         form.sample_type.data = sample.sample_type.name
         form.lab_number.data = sample.lab_number
         if sample.active_ingredient:
-            form.active_ingredient.data = sample.active_ingredient
+            if isinstance(form.active_ingredient, _SelectMultipleField):
+                form.active_ingredient.data = [
+                    v.strip() for v in sample.active_ingredient.split(',') if v.strip()
+                ]
+            else:
+                form.active_ingredient.data = sample.active_ingredient
     if form.validate_on_submit():
         new_lab_number = form.lab_number.data.strip()
         if new_lab_number != sample.lab_number:
@@ -634,7 +654,7 @@ def edit(sample_id):
         sample.patient_name = form.patient_name.data
         sample.source = form.source.data
         sample.formulation_type = form.formulation_type.data
-        sample.active_ingredient = form.active_ingredient.data or None
+        sample.active_ingredient = _serialize_apis(form.active_ingredient.data)
         sample.alcohol_type = form.alcohol_type.data if form.alcohol_type.data else None
         sample.claim_butt_number = form.claim_butt_number.data
         sample.batch_lot_number = form.batch_lot_number.data or None

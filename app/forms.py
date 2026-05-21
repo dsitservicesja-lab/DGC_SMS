@@ -168,6 +168,9 @@ API_CHOICES = _sort_choices([
     ('Other', 'Other'),
 ])
 
+# API choices without blank entry – used for the multi-select field
+API_CHOICES_MULTI = [c for c in API_CHOICES if c[0]]
+
 # Toxicology sample type choices (replaces Sample Name for Toxicology)
 TOXICOLOGY_SAMPLE_TYPE_CHOICES = _sort_choices([
     ('', '-- Select Sample Type --'),
@@ -539,10 +542,11 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
-    active_ingredient = SelectField(
+    active_ingredient = SelectMultipleField(
         'Active Pharmaceutical Ingredient (API)',
-        choices=API_CHOICES,
+        choices=API_CHOICES_MULTI,
         validators=[Optional()],
+        validate_choice=False,
     )
     lot_number = StringField(
         'Lot Number',
@@ -682,10 +686,11 @@ class SampleEditForm(FlaskForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
-    active_ingredient = SelectField(
+    active_ingredient = SelectMultipleField(
         'Active Pharmaceutical Ingredient (API)',
-        choices=API_CHOICES,
+        choices=API_CHOICES_MULTI,
         validators=[Optional()],
+        validate_choice=False,
     )
     alcohol_type = SelectField(
         'Alcohol Type',

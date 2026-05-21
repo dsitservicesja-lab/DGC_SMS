@@ -70,7 +70,8 @@
                         </div>
                         <div class="col-md-8">
                             {{ form.active_ingredient.label(class="form-label fw-semibold") }}
-                            {{ form.active_ingredient(class="form-select") }}
+                            {{ form.active_ingredient(class="form-select", size="6") }}
+                            <div class="form-text">Hold <kbd>Ctrl</kbd> (or <kbd>⌘ Cmd</kbd> on Mac) to select multiple APIs.</div>
                         </div>
                         <div class="col-md-4">
                             {{ form.alcohol_type.label(class="form-label fw-semibold") }}
