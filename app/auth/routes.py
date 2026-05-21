@@ -359,3 +359,104 @@ def active_users():
         online_users=online,
         threshold_minutes=_ONLINE_THRESHOLD_MINUTES,
     )
+
+
+# ---------------------------------------------------------------------------
+# Roles & Permissions matrix (Admin only)
+# ---------------------------------------------------------------------------
+
+# Mapping from Role → set of Permission values that the role inherently has
+# (before any per-user extra grants are applied).  Used for the read-only
+# reference matrix.
+_ROLE_INHERENT_PERMISSIONS: dict[Role, set[Permission]] = {
+    Role.ADMIN: set(Permission),          # Admin has ALL permissions
+    Role.HOD: {
+        Permission.REGISTER_SAMPLE,
+        Permission.EDIT_SAMPLE,
+        Permission.ASSIGN_SAMPLE,
+        Permission.SUBMIT_REPORT,
+        Permission.PRELIMINARY_REVIEW,
+        Permission.TECHNICAL_REVIEW,
+        Permission.HOD_REVIEW,
+        Permission.MULTI_ANALYST_ASSIGN,
+        Permission.COA_DECERTIFY_REISSUE,
+        Permission.OOS_FLAG,
+        Permission.KPI_VIEW,
+        Permission.INVOICE_GENERATE,
+        Permission.MANAGE_DROPDOWNS,
+    },
+    Role.DEPUTY: {
+        Permission.DEPUTY_REVIEW,
+        Permission.COA_DECERTIFY_REISSUE,
+        Permission.SUBMIT_REPORT,
+    },
+    Role.SENIOR_CHEMIST: {
+        Permission.REGISTER_SAMPLE,
+        Permission.EDIT_SAMPLE,
+        Permission.ASSIGN_SAMPLE,
+        Permission.SUBMIT_REPORT,
+        Permission.PRELIMINARY_REVIEW,
+        Permission.TECHNICAL_REVIEW,
+        Permission.MULTI_ANALYST_ASSIGN,
+    },
+    Role.OFFICER: {
+        Permission.REGISTER_SAMPLE,
+        Permission.EDIT_SAMPLE,
+        Permission.ASSIGN_SAMPLE,
+        Permission.SUBMIT_REPORT,
+        Permission.INVOICE_GENERATE,
+    },
+    Role.CHEMIST: {
+        Permission.SUBMIT_REPORT,
+    },
+    Role.GOVT_CHEMIST_ASSISTANT: {
+        Permission.SUBMIT_REPORT,
+    },
+    Role.SUPER_ADMIN: set(Permission),    # SuperAdmin has ALL permissions
+    # Procurement / Stores Management roles — no inherent permissions in the
+    # current sample-management system; their capabilities are reserved for
+    # the procurement module and can be extended here as that module grows.
+    Role.VIEWER: set(),
+    Role.REQUESTOR: set(),
+    Role.DIRECTOR_HRM: set(),
+    Role.DIRECTOR_PROCUREMENT: set(),
+    Role.EVALUATION_COMMITTEE: set(),
+    Role.FINANCE_OFFICER: set(),
+    Role.PROCUREMENT_COMMITTEE: set(),
+    Role.PROCUREMENT_OFFICER: set(),
+    Role.PROPERTY_MANAGEMENT: set(),
+}
+
+
+@auth_bp.route('/roles-permissions')
+@login_required
+def roles_permissions():
+    if not current_user.has_role(Role.ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    all_users = User.query.filter_by(is_active_user=True).all()
+
+    # Count of active users per role
+    role_user_counts: dict[Role, int] = {
+        role: sum(1 for u in all_users if role in u.roles)
+        for role in Role
+    }
+
+    # Count of active users who have been explicitly granted each permission
+    permission_user_counts: dict[Permission, int] = {
+        perm: sum(1 for u in all_users if perm in u.permissions)
+        for perm in Permission
+    }
+
+    # Alphabetically sorted roles by display_name for column order
+    sorted_roles = sorted(Role, key=lambda r: r.display_name)
+
+    return render_template(
+        'auth/roles_permissions.html',
+        roles=sorted_roles,
+        permissions=list(Permission),
+        role_user_counts=role_user_counts,
+        permission_user_counts=permission_user_counts,
+        inherent=_ROLE_INHERENT_PERMISSIONS,
+    )

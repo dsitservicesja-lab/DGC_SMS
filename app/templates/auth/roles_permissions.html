@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Roles &amp; Permissions - DGC SMS{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h2><i class="bi bi-shield-lock"></i> Roles &amp; Permissions</h2>
+    <a href="{{ url_for('auth.user_list') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-people me-1"></i>Manage Users
+    </a>
+</div>
+
+<div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    This matrix shows the <strong>inherent permissions</strong> each role carries by default
+    (&#9679; = included).  Admins can also grant individual users extra permissions beyond
+    what their role provides — those are shown in the <em>Users</em> column.
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" style="min-width: max-content;">
+            <thead>
+                <tr>
+                    <th style="min-width: 220px;">Permission</th>
+                    {% for role in roles %}
+                    <th class="text-center" style="min-width: 80px;" title="{{ role.display_name }}">
+                        {{ role.display_name }}
+                    </th>
+                    {% endfor %}
+                    <th class="text-center" style="min-width: 70px;">Users</th>
+                    <th style="min-width: 90px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for perm in permissions %}
+                <tr>
+                    <td class="fw-semibold">{{ perm.value }}</td>
+                    {% for role in roles %}
+                    <td class="text-center">
+                        {% if perm in inherent.get(role, set()) %}
+                        <span class="text-success fw-bold" title="{{ role.display_name }} has this permission by default"
+                              style="font-size: 1.1rem;">&#9679;</span>
+                        {% else %}
+                        <span class="text-muted" title="{{ role.display_name }} does not have this permission by default"
+                              style="font-size: .85rem;">&#9675;</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                    <td class="text-center">
+                        {% set user_count = permission_user_counts.get(perm, 0) %}
+                        {% if user_count > 0 %}
+                        <span class="badge bg-warning text-dark"
+                              title="{{ user_count }} user(s) have been explicitly granted this permission">
+                            {{ user_count }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted small">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('auth.user_list') }}"
+                           class="btn btn-sm btn-outline-primary"
+                           title="Manage users with this permission">
+                            <i class="bi bi-people"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Role summary cards -->
+<h5 class="mt-4 mb-3 text-muted"><i class="bi bi-person-badge me-1"></i>Active Users per Role</h5>
+<div class="row g-3">
+    {% for role in roles %}
+    {% set count = role_user_counts.get(role, 0) %}
+    <div class="col-6 col-md-4 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="flex-grow-1">
+                    <div class="small fw-semibold text-truncate" title="{{ role.display_name }}">
+                        {{ role.display_name }}
+                    </div>
+                    <div class="text-muted small">{{ count }} active user{{ 's' if count != 1 else '' }}</div>
+                </div>
+                <span class="badge {% if count > 0 %}bg-success{% else %}bg-secondary{% endif %} fs-6">
+                    {{ count }}
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
