@@ -200,7 +200,11 @@
                             {% endif %}
                             {% if sample.active_ingredient %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">API (Active Ingredient)</dt>
-                            <dd class="mb-0">{{ sample.active_ingredient }}</dd>
+                            <dd class="mb-0">
+                                {% for api in sample.active_ingredient.split(',') if api.strip() %}
+                                <span class="badge bg-secondary me-1">{{ api.strip() }}</span>
+                                {% endfor %}
+                            </dd>
                             {% endif %}
                         </dl>
                     </div>
