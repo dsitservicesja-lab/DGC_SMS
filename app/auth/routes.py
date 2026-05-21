@@ -413,6 +413,18 @@ _ROLE_INHERENT_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.SUBMIT_REPORT,
     },
     Role.SUPER_ADMIN: set(Permission),    # SuperAdmin has ALL permissions
+    # Procurement / Stores Management roles — no inherent permissions in the
+    # current sample-management system; their capabilities are reserved for
+    # the procurement module and can be extended here as that module grows.
+    Role.VIEWER: set(),
+    Role.REQUESTOR: set(),
+    Role.DIRECTOR_HRM: set(),
+    Role.DIRECTOR_PROCUREMENT: set(),
+    Role.EVALUATION_COMMITTEE: set(),
+    Role.FINANCE_OFFICER: set(),
+    Role.PROCUREMENT_COMMITTEE: set(),
+    Role.PROCUREMENT_OFFICER: set(),
+    Role.PROPERTY_MANAGEMENT: set(),
 }
 
 

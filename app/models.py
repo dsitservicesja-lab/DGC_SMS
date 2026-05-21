@@ -60,7 +60,12 @@ class Role(enum.Enum):
 
     @property
     def display_name(self):
-        """Full display name for the role, used in UI labels."""
+        """Full display name for the role, used in UI labels.
+
+        Most roles use their enum value as-is; this dict provides
+        overrides only where the stored value differs from the desired
+        display name (e.g. 'Deputy' is shown as 'Deputy Government Chemist').
+        """
         _names = {
             'Deputy': 'Deputy Government Chemist',
         }
