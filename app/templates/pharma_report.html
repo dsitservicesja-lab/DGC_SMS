@@ -71,6 +71,11 @@
                     <label class="form-check-label small" for="oos_filter">OOS Only</label>
                 </div>
             </div>
+            <div class="col-sm-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Search</label>
+                <input type="text" name="search" class="form-control form-control-sm"
+                       placeholder="Lab number or sample name…" value="{{ search }}">
+            </div>
             <div class="col-sm-auto">
                 <button type="submit" class="btn btn-primary btn-sm">Filter</button>
                 <a href="{{ url_for('main.pharma_report', year=year) }}" class="btn btn-outline-secondary btn-sm">Clear</a>
@@ -231,19 +236,19 @@
         <nav aria-label="Pharmaceutical report pagination">
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                    <a class="page-link" href="{{ url_for('main.pharma_report', year=year, quarter=quarter, month=month, status=status_filter, date_reported_from=date_reported_from, date_reported_to=date_reported_to, oos=oos_filter, page=page - 1) }}">&laquo;</a>
+                    <a class="page-link" href="{{ url_for('main.pharma_report', year=year, quarter=quarter, month=month, status=status_filter, date_reported_from=date_reported_from, date_reported_to=date_reported_to, oos=oos_filter, search=search, page=page - 1) }}">&laquo;</a>
                 </li>
                 {% for p in range(1, total_pages + 1) %}
                 {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
                 <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('main.pharma_report', year=year, quarter=quarter, month=month, status=status_filter, date_reported_from=date_reported_from, date_reported_to=date_reported_to, oos=oos_filter, page=p) }}">{{ p }}</a>
+                    <a class="page-link" href="{{ url_for('main.pharma_report', year=year, quarter=quarter, month=month, status=status_filter, date_reported_from=date_reported_from, date_reported_to=date_reported_to, oos=oos_filter, search=search, page=p) }}">{{ p }}</a>
                 </li>
                 {% elif p == page - 3 or p == page + 3 %}
                 <li class="page-item disabled"><span class="page-link">…</span></li>
                 {% endif %}
                 {% endfor %}
                 <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                    <a class="page-link" href="{{ url_for('main.pharma_report', year=year, quarter=quarter, month=month, status=status_filter, date_reported_from=date_reported_from, date_reported_to=date_reported_to, oos=oos_filter, page=page + 1) }}">&raquo;</a>
+                    <a class="page-link" href="{{ url_for('main.pharma_report', year=year, quarter=quarter, month=month, status=status_filter, date_reported_from=date_reported_from, date_reported_to=date_reported_to, oos=oos_filter, search=search, page=page + 1) }}">&raquo;</a>
                 </li>
             </ul>
         </nav>

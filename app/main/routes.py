@@ -814,6 +814,7 @@ def pharma_report():
     date_reported_from = request.args.get('date_reported_from', '')  # Feature 8
     date_reported_to = request.args.get('date_reported_to', '')      # Feature 8
     oos_filter = request.args.get('oos', '')                          # Feature 4
+    search = request.args.get('search', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
@@ -861,6 +862,14 @@ def pharma_report():
                 SampleAssignment.oos_investigation.is_(True),
             )
         )
+
+    if search:
+        from sqlalchemy import or_
+        pattern = f'%{search}%'
+        q = q.filter(or_(
+            Sample.lab_number.ilike(pattern),
+            Sample.sample_name.ilike(pattern),
+        ))
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -920,6 +929,7 @@ def pharma_report():
         date_reported_from=date_reported_from,
         date_reported_to=date_reported_to,
         oos_filter=oos_filter,
+        search=search,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -1018,6 +1028,7 @@ def milk_report():
     status_filter = request.args.get('status', '')
     date_reported_from = request.args.get('date_reported_from', '')
     date_reported_to = request.args.get('date_reported_to', '')
+    search = request.args.get('search', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
@@ -1051,6 +1062,14 @@ def milk_report():
             ))
         except (ValueError, TypeError):
             pass
+
+    if search:
+        from sqlalchemy import or_
+        pattern = f'%{search}%'
+        q = q.filter(or_(
+            Sample.lab_number.ilike(pattern),
+            Sample.sample_name.ilike(pattern),
+        ))
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -1108,6 +1127,7 @@ def milk_report():
         status_filter=status_filter,
         date_reported_from=date_reported_from,
         date_reported_to=date_reported_to,
+        search=search,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -1207,6 +1227,7 @@ def toxicology_report():
     status_filter = request.args.get('status', '')
     date_reported_from = request.args.get('date_reported_from', '')
     date_reported_to = request.args.get('date_reported_to', '')
+    search = request.args.get('search', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
@@ -1240,6 +1261,15 @@ def toxicology_report():
             ))
         except (ValueError, TypeError):
             pass
+
+    if search:
+        from sqlalchemy import or_
+        pattern = f'%{search}%'
+        q = q.filter(or_(
+            Sample.lab_number.ilike(pattern),
+            Sample.sample_name.ilike(pattern),
+            Sample.patient_name.ilike(pattern),
+        ))
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -1295,6 +1325,7 @@ def toxicology_report():
         status_filter=status_filter,
         date_reported_from=date_reported_from,
         date_reported_to=date_reported_to,
+        search=search,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -1388,6 +1419,7 @@ def alcohol_report():
     status_filter = request.args.get('status', '')
     date_reported_from = request.args.get('date_reported_from', '')
     date_reported_to = request.args.get('date_reported_to', '')
+    search = request.args.get('search', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_ALCOHOL,
@@ -1421,6 +1453,14 @@ def alcohol_report():
             ))
         except (ValueError, TypeError):
             pass
+
+    if search:
+        from sqlalchemy import or_
+        pattern = f'%{search}%'
+        q = q.filter(or_(
+            Sample.lab_number.ilike(pattern),
+            Sample.sample_name.ilike(pattern),
+        ))
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -1496,6 +1536,7 @@ def alcohol_report():
         status_filter=status_filter,
         date_reported_from=date_reported_from,
         date_reported_to=date_reported_to,
+        search=search,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -1665,6 +1706,7 @@ def analyst_report():
     quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
     branch_filter = request.args.get('branch', '')
     analyst_id = request.args.get('analyst_id', type=int, default=0)
+    search = request.args.get('search', '').strip()
 
     # Build base query on assignments
     q = SampleAssignment.query.join(
@@ -1713,6 +1755,9 @@ def analyst_report():
         analyst_list = sorted(analyst_data.values(), key=lambda x: x['total'], reverse=reverse)
     else:
         analyst_list = sorted(analyst_data.values(), key=lambda x: x['completed'], reverse=reverse)
+
+    if search:
+        analyst_list = [a for a in analyst_list if search.lower() in a['name'].lower()]
 
     # Pagination for the analyst summary table (Python-level)
     SUMMARY_PER_PAGE = 20
@@ -1779,6 +1824,7 @@ def analyst_report():
         year=year,
         quarter=quarter,
         branch_filter=branch_filter,
+        search=search,
         available_years=available_years,
         total_assignments=total_assignments,
         total_completed=total_completed,
