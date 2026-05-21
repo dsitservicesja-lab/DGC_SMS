@@ -46,6 +46,25 @@ class Role(enum.Enum):
     HOD = 'HOD'
     ADMIN = 'Admin'
     GOVT_CHEMIST_ASSISTANT = 'GC Assistant'
+    # Procurement / Stores Management roles
+    SUPER_ADMIN = 'SuperAdmin'
+    VIEWER = 'Viewer'
+    REQUESTOR = 'Requestor'
+    DIRECTOR_HRM = 'Director HRM&A'
+    DIRECTOR_PROCUREMENT = 'Director Procurement'
+    EVALUATION_COMMITTEE = 'Evaluation Committee Member'
+    FINANCE_OFFICER = 'Finance Officer'
+    PROCUREMENT_COMMITTEE = 'Procurement Committee'
+    PROCUREMENT_OFFICER = 'Procurement Officer'
+    PROPERTY_MANAGEMENT = 'Property Management Officer'
+
+    @property
+    def display_name(self):
+        """Full display name for the role, used in UI labels."""
+        _names = {
+            'Deputy': 'Deputy Government Chemist',
+        }
+        return _names.get(self.value, self.value)
 
 
 class Branch(enum.Enum):
