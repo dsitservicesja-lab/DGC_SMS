@@ -37,7 +37,7 @@
                     <td class="fw-semibold">{{ perm.value }}</td>
                     {% for role in roles %}
                     <td class="text-center">
-                        {% if perm in inherent.get(role, set()) %}
+                        {% if perm in inherent.get(role, []) %}
                         <span class="text-success fw-bold" title="{{ role.display_name }} has this permission by default"
                               style="font-size: 1.1rem;">&#9679;</span>
                         {% else %}
