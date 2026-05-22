@@ -164,22 +164,31 @@ def _can_show_submit_to_deputy(sample):
 def sample_list():
     query = Sample.query
 
+    status_filters = request.args.getlist('status')
     # Basic filters
     status_filter = request.args.get('status')
-    type_filter   = request.args.get('type')
-    search        = request.args.get('q', '').strip()
+    type_filter = request.args.get('type')
+    search = request.args.get('q', '').strip()
+    sort_by = request.args.get('sort', 'date_received')
+    sort_dir = request.args.get('dir', 'desc').lower()
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
+    if not per_page or per_page < 1:
+        per_page = 25
 
     # Advanced filters
-    adv_sample_name    = request.args.get('sample_name', '').strip()
-    adv_formulation    = request.args.get('formulation_type', '').strip()
-    adv_api            = request.args.get('api', '').strip()
-    adv_source         = request.args.get('source', '').strip()
-    adv_parish         = request.args.get('parish', '').strip()
-    adv_milk_type      = request.args.get('milk_type', '').strip()
-    adv_hospital       = request.args.get('hospital', '').strip()
-    adv_tox_type       = request.args.get('tox_sample_type', '').strip()
-    adv_patient_name   = request.args.get('patient_name', '').strip()
-    adv_alcohol_type   = request.args.get('alcohol_type', '').strip()
+    adv_sample_name = request.args.get('sample_name', '').strip()
+    adv_formulation = request.args.get('formulation_type', '').strip()
+    adv_api = request.args.get('api', '').strip()
+    adv_source = request.args.get('source', '').strip()
+    adv_parish = request.args.get('parish', '').strip()
+    adv_milk_type = request.args.get('milk_type', '').strip()
+    adv_hospital = request.args.get('hospital', '').strip()
+    adv_tox_type = request.args.get('tox_sample_type', '').strip()
+    adv_patient_name = request.args.get('patient_name', '').strip()
+    adv_alcohol_type = request.args.get('alcohol_type', '').strip()
 
     if len(status_filters) > 1:
         valid_statuses = []
@@ -244,8 +253,41 @@ def sample_list():
         # Senior Chemists see samples in their branch(es)
         query = query.filter(Sample.sample_type.in_(current_user.branches))
 
-    samples = query.order_by(Sample.date_registered.desc()).all()
-    result_count = len(samples)
+    sort_columns = {
+        'lab_number': Sample.lab_number,
+        'sample_name': Sample.sample_name,
+        'date_received': Sample.date_received,
+        'status': Sample.status,
+    }
+    sort_col = sort_columns.get(sort_by, Sample.date_received)
+    order_clause = sort_col.asc() if sort_dir == 'asc' else sort_col.desc()
+
+    result_count = query.count()
+    pagination = query.order_by(order_clause).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    # Working-day remaining TAT by row for list badges
+    today = date.today()
+    tat_remaining = {}
+    horizon_start = today - timedelta(days=365)
+    horizon_end = today + timedelta(days=365)
+    non_working = fetch_non_working_days(horizon_start, horizon_end)
+    for s in pagination.items:
+        if not s.expected_report_date:
+            tat_remaining[s.id] = None
+            continue
+        if s.expected_report_date == today:
+            tat_remaining[s.id] = 0
+            continue
+        if s.expected_report_date > today:
+            tat_remaining[s.id] = calculate_working_days(
+                today, s.expected_report_date, non_working
+            )
+        else:
+            tat_remaining[s.id] = -calculate_working_days(
+                s.expected_report_date, today, non_working
+            )
 
     adv_filters = {
         'sample_name': adv_sample_name,
@@ -267,6 +309,9 @@ def sample_list():
         pagination=pagination,
         SampleStatus=SampleStatus,
         Branch=Branch,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        tat_remaining=tat_remaining,
         status_filter=status_filter,
         status_filters=status_filters,
         type_filter=type_filter,
