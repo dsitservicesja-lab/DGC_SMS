@@ -21,6 +21,7 @@ from app.models import (
     fiscal_quarter_months, fiscal_year_date_range,
     SupportingDocument, ReviewHistory, AuditLog,
     user_roles, user_branches, user_permissions,
+    CustomRole, custom_role_permissions, user_custom_roles,
     DeleteRequest, DirectMessage,
     Invoice, InvoiceItem, DropdownConfig,
 )
@@ -2626,6 +2627,9 @@ def export_data():
             'user_roles': _assoc_table_to_dicts(user_roles),
             'user_branches': _assoc_table_to_dicts(user_branches),
             'user_permissions': _assoc_table_to_dicts(user_permissions),
+            'custom_roles': _table_to_dicts(CustomRole),
+            'custom_role_permissions': _assoc_table_to_dicts(custom_role_permissions),
+            'user_custom_roles': _assoc_table_to_dicts(user_custom_roles),
             'settings': _table_to_dicts(Setting),
             'samples': _table_to_dicts(Sample),
             'sample_assignments': _table_to_dicts(SampleAssignment),
@@ -2726,6 +2730,7 @@ def _coerce_row(table_name, row):
         'user_roles': {'role': Role},
         'user_branches': {'branch': Branch},
         'user_permissions': {'permission': Permission},
+        'custom_role_permissions': {'permission': Permission},
         'samples': {
             'sample_type': Branch,
             'status': SampleStatus,
@@ -2827,6 +2832,9 @@ def import_data():
         db.session.execute(user_roles.delete())
         db.session.execute(user_branches.delete())
         db.session.execute(user_permissions.delete())
+        db.session.execute(custom_role_permissions.delete())
+        db.session.execute(user_custom_roles.delete())
+        CustomRole.query.delete()
         User.query.delete()
         db.session.flush()
 
@@ -2875,6 +2883,30 @@ def import_data():
                 db.session.execute(user_permissions.insert().values(
                     user_id=row['user_id'], permission=row['permission']
                 ))
+
+        for row in tables.get('custom_roles', []):
+            cr = CustomRole(
+                id=row.get('id'),
+                name=row['name'],
+                description=row.get('description'),
+                created_at=_parse_datetime(row.get('created_at')),
+            )
+            db.session.add(cr)
+        db.session.flush()
+
+        for row in tables.get('custom_role_permissions', []):
+            row = _coerce_row('custom_role_permissions', row)
+            if row.get('permission') is not None:
+                db.session.execute(custom_role_permissions.insert().values(
+                    custom_role_id=row['custom_role_id'],
+                    permission=row['permission'],
+                ))
+
+        for row in tables.get('user_custom_roles', []):
+            db.session.execute(user_custom_roles.insert().values(
+                user_id=row['user_id'],
+                custom_role_id=row['custom_role_id'],
+            ))
         db.session.flush()
 
         # 3. Settings

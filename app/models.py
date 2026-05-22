@@ -126,6 +126,80 @@ user_permissions = db.Table(
     db.Column('permission', db.Enum(Permission), primary_key=True),
 )
 
+custom_role_permissions = db.Table(
+    'custom_role_permissions',
+    db.Column(
+        'custom_role_id',
+        db.Integer,
+        db.ForeignKey('custom_roles.id', ondelete='CASCADE'),
+        primary_key=True,
+    ),
+    db.Column('permission', db.Enum(Permission), primary_key=True),
+)
+
+user_custom_roles = db.Table(
+    'user_custom_roles',
+    db.Column(
+        'user_id',
+        db.Integer,
+        db.ForeignKey('users.id', ondelete='CASCADE'),
+        primary_key=True,
+    ),
+    db.Column(
+        'custom_role_id',
+        db.Integer,
+        db.ForeignKey('custom_roles.id', ondelete='CASCADE'),
+        primary_key=True,
+    ),
+)
+
+
+class CustomRole(db.Model):
+    __tablename__ = 'custom_roles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=jamaica_now)
+
+    users = db.relationship(
+        'User',
+        secondary=user_custom_roles,
+        back_populates='custom_roles_rel',
+        lazy='selectin',
+    )
+
+    @property
+    def permissions(self):
+        rows = db.session.execute(
+            select(custom_role_permissions).where(
+                custom_role_permissions.c.custom_role_id == self.id
+            )
+        ).fetchall()
+        return {row.permission for row in rows}
+
+    @permissions.setter
+    def permissions(self, values):
+        db.session.execute(
+            delete(custom_role_permissions).where(
+                custom_role_permissions.c.custom_role_id == self.id
+            )
+        )
+        for p in set(values or []):
+            db.session.execute(
+                insert(custom_role_permissions).values(
+                    custom_role_id=self.id,
+                    permission=p,
+                )
+            )
+
+    @property
+    def display_name(self):
+        return self.name
+
+    def __repr__(self):
+        return f'<CustomRole {self.name}>'
+
 
 class SampleStatus(enum.Enum):
     REGISTERED = 'Registered'
@@ -192,6 +266,12 @@ class User(UserMixin, db.Model):
     assignments = db.relationship(
         'SampleAssignment', backref='chemist', lazy='dynamic',
         foreign_keys='SampleAssignment.chemist_id'
+    )
+    custom_roles_rel = db.relationship(
+        'CustomRole',
+        secondary=user_custom_roles,
+        back_populates='users',
+        lazy='selectin',
     )
 
     # Maximum failed attempts before account is temporarily locked
@@ -326,12 +406,16 @@ class User(UserMixin, db.Model):
         Admin users always have all permissions."""
         if self.has_role(Role.ADMIN):
             return True
-        return permission in self.permissions
+        if permission in self.permissions:
+            return True
+        return any(permission in cr.permissions for cr in self.custom_roles_rel)
 
     @property
     def role_names(self):
         """Comma-separated display of roles."""
-        return ', '.join(sorted(r.value for r in self.roles)) or '—'
+        names = {r.value for r in self.roles}
+        names.update(cr.name for cr in self.custom_roles_rel)
+        return ', '.join(sorted(names)) or '—'
 
     @property
     def branch_names(self):

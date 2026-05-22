@@ -27,6 +27,9 @@ def _verify_schema_compatibility(app):
         'users': {'is_active_user', 'must_change_password'},
         'samples': {'api', 'expected_report_date', 'sample_name', 'status'},
         'user_permissions': set(),
+        'custom_roles': {'name'},
+        'custom_role_permissions': {'custom_role_id', 'permission'},
+        'user_custom_roles': {'user_id', 'custom_role_id'},
     }
 
     engine = db.engine

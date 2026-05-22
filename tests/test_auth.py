@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-from app.models import User, Role
+from app import db
+from app.models import User, Role, Permission, CustomRole
 from tests.conftest import _create_user, _login
 
 
@@ -144,3 +145,67 @@ def test_session_expires_after_lifetime(app, client):
     set_cookie = resp.headers.get('Set-Cookie', '')
     assert 'Expires=' in set_cookie or 'Max-Age=' in set_cookie, \
         "Session cookie must have an expiry for timeout to work"
+
+
+def test_admin_can_create_custom_role(app, client):
+    with app.app_context():
+        _create_user(role=Role.ADMIN, username='admin')
+    _login(client, username='admin')
+
+    resp = client.post('/auth/roles-permissions', data={
+        'action': 'create_custom_role',
+        'role_name': 'Lab Liaison',
+        'role_description': 'Coordinates with external labs',
+        'permissions': [Permission.EDIT_SAMPLE.name, Permission.ASSIGN_SAMPLE.name],
+    }, follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b'created' in resp.data.lower()
+    with app.app_context():
+        role = CustomRole.query.filter_by(name='Lab Liaison').first()
+        assert role is not None
+        assert Permission.EDIT_SAMPLE in role.permissions
+        assert Permission.ASSIGN_SAMPLE in role.permissions
+
+
+def test_admin_can_delete_unassigned_custom_role(app, client):
+    with app.app_context():
+        _create_user(role=Role.ADMIN, username='admin')
+        role = CustomRole(name='Temporary Role')
+        db.session.add(role)
+        db.session.commit()
+        role_id = role.id
+    _login(client, username='admin')
+
+    resp = client.post('/auth/roles-permissions', data={
+        'action': 'delete_custom_role',
+        'role_id': role_id,
+    }, follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b'deleted' in resp.data.lower()
+    with app.app_context():
+        assert db.session.get(CustomRole, role_id) is None
+
+
+def test_admin_cannot_delete_assigned_custom_role(app, client):
+    with app.app_context():
+        _create_user(role=Role.ADMIN, username='admin')
+        user = _create_user(role=Role.CHEMIST, username='chemist')
+        role = CustomRole(name='Assigned Role')
+        db.session.add(role)
+        db.session.flush()
+        user.custom_roles_rel = [role]
+        db.session.commit()
+        role_id = role.id
+    _login(client, username='admin')
+
+    resp = client.post('/auth/roles-permissions', data={
+        'action': 'delete_custom_role',
+        'role_id': role_id,
+    }, follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b'cannot delete custom role' in resp.data.lower()
+    with app.app_context():
+        assert db.session.get(CustomRole, role_id) is not None

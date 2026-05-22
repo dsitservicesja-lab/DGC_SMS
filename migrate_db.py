@@ -152,6 +152,31 @@ NEW_TABLES = [
         ')',
     ),
     (
+        'custom_roles',
+        'CREATE TABLE IF NOT EXISTS custom_roles ('
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        '  name VARCHAR(120) NOT NULL UNIQUE,'
+        '  description VARCHAR(255),'
+        '  created_at DATETIME'
+        ')',
+    ),
+    (
+        'custom_role_permissions',
+        'CREATE TABLE IF NOT EXISTS custom_role_permissions ('
+        '  custom_role_id INTEGER NOT NULL REFERENCES custom_roles(id),'
+        '  permission VARCHAR(50) NOT NULL,'
+        '  PRIMARY KEY (custom_role_id, permission)'
+        ')',
+    ),
+    (
+        'user_custom_roles',
+        'CREATE TABLE IF NOT EXISTS user_custom_roles ('
+        '  user_id INTEGER NOT NULL REFERENCES users(id),'
+        '  custom_role_id INTEGER NOT NULL REFERENCES custom_roles(id),'
+        '  PRIMARY KEY (user_id, custom_role_id)'
+        ')',
+    ),
+    (
         'notifications',
         'CREATE TABLE IF NOT EXISTS notifications ('
         '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
