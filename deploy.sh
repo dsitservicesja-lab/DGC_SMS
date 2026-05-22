@@ -148,6 +148,37 @@ systemctl start nginx || {
     exit 1
 }
 
+echo "[post-check] Verifying dgc_sms service is active..."
+if ! systemctl is-active --quiet dgc_sms; then
+    echo "ERROR: dgc_sms service is not active. Recent logs:"
+    journalctl -u dgc_sms --no-pager -n 50 2>/dev/null || true
+    exit 1
+fi
+
+echo "[post-check] Verifying upstream responds on 127.0.0.1:8000..."
+if command -v curl &>/dev/null; then
+    if ! curl -fsS -o /dev/null http://127.0.0.1:8000/; then
+        echo "ERROR: Upstream app check failed on http://127.0.0.1:8000/."
+        journalctl -u dgc_sms --no-pager -n 50 2>/dev/null || true
+        exit 1
+    fi
+elif command -v wget &>/dev/null; then
+    if ! wget -q --spider http://127.0.0.1:8000/; then
+        echo "ERROR: Upstream app check failed on http://127.0.0.1:8000/."
+        journalctl -u dgc_sms --no-pager -n 50 2>/dev/null || true
+        exit 1
+    fi
+else
+    echo "WARNING: Neither curl nor wget is installed; skipping upstream HTTP check."
+fi
+
+echo "[post-check] Verifying nginx service is active..."
+if ! systemctl is-active --quiet nginx; then
+    echo "ERROR: nginx service is not active. Recent logs:"
+    journalctl -u nginx --no-pager -n 50 2>/dev/null || true
+    exit 1
+fi
+
 # Open port 8080 in the firewall if ufw is active
 if command -v ufw &>/dev/null && ufw status | grep -q "^Status: active"; then
     echo "  >> Opening port 8080/tcp in ufw..."

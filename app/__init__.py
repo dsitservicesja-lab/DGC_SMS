@@ -4,6 +4,7 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
+from sqlalchemy import inspect
 
 from config import config
 
@@ -14,6 +15,61 @@ login_manager.login_message_category = 'info'
 mail = Mail()
 migrate = Migrate()
 csrf = CSRFProtect()
+
+
+def _verify_schema_compatibility(app):
+    """Fail fast when the runtime DB schema is older than current code.
+
+    This avoids opaque 500s later in request handlers by validating a small set
+    of critical tables/columns at startup and raising a clear, actionable error.
+    """
+    required = {
+        'users': {'is_active_user', 'must_change_password'},
+        'samples': {'api', 'expected_report_date', 'sample_name', 'status'},
+        'user_permissions': set(),
+    }
+
+    engine = db.engine
+    inspector = inspect(engine)
+    missing_tables = []
+    missing_columns = {}
+
+    for table_name, required_cols in required.items():
+        if not inspector.has_table(table_name):
+            missing_tables.append(table_name)
+            continue
+        existing_cols = {c['name'] for c in inspector.get_columns(table_name)}
+        missing = sorted(required_cols - existing_cols)
+        if missing:
+            missing_columns[table_name] = missing
+
+    if not missing_tables and not missing_columns:
+        return
+
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    db_hint = '<db-path>'
+    if db_uri.startswith('sqlite:///'):
+        db_hint = db_uri.replace('sqlite:///', '', 1)
+
+    lines = [
+        'Database schema is out of date for this application version.',
+        '',
+    ]
+    if missing_tables:
+        lines.append(f"Missing tables: {', '.join(sorted(missing_tables))}")
+    if missing_columns:
+        lines.append('Missing columns:')
+        for table_name, cols in sorted(missing_columns.items()):
+            lines.append(f"  - {table_name}: {', '.join(cols)}")
+
+    lines.extend([
+        '',
+        'Action required:',
+        f"  1. Run migration: python migrate_db.py {db_hint}",
+        '  2. Restart app service: sudo systemctl restart dgc_sms',
+    ])
+
+    raise RuntimeError('\n'.join(lines))
 
 
 def create_app(config_name=None):
@@ -58,6 +114,8 @@ def create_app(config_name=None):
     # Ensure all database tables exist
     with app.app_context():
         db.create_all()
+        if config_name != 'testing':
+            _verify_schema_compatibility(app)
 
     # Register blueprints
     from app.auth import auth_bp
