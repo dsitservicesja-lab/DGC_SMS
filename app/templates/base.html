@@ -556,8 +556,17 @@
                         <span id="sidebar-msg-badge" class="ms-auto badge bg-primary d-none" style="font-size:.6rem;"></span>
                     </a>
                 </li>
-                {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) %}
+                {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) or current_user.has_permission(Permission.VIEW_ALL_BRANCHES_REPORT) %}
                 <li><div class="sidebar-section-label">Reports</div></li>
+                {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) or current_user.has_permission(Permission.VIEW_ALL_BRANCHES_REPORT) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.all_branches_report' %}active{% endif %}"
+                       href="{{ url_for('main.all_branches_report') }}">
+                        <i class="bi bi-layers"></i> All Branches Report
+                    </a>
+                </li>
+                {% endif %}
+                {% if current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD, Role.DEPUTY, Role.ADMIN) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.endpoint == 'main.analyst_report' %}active{% endif %}"
                        href="{{ url_for('main.analyst_report') }}">
@@ -600,6 +609,7 @@
                         <i class="bi bi-bar-chart-line"></i> KPI Monthly
                     </a>
                 </li>
+                {% endif %}
                 {% endif %}
 
                 {% if current_user.has_any_role(Role.ADMIN, Role.HOD, Role.DEPUTY) %}

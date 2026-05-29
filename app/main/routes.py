@@ -1631,6 +1631,187 @@ def kpi_toxicology():
 
 
 # ---------------------------------------------------------------------------
+# All Branches Combined Report
+# ---------------------------------------------------------------------------
+
+def _can_view_all_branches_report():
+    """Return True if the current user may view the all-branches report."""
+    return (
+        current_user.has_any_role(Role.SENIOR_CHEMIST, Role.HOD,
+                                  Role.DEPUTY, Role.ADMIN)
+        or current_user.has_permission(Permission.VIEW_ALL_BRANCHES_REPORT)
+    )
+
+
+@main_bp.route('/reports/all-branches')
+@login_required
+def all_branches_report():
+    """Combined report showing samples from all branches with carry-forward logic."""
+    if not _can_view_all_branches_report():
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int, default=_current_fiscal_year())
+    quarter = request.args.get('quarter', type=int, default=0)  # 0 = all
+    month = request.args.get('month', type=int, default=0)
+    status_filter = request.args.get('status', '')
+    branch_filter = request.args.get('branch', '')
+
+    q = Sample.query
+    # Carry forward uncertified samples from previous quarters
+    q = _apply_certified_quarter_filter(q, year, quarter, month)
+
+    if branch_filter:
+        try:
+            br = Branch[branch_filter]
+            q = q.filter(Sample.sample_type == br)
+        except KeyError:
+            pass
+
+    if status_filter:
+        try:
+            st = SampleStatus(status_filter)
+            q = q.filter(Sample.status == st)
+        except ValueError:
+            pass
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    total = len(samples)
+    certified = sum(
+        1 for s in samples
+        if s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)
+    )
+    in_progress = sum(
+        1 for s in samples
+        if s.status not in (
+            SampleStatus.CERTIFIED, SampleStatus.COMPLETED,
+            SampleStatus.REJECTED,
+        )
+    )
+    rejected = sum(1 for s in samples if s.status == SampleStatus.REJECTED)
+
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
+
+    sample_tat = {}
+    for s in samples:
+        if s.certified_at and s.date_registered and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED):
+            sample_tat[s.id] = calculate_working_days(s.date_registered, s.certified_at, non_working)
+        else:
+            sample_tat[s.id] = None
+
+    tat_days = [v for v in sample_tat.values() if v is not None]
+    avg_tat = round(sum(tat_days) / len(tat_days), 1) if tat_days else None
+
+    sample_ids = [s.id for s in samples]
+    out_of_spec_count = _out_of_spec_count_for_samples(sample_ids)
+    sample_resubmissions = _resubmission_counts_for_samples(sample_ids)
+
+    # Per-branch breakdown counts
+    branch_counts = {}
+    for br in Branch:
+        branch_counts[br] = sum(1 for s in samples if s.sample_type == br)
+
+    available_years = _available_fiscal_years()
+
+    page = request.args.get('page', 1, type=int)
+    total_pages = max(1, (total + REPORT_PER_PAGE - 1) // REPORT_PER_PAGE)
+    page = max(1, min(page, total_pages))
+    page_start = (page - 1) * REPORT_PER_PAGE
+    page_samples = samples[page_start:page_start + REPORT_PER_PAGE]
+
+    return render_template(
+        'all_branches_report.html',
+        samples=page_samples,
+        year=year,
+        quarter=quarter,
+        month=month,
+        status_filter=status_filter,
+        branch_filter=branch_filter,
+        available_years=available_years,
+        total=total,
+        certified=certified,
+        in_progress=in_progress,
+        rejected=rejected,
+        avg_tat=avg_tat,
+        out_of_spec_count=out_of_spec_count,
+        sample_tat=sample_tat,
+        sample_resubmissions=sample_resubmissions,
+        branch_counts=branch_counts,
+        Branch=Branch,
+        SampleStatus=SampleStatus,
+        page=page,
+        total_pages=total_pages,
+    )
+
+
+@main_bp.route('/reports/all-branches/download')
+@login_required
+def all_branches_report_download():
+    """Download all-branches report as CSV."""
+    if not _can_view_all_branches_report():
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    year = request.args.get('year', type=int, default=_current_fiscal_year())
+    quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
+    branch_filter = request.args.get('branch', '')
+
+    q = Sample.query
+    q = _apply_certified_quarter_filter(q, year, quarter, month)
+
+    if branch_filter:
+        try:
+            br = Branch[branch_filter]
+            q = q.filter(Sample.sample_type == br)
+        except KeyError:
+            pass
+
+    samples = q.order_by(Sample.date_registered.desc()).all()
+
+    fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
+    non_working = fetch_non_working_days(fy_start, fy_end)
+    sample_ids = [s.id for s in samples]
+    resubmissions = _resubmission_counts_for_samples(sample_ids)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        'Lab Number', 'Sample Name', 'Branch', 'Status',
+        'Date Received', 'Date Registered', 'Certified Date',
+        'Turnaround (working days)', 'Report Resubmissions', 'COA Version',
+    ])
+    for s in samples:
+        tat = ''
+        if (s.certified_at and s.date_registered
+                and s.status in (SampleStatus.CERTIFIED, SampleStatus.COMPLETED)):
+            tat = calculate_working_days(s.date_registered, s.certified_at, non_working) or ''
+        writer.writerow([
+            s.lab_number,
+            s.sample_name,
+            s.sample_type.value if s.sample_type else '',
+            s.status.value if s.status else '',
+            s.date_received.isoformat() if s.date_received else '',
+            s.date_registered.strftime('%Y-%m-%d') if s.date_registered else '',
+            s.certified_at.strftime('%Y-%m-%d') if s.certified_at else '',
+            tat,
+            resubmissions.get(s.id, 0),
+            s.coa_version if s.coa_version else 1,
+        ])
+
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else (f'_M{month}' if month else '')
+    b_label = f'_{branch_filter}' if branch_filter else ''
+    filename = f'AllBranches_Report_{year}{q_label}{b_label}.csv'
+    return Response(
+        buf.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Analyst Performance Report
 # ---------------------------------------------------------------------------
 
@@ -1956,6 +2137,15 @@ def settings():
                 if smtp_password_raw:
                     Setting.set('smtp_password', smtp_password_raw)
 
+        db.session.add(AuditLog(
+            action='SETTINGS_UPDATED',
+            entity_type='Setting',
+            entity_id=None,
+            entity_label='System Settings',
+            details=f'System settings updated by "{current_user.username}".',
+            performed_by=current_user.id,
+            performed_at=jamaica_now(),
+        ))
         db.session.commit()
         flash('Settings updated.', 'success')
         return redirect(url_for('main.settings'))

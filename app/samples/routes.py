@@ -485,6 +485,15 @@ def register():
                      f'Registered by {current_user.full_name}',
                      action_type='Original Submission',
                      object_affected='Sample')
+        db.session.add(AuditLog(
+            action='SAMPLE_REGISTERED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=f'Sample "{sample.lab_number}" registered by "{current_user.username}".',
+            performed_by=current_user.id,
+            performed_at=jamaica_now(),
+        ))
         try:
             db.session.commit()
         except Exception as exc:
@@ -643,6 +652,15 @@ def edit(sample_id):
 
         _add_history(sample, 'Sample Updated', f'Updated by {current_user.full_name}',
                      action_type='Edit', object_affected='Sample')
+        db.session.add(AuditLog(
+            action='SAMPLE_UPDATED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=f'Sample "{sample.lab_number}" updated by "{current_user.username}".',
+            performed_by=current_user.id,
+            performed_at=jamaica_now(),
+        ))
         try:
             db.session.commit()
         except Exception as exc:

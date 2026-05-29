@@ -1726,9 +1726,8 @@ def test_bulk_delete_creates_audit_log(app, client):
         # Sample is gone
         assert Sample.query.count() == 0
         # Audit log entry exists
-        logs = AuditLog.query.all()
-        assert len(logs) == 1
-        log = logs[0]
+        log = AuditLog.query.filter_by(action='SAMPLE_DELETED').first()
+        assert log is not None
         assert log.action == 'SAMPLE_DELETED'
         assert log.entity_type == 'Sample'
         assert log.entity_label == 'TOX-AUDIT'
@@ -1797,7 +1796,8 @@ def test_bulk_delete_cascades_assignments(app, client):
         assert Sample.query.count() == 0
         assert SampleAssignment.query.count() == 0
         # Audit log captures assignment count
-        log = AuditLog.query.first()
+        log = AuditLog.query.filter_by(action='SAMPLE_DELETED').first()
+        assert log is not None
         assert '"assignment_count": 1' in log.details
 
 

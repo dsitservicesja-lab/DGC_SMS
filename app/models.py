@@ -102,6 +102,7 @@ class Permission(enum.Enum):
     INVOICE_GENERATE        = 'Invoice Generation'
     MANAGE_DROPDOWNS        = 'Manage Dropdown Values'
     MANAGE_SETTINGS         = 'Manage Settings'
+    VIEW_ALL_BRANCHES_REPORT = 'View All Branches Report'
 
 
 # ---------------------------------------------------------------------------

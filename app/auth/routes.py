@@ -8,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 from app import db
 from app.auth import auth_bp
 from app.forms import LoginForm, UserCreateForm, UserEditForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
-from app.models import User, Role, Branch, Permission, Notification, SampleHistory, SampleAssignment, Sample, CustomRole, Setting, jamaica_now
+from app.models import User, Role, Branch, Permission, Notification, SampleHistory, SampleAssignment, Sample, CustomRole, Setting, jamaica_now, AuditLog
 from app.notifications import send_email
 
 
@@ -100,6 +100,15 @@ def login():
             return render_template('auth/login.html', form=form)
         if user and user.check_password(form.password.data) and user.is_active_user:
             user.reset_failed_logins()
+            db.session.add(AuditLog(
+                action='USER_LOGIN',
+                entity_type='User',
+                entity_id=user.id,
+                entity_label=user.username,
+                details=f'User "{user.username}" logged in.',
+                performed_by=user.id,
+                performed_at=jamaica_now(),
+            ))
             db.session.commit()
             login_user(user, remember=form.remember_me.data)
             if user.must_change_password:
@@ -183,6 +192,16 @@ def change_password():
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    db.session.add(AuditLog(
+        action='USER_LOGOUT',
+        entity_type='User',
+        entity_id=current_user.id,
+        entity_label=current_user.username,
+        details=f'User "{current_user.username}" logged out.',
+        performed_by=current_user.id,
+        performed_at=jamaica_now(),
+    ))
+    db.session.commit()
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
@@ -233,6 +252,15 @@ def user_create():
         user.branch = next(iter(branches_set), None)
         db.session.add(user)
         try:
+            db.session.add(AuditLog(
+                action='USER_CREATED',
+                entity_type='User',
+                entity_id=None,
+                entity_label=user.username,
+                details=f'User "{user.username}" created by "{current_user.username}".',
+                performed_by=current_user.id,
+                performed_at=jamaica_now(),
+            ))
             _commit_with_retry()
         except Exception as exc:
             db.session.rollback()
@@ -314,6 +342,15 @@ def user_edit(user_id):
             if form.new_password.data:
                 user.set_password(form.new_password.data)
             try:
+                db.session.add(AuditLog(
+                    action='USER_UPDATED',
+                    entity_type='User',
+                    entity_id=user.id,
+                    entity_label=user.username,
+                    details=f'User "{user.username}" updated by "{current_user.username}".',
+                    performed_by=current_user.id,
+                    performed_at=jamaica_now(),
+                ))
                 _commit_with_retry()
             except Exception as exc:
                 db.session.rollback()
@@ -399,6 +436,15 @@ def user_delete(user_id):
     db.session.execute(
         db.text('DELETE FROM user_custom_roles WHERE user_id = :uid'), {'uid': user.id}
     )
+    db.session.add(AuditLog(
+        action='USER_DELETED',
+        entity_type='User',
+        entity_id=user.id,
+        entity_label=user.username,
+        details=f'User "{user.username}" deleted by "{current_user.username}".',
+        performed_by=current_user.id,
+        performed_at=jamaica_now(),
+    ))
     db.session.delete(user)
     db.session.commit()
     flash(f'User {user.username} has been deleted.', 'success')
