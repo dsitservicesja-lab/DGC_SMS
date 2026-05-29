@@ -659,6 +659,12 @@
                         <i class="bi bi-list-ul"></i> Dropdown Config
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'main.audit_log' %}active{% endif %}"
+                       href="{{ url_for('main.audit_log') }}">
+                        <i class="bi bi-journal-text"></i> Audit Log
+                    </a>
+                </li>
                 {% endif %}
                 {% elif current_user.has_permission(Permission.MANAGE_SETTINGS) %}
                 <li><div class="sidebar-section-label">Admin</div></li>

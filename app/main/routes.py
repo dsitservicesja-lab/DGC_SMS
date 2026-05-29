@@ -3466,3 +3466,55 @@ def kpi_monthly():
         lab_icon=lab_icon,
         lab_groups=LAB_GROUPS,
     )
+
+
+# ---------------------------------------------------------------------------
+# Audit Log view
+# ---------------------------------------------------------------------------
+
+@main_bp.route('/audit-log')
+@login_required
+def audit_log():
+    """View the permanent audit log – Admin and SuperAdmin only."""
+    if not current_user.has_any_role(Role.ADMIN, Role.SUPER_ADMIN):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    page = request.args.get('page', 1, type=int)
+    q_action = request.args.get('action', '').strip()
+    q_entity = request.args.get('entity', '').strip()
+    q_user = request.args.get('user', '').strip()
+
+    query = AuditLog.query
+    if q_action:
+        query = query.filter(AuditLog.action.ilike(f'%{q_action}%'))
+    if q_entity:
+        query = query.filter(
+            db.or_(
+                AuditLog.entity_type.ilike(f'%{q_entity}%'),
+                AuditLog.entity_label.ilike(f'%{q_entity}%'),
+            )
+        )
+    if q_user:
+        matching_users = User.query.filter(
+            db.or_(
+                User.first_name.ilike(f'%{q_user}%'),
+                User.last_name.ilike(f'%{q_user}%'),
+                User.username.ilike(f'%{q_user}%'),
+            )
+        ).with_entities(User.id).all()
+        user_ids = [u.id for u in matching_users]
+        query = query.filter(AuditLog.performed_by.in_(user_ids))
+
+    pagination = query.order_by(AuditLog.performed_at.desc()).paginate(
+        page=page, per_page=50, error_out=False
+    )
+
+    return render_template(
+        'audit_log.html',
+        entries=pagination.items,
+        pagination=pagination,
+        q_action=q_action,
+        q_entity=q_entity,
+        q_user=q_user,
+    )
