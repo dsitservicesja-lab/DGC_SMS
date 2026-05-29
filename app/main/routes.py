@@ -923,6 +923,7 @@ def pharma_report_download():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
     formulation_filter = request.args.get('formulation_type', '').strip()
     api_filter = request.args.get('api', '').strip()
     source_filter = request.args.get('source', '').strip()
@@ -1107,13 +1108,14 @@ def milk_report_download():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
     parish_filter = request.args.get('parish', '').strip()
     milk_type_filter = request.args.get('milk_type', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_MILK,
     )
-    q = _apply_certified_quarter_filter(q, year, quarter)
+    q = _apply_certified_quarter_filter(q, year, quarter, month)
 
     if parish_filter:
         q = q.filter(Sample.parish.ilike(f'%{parish_filter}%'))
@@ -1158,7 +1160,7 @@ def milk_report_download():
             s.coa_version if s.coa_version else 1,
         ])
 
-    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else (f'_M{month}' if month else '')
     filename = f'Milk_Report_{year}{q_label}.csv'
     return Response(
         buf.getvalue(),
@@ -1294,6 +1296,7 @@ def toxicology_report_download():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
     hospital_filter = request.args.get('hospital', '').strip()
     sample_type_filter = request.args.get('sample_type', '').strip()
     patient_name_filter = request.args.get('patient_name', '').strip()
@@ -1301,7 +1304,7 @@ def toxicology_report_download():
     q = Sample.query.filter(
         Sample.sample_type == Branch.TOXICOLOGY,
     )
-    q = _apply_certified_quarter_filter(q, year, quarter)
+    q = _apply_certified_quarter_filter(q, year, quarter, month)
 
     if hospital_filter:
         q = q.filter(Sample.source.ilike(f'%{hospital_filter}%'))
@@ -1345,7 +1348,7 @@ def toxicology_report_download():
             resubmissions.get(s.id, 0),
         ])
 
-    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else (f'_M{month}' if month else '')
     filename = f'Toxicology_Report_{year}{q_label}.csv'
     return Response(
         buf.getvalue(),
@@ -1495,13 +1498,14 @@ def alcohol_report_download():
     year = request.args.get('year', type=int,
                             default=_current_fiscal_year())
     quarter = request.args.get('quarter', type=int, default=0)
+    month = request.args.get('month', type=int, default=0)
     sample_name_filter = request.args.get('sample_name', '').strip()
     alcohol_type_filter = request.args.get('alcohol_type', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type == Branch.FOOD_ALCOHOL,
     )
-    q = _apply_certified_quarter_filter(q, year, quarter)
+    q = _apply_certified_quarter_filter(q, year, quarter, month)
 
     if sample_name_filter:
         q = q.filter(Sample.sample_name.ilike(f'%{sample_name_filter}%'))
@@ -1542,7 +1546,7 @@ def alcohol_report_download():
             s.coa_version if s.coa_version else 1,
         ])
 
-    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else ''
+    q_label = f'_Q{quarter}' if quarter in (1, 2, 3, 4) else (f'_M{month}' if month else '')
     filename = f'Alcohol_Report_{year}{q_label}.csv'
     return Response(
         buf.getvalue(),
