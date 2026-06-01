@@ -72,7 +72,7 @@
                             {{ entry.action | replace('_', ' ') }}
                         </span>
                     </td>
-                    <td>{{ entry.entity_type | replace('Sample', 'Sample') if entry.entity_type else '—' }}</td>
+                    <td>{{ entry.entity_type if entry.entity_type else '—' }}</td>
                     <td>{{ entry.entity_label or (entry.entity_id | string if entry.entity_id else '—') }}</td>
                     <td>{{ entry.performer.full_name if entry.performer else '—' }}</td>
                     <td>
@@ -173,9 +173,9 @@
         current_status: 'Current Status',
         date_received: 'Date Received',
         date_registered: 'Date Registered',
-        uploaded_by: 'Uploaded By (ID)',
         uploaded_by_name: 'Uploaded By',
-        assignment_count: 'Assignment Count',
+        uploaded_by: 'Uploaded By (ID)',
+        assignment_count: 'Assignments Created',
         delete_request_id: 'Delete Request ID',
         delete_requested_by: 'Delete Requested By',
         delete_request_reason: 'Delete Reason',
@@ -184,7 +184,6 @@
         updated_by: 'Updated By',
         tests_assigned: 'Tests Assigned',
         assigned_to: 'Assigned To',
-        assignment_count: 'Assignments Created',
         assigned_by: 'Assigned By',
         test_name: 'Test Name',
         removed_from: 'Removed From',
@@ -194,17 +193,14 @@
         returned_by: 'Returned By',
         comments: 'Comments',
         changes: 'Changes',
-        updated_by: 'Updated By',
         file_name: 'File Name',
         description: 'Description',
-        uploaded_by: 'Uploaded By',
         tests: 'Tests',
         submitted_by: 'Submitted By',
         outcome: 'Outcome',
         reviewed_by: 'Reviewed By',
         is_resubmission: 'Resubmission',
         includes_summary_report: 'Includes Summary Report',
-        submitted_by: 'Submitted By',
         out_of_spec: 'Out of Specification',
         reassignment: 'Reassignment',
         resubmitted_by: 'Resubmitted By',
