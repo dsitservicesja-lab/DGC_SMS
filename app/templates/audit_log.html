@@ -59,16 +59,20 @@
                         {{ entry.performed_at.strftime('%d %b %Y %H:%M') if entry.performed_at else '—' }}
                     </td>
                     <td>
+                        {% set action_upper = entry.action | upper %}
                         <span class="badge
-                            {% if 'DELETE' in entry.action %}bg-danger
-                            {% elif 'APPROVED' in entry.action or 'CERTIFIED' in entry.action %}bg-success
-                            {% elif 'DENIED' in entry.action or 'RETURNED' in entry.action %}bg-warning text-dark
+                            {% if 'DELETE' in action_upper %}bg-danger
+                            {% elif 'APPROVED' in action_upper or 'CERTIFIED' in action_upper or 'SIGNED' in action_upper or 'ACCEPTED' in action_upper or 'REGISTERED' in action_upper %}bg-success
+                            {% elif 'DENIED' in action_upper or 'RETURNED' in action_upper or 'REJECTED' in action_upper %}bg-warning text-dark
+                            {% elif 'SUBMITTED' in action_upper or 'PREPARED' in action_upper %}bg-info text-dark
+                            {% elif 'UPDATED' in action_upper or 'ASSIGNED' in action_upper %}bg-primary
+                            {% elif 'REQUESTED' in action_upper %}bg-secondary
                             {% else %}bg-secondary
                             {% endif %}">
                             {{ entry.action | replace('_', ' ') }}
                         </span>
                     </td>
-                    <td>{{ entry.entity_type or '—' }}</td>
+                    <td>{{ entry.entity_type | replace('Sample', 'Sample') if entry.entity_type else '—' }}</td>
                     <td>{{ entry.entity_label or (entry.entity_id | string if entry.entity_id else '—') }}</td>
                     <td>{{ entry.performer.full_name if entry.performer else '—' }}</td>
                     <td>
@@ -143,11 +147,120 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <pre class="bg-light p-3 rounded small" style="white-space:pre-wrap;word-break:break-word;">{{ entry.details }}</pre>
+                <div class="mb-2 text-muted small">
+                    <i class="bi bi-clock"></i>
+                    {{ entry.performed_at.strftime('%d %b %Y at %H:%M') if entry.performed_at else '' }}
+                    &nbsp;|&nbsp;
+                    <i class="bi bi-person"></i>
+                    {{ entry.performer.full_name if entry.performer else '—' }}
+                </div>
+                <div class="audit-detail-body" data-details="{{ entry.details | e }}"></div>
             </div>
         </div>
     </div>
 </div>
 {% endif %}
 {% endfor %}
+
+<script>
+(function () {
+    // Human-friendly labels for common JSON keys
+    const KEY_LABELS = {
+        lab_number: 'Lab Number',
+        sample_name: 'Sample Name',
+        sample_type: 'Sample Type',
+        status: 'Status',
+        current_status: 'Current Status',
+        date_received: 'Date Received',
+        date_registered: 'Date Registered',
+        uploaded_by: 'Uploaded By (ID)',
+        uploaded_by_name: 'Uploaded By',
+        assignment_count: 'Assignment Count',
+        delete_request_id: 'Delete Request ID',
+        delete_requested_by: 'Delete Requested By',
+        delete_request_reason: 'Delete Reason',
+        delete_approved_by: 'Approved By',
+        registered_by: 'Registered By',
+        updated_by: 'Updated By',
+        tests_assigned: 'Tests Assigned',
+        assigned_to: 'Assigned To',
+        assignment_count: 'Assignments Created',
+        assigned_by: 'Assigned By',
+        test_name: 'Test Name',
+        removed_from: 'Removed From',
+        removed_by: 'Removed By',
+        analyst: 'Analyst',
+        previous_status: 'Previous Status',
+        returned_by: 'Returned By',
+        comments: 'Comments',
+        changes: 'Changes',
+        updated_by: 'Updated By',
+        file_name: 'File Name',
+        description: 'Description',
+        uploaded_by: 'Uploaded By',
+        tests: 'Tests',
+        submitted_by: 'Submitted By',
+        outcome: 'Outcome',
+        reviewed_by: 'Reviewed By',
+        is_resubmission: 'Resubmission',
+        includes_summary_report: 'Includes Summary Report',
+        submitted_by: 'Submitted By',
+        out_of_spec: 'Out of Specification',
+        reassignment: 'Reassignment',
+        resubmitted_by: 'Resubmitted By',
+        coa_reference: 'COA Reference',
+        prepared_by: 'Prepared By',
+        field: 'Date Field',
+        original_date: 'Original Date',
+        proposed_date: 'Proposed Date',
+        reason: 'Reason',
+        requested_by: 'Requested By',
+        request_type: 'Request Type',
+        entity: 'Entity',
+        decision: 'Decision',
+        decided_by: 'Decided By',
+        chemist: 'Chemist',
+        assignment_id: 'Assignment ID',
+        sample_lab_number: 'Lab Number',
+        test_reference: 'Test Reference',
+        chemist_name: 'Chemist',
+        assigned_date: 'Assigned Date',
+    };
+
+    function formatValue(val) {
+        if (val === null || val === undefined) return '<span class="text-muted fst-italic">N/A</span>';
+        if (typeof val === 'boolean') return val ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>';
+        if (Array.isArray(val)) {
+            if (val.length === 0) return '<span class="text-muted fst-italic">None</span>';
+            return val.map(function(v) { return '<span class="badge bg-light text-dark border me-1">' + String(v).replace(/</g,'&lt;') + '</span>'; }).join(' ');
+        }
+        return String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function buildTable(data) {
+        var rows = '';
+        Object.keys(data).forEach(function(key) {
+            var label = KEY_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+            rows += '<tr><th scope="row" class="text-muted fw-normal" style="width:40%;white-space:nowrap">' + label + '</th><td>' + formatValue(data[key]) + '</td></tr>';
+        });
+        return '<table class="table table-sm table-bordered mb-0">' + rows + '</table>';
+    }
+
+    document.querySelectorAll('.audit-detail-body').forEach(function(el) {
+        var raw = el.getAttribute('data-details') || '';
+        try {
+            var data = JSON.parse(raw);
+            el.innerHTML = buildTable(data);
+        } catch (e) {
+            // Not JSON — render as plain text
+            var pre = document.createElement('pre');
+            pre.className = 'bg-light p-3 rounded small';
+            pre.style.whiteSpace = 'pre-wrap';
+            pre.style.wordBreak = 'break-word';
+            pre.textContent = raw;
+            el.appendChild(pre);
+        }
+    });
+})();
+</script>
 {% endblock %}

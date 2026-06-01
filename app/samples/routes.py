@@ -490,7 +490,13 @@ def register():
             entity_type='Sample',
             entity_id=sample.id,
             entity_label=sample.lab_number,
-            details=f'Sample "{sample.lab_number}" registered by "{current_user.username}".',
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'sample_type': sample.sample_type.value,
+                'date_received': sample.date_received.isoformat() if sample.date_received else None,
+                'registered_by': current_user.full_name,
+            }),
             performed_by=current_user.id,
             performed_at=jamaica_now(),
         ))
@@ -657,7 +663,12 @@ def edit(sample_id):
             entity_type='Sample',
             entity_id=sample.id,
             entity_label=sample.lab_number,
-            details=f'Sample "{sample.lab_number}" updated by "{current_user.username}".',
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'sample_type': sample.sample_type.value,
+                'updated_by': current_user.full_name,
+            }),
             performed_by=current_user.id,
             performed_at=jamaica_now(),
         ))
@@ -798,6 +809,20 @@ def assign(sample_id):
                 f'Assigned to: {chemist_list}; '
                 f'Assigned by: {current_user.full_name}'),
         )
+        db.session.add(AuditLog(
+            action='SAMPLE_ASSIGNED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'tests_assigned': selected_test_names,
+                'assigned_to': assigned_chemist_names,
+                'assignment_count': assignment_count,
+                'assigned_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
         if skipped_count > 0:
             flash(f'Sample assigned successfully. {skipped_count} duplicate assignment(s) skipped.', 'success')
@@ -884,6 +909,19 @@ def remove_assignment(assignment_id):
             f'Test "{test_name}" unassigned from {chemist_name} '
             f'by {current_user.full_name}'),
     )
+    db.session.add(AuditLog(
+        action='ASSIGNMENT_REMOVED',
+        entity_type='SampleAssignment',
+        entity_id=assignment_id,
+        entity_label=f'{sample_ref} – {test_name}',
+        details=json.dumps({
+            'lab_number': sample_ref,
+            'test_name': test_name,
+            'removed_from': chemist_name,
+            'removed_by': current_user.full_name,
+        }),
+        performed_by=current_user.id,
+    ))
 
     db.session.delete(assignment)
 
@@ -952,6 +990,21 @@ def return_to_analyst(assignment_id):
     )
 
     _update_sample_status(sample)
+    db.session.add(AuditLog(
+        action='RETURNED_TO_ANALYST',
+        entity_type='SampleAssignment',
+        entity_id=assignment.id,
+        entity_label=f'{sample.lab_number} – {assignment.test_name}',
+        details=json.dumps({
+            'lab_number': sample.lab_number,
+            'test_name': assignment.test_name,
+            'analyst': chemist_name,
+            'previous_status': old_status,
+            'returned_by': current_user.full_name,
+            'comments': return_comment or None,
+        }),
+        performed_by=current_user.id,
+    ))
     db.session.commit()
 
     # Notify the analyst
@@ -1046,6 +1099,19 @@ def edit_assignment(assignment_id):
                 object_affected='Sample Assignment',
                 change_description='; '.join(changes) + f' (by {current_user.full_name})',
             )
+            db.session.add(AuditLog(
+                action='ASSIGNMENT_UPDATED',
+                entity_type='SampleAssignment',
+                entity_id=assignment.id,
+                entity_label=f'{sample.lab_number} – {assignment.test_name}',
+                details=json.dumps({
+                    'lab_number': sample.lab_number,
+                    'test_name': assignment.test_name,
+                    'changes': changes,
+                    'updated_by': current_user.full_name,
+                }),
+                performed_by=current_user.id,
+            ))
             db.session.commit()
             flash('Assignment updated.', 'success')
         else:
@@ -1097,6 +1163,19 @@ def upload_supporting_document(sample_id):
                      action_type='Document Upload',
                      object_affected='Supporting Document',
                      change_description=f'File: {original} (uploaded by {current_user.full_name})')
+        db.session.add(AuditLog(
+            action='DOCUMENT_UPLOADED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'file_name': original,
+                'description': form.description.data or None,
+                'uploaded_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
         flash('Supporting document uploaded.', 'success')
         return redirect(url_for('samples.detail', sample_id=sample.id))
@@ -1445,6 +1524,18 @@ def submit_report(assignment_id):
                     f'by {current_user.full_name}'),
             )
             _update_sample_status(info['sample'])
+            db.session.add(AuditLog(
+                action='REPORT_SUBMITTED',
+                entity_type='Sample',
+                entity_id=info['sample'].id,
+                entity_label=info['sample'].lab_number,
+                details=json.dumps({
+                    'lab_number': info['sample'].lab_number,
+                    'tests': names,
+                    'submitted_by': current_user.full_name,
+                }),
+                performed_by=current_user.id,
+            ))
 
         db.session.commit()
 
@@ -1625,6 +1716,21 @@ def preliminary_review(assignment_id):
             )
 
         _update_sample_status(sample)
+        audit_action = 'PRELIMINARY_REVIEW_APPROVED' if action == 'approved' else 'PRELIMINARY_REVIEW_RETURNED'
+        db.session.add(AuditLog(
+            action=audit_action,
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'tests': reviewed_names,
+                'outcome': action,
+                'reviewed_by': current_user.full_name,
+                'comments': comments or None,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         for a in target_assignments:
@@ -1795,6 +1901,23 @@ def review_report(assignment_id):
         )
 
         _update_sample_status(sample)
+        audit_action = f'TECHNICAL_REVIEW_{action.upper()}'
+        db.session.add(AuditLog(
+            action=audit_action,
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'tests': reviewed_names,
+                'outcome': action,
+                'out_of_spec': out_of_spec_flag,
+                'reviewed_by': current_user.full_name,
+                'reassignment': reassign_msg.strip() or None,
+                'comments': comments or None,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         for a in target_assignments:
@@ -1905,6 +2028,22 @@ def submit_to_deputy(sample_id):
                      action_type='Deputy Submission',
                      object_affected='Sample',
                      change_description=change_desc)
+        audit_action = 'RESUBMITTED_TO_DEPUTY' if is_resubmission else 'SUBMITTED_TO_DEPUTY'
+        db.session.add(AuditLog(
+            action=audit_action,
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'sample_type': sample.sample_type.value,
+                'is_resubmission': is_resubmission,
+                'includes_summary_report': bool(form.summary_report.data),
+                'submitted_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_submitted_to_deputy(sample)
@@ -2003,6 +2142,21 @@ def deputy_review(sample_id):
                     f'Comments: {form.review_comments.data or "N/A"}'),
             )
 
+        audit_action = f'DEPUTY_REVIEW_{action.upper()}'
+        db.session.add(AuditLog(
+            action=audit_action,
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'outcome': action,
+                'reviewed_by': current_user.full_name,
+                'comments': form.review_comments.data or None,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_deputy_review_completed(sample, action)
@@ -2051,6 +2205,18 @@ def resubmit_to_deputy(sample_id):
         change_description=(
             f'Resubmitted by {current_user.full_name} after corrections'),
     )
+    db.session.add(AuditLog(
+        action='RESUBMITTED_TO_DEPUTY',
+        entity_type='Sample',
+        entity_id=sample.id,
+        entity_label=sample.lab_number,
+        details=json.dumps({
+            'lab_number': sample.lab_number,
+            'sample_name': sample.sample_name,
+            'resubmitted_by': current_user.full_name,
+        }),
+        performed_by=current_user.id,
+    ))
     db.session.commit()
 
     notify_submitted_to_deputy(sample)
@@ -2120,6 +2286,19 @@ def prepare_certificate(sample_id):
                 f'COA prepared by {current_user.full_name}, '
                 f'submitted to Government Chemist for signing'),
         )
+        db.session.add(AuditLog(
+            action='CERTIFICATE_PREPARED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'coa_reference': coa_ref or None,
+                'prepared_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_certificate_prepared(sample)
@@ -2212,6 +2391,21 @@ def hod_review(sample_id):
                     f'Comments: {form.review_comments.data or "N/A"}'),
             )
 
+        audit_action = 'CERTIFICATE_SIGNED' if action == 'sign' else 'HOD_REVIEW_RETURNED'
+        db.session.add(AuditLog(
+            action=audit_action,
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'outcome': action,
+                'reviewed_by': current_user.full_name,
+                'comments': form.review_comments.data or None,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_certificate_signed(sample, action)
@@ -2332,6 +2526,21 @@ def request_backdate(sample_id):
                 f'{field_name}: {original or "N/A"} → {proposed} '
                 f'(requested by {current_user.full_name})'),
         )
+        db.session.add(AuditLog(
+            action='BACKDATE_REQUESTED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'field': field_label,
+                'original_date': original or None,
+                'proposed_date': proposed,
+                'reason': form.reason.data,
+                'requested_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_backdate_request_submitted(bdr)
@@ -2406,6 +2615,21 @@ def request_sample_delete(sample_id):
             object_affected='Sample',
             change_description=f'Deletion requested by {current_user.full_name}',
         )
+        db.session.add(AuditLog(
+            action='DELETE_REQUEST_SUBMITTED',
+            entity_type='Sample',
+            entity_id=sample.id,
+            entity_label=sample.lab_number,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'sample_name': sample.sample_name,
+                'sample_type': sample.sample_type.value,
+                'current_status': sample.status.value,
+                'reason': form.reason.data,
+                'requested_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_delete_request_submitted(dr)
@@ -2474,6 +2698,21 @@ def request_assignment_delete(assignment_id):
                 f'Deletion of assignment "{assignment.test_name}" requested '
                 f'by {current_user.full_name}'),
         )
+        db.session.add(AuditLog(
+            action='DELETE_REQUEST_SUBMITTED',
+            entity_type='SampleAssignment',
+            entity_id=assignment.id,
+            entity_label=label,
+            details=json.dumps({
+                'lab_number': sample.lab_number,
+                'test_name': assignment.test_name,
+                'chemist': chemist.full_name if chemist else None,
+                'current_status': assignment.status.value,
+                'reason': form.reason.data,
+                'requested_by': current_user.full_name,
+            }),
+            performed_by=current_user.id,
+        ))
         db.session.commit()
 
         notify_delete_request_submitted(dr)

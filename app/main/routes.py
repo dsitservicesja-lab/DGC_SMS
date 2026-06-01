@@ -2142,7 +2142,9 @@ def settings():
             entity_type='Setting',
             entity_id=None,
             entity_label='System Settings',
-            details=f'System settings updated by "{current_user.username}".',
+            details=json.dumps({
+                'updated_by': current_user.full_name,
+            }),
             performed_by=current_user.id,
             performed_at=jamaica_now(),
         ))
@@ -2373,6 +2375,24 @@ def decide_backdate(req_id):
                            f'({decision} by {current_user.full_name}, '
                            f'requested by {requester_name})'),
     ))
+    audit_action = f'BACKDATE_{decision.upper()}'
+    db.session.add(AuditLog(
+        action=audit_action,
+        entity_type='Sample',
+        entity_id=bdr.sample_id,
+        entity_label=bdr.sample.lab_number if bdr.sample else str(bdr.sample_id),
+        details=json.dumps({
+            'lab_number': bdr.sample.lab_number if bdr.sample else None,
+            'field': bdr.field_name.replace('_', ' ').title(),
+            'original_date': bdr.original_date or None,
+            'proposed_date': bdr.proposed_date,
+            'decision': decision,
+            'requested_by': requester_name,
+            'decided_by': current_user.full_name,
+            'comments': comments or None,
+        }),
+        performed_by=current_user.id,
+    ))
     db.session.commit()
 
     from app.notifications import notify_backdate_request_decided
@@ -2554,10 +2574,13 @@ def decide_delete_request(req_id):
         entity_type='DeleteRequest',
         entity_id=dr.id,
         entity_label=dr.entity_label,
-        details=(f'Request type: {dr.request_type}; '
-                 f'Requested by: {dr.requester.full_name if dr.requester else "Unknown"}; '
-                 f'Decision: {decision}; '
-                 f'Comments: {comments or "N/A"}'),
+        details=json.dumps({
+            'request_type': dr.request_type,
+            'entity': dr.entity_label,
+            'requested_by': dr.requester.full_name if dr.requester else 'Unknown',
+            'decision': decision,
+            'comments': comments or None,
+        }),
         performed_by=current_user.id,
         performed_at=now,
     ))
