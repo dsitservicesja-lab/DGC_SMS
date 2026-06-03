@@ -1229,6 +1229,7 @@ class InvoiceCreateForm(FlaskForm):
 DROPDOWN_CATEGORY_CHOICES = _sort_choices([
     ('', '-- Select Category --'),
     ('api', 'API (Active Pharmaceutical Ingredient)'),
+    ('test_name', 'Test Names'),
     ('test_type', 'Test Types'),
     ('invoice_test', 'Invoice Test Items'),
     ('formulation_type', 'Formulation Types'),

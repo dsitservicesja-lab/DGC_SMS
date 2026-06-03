@@ -705,7 +705,9 @@ def assign(sample_id):
 
     # Determine if this sample type has predefined test names/references
     branch_key = sample.sample_type.name
-    predefined_tests = BRANCH_TEST_NAMES.get(branch_key)
+    # Try dynamic dropdown config first, fall back to hardcoded lists
+    dynamic_tests = DropdownConfig.choices_for('test_name', branch=sample.sample_type.value)
+    predefined_tests = dynamic_tests if dynamic_tests else BRANCH_TEST_NAMES.get(branch_key)
     predefined_refs = BRANCH_TEST_REFERENCES.get(branch_key)
     has_predefined_tests = bool(predefined_tests)
     has_predefined_refs = bool(predefined_refs)
@@ -1044,7 +1046,9 @@ def edit_assignment(assignment_id):
         return redirect(url_for('samples.assignment_detail', assignment_id=assignment.id))
 
     branch_key = sample.sample_type.name
-    predefined_tests = BRANCH_TEST_NAMES.get(branch_key)
+    # Try dynamic dropdown config first, fall back to hardcoded lists
+    dynamic_tests = DropdownConfig.choices_for('test_name', branch=sample.sample_type.value)
+    predefined_tests = dynamic_tests if dynamic_tests else BRANCH_TEST_NAMES.get(branch_key)
     predefined_refs = BRANCH_TEST_REFERENCES.get(branch_key)
 
     # Populate chemist choices
