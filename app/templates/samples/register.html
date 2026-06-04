@@ -176,6 +176,14 @@
                         </div>
                         {% endif %}
 
+                        {# Manufacturer (Pharmaceutical) #}
+                        {% if form.manufacturer %}
+                        <div class="col-md-4" id="manufacturer_field">
+                            {{ form.manufacturer.label(class="form-label fw-semibold") }}
+                            {{ form.manufacturer(class="form-control") }}
+                        </div>
+                        {% endif %}
+
                         {# Lot Number (Pharmaceutical & Milk) #}
                         {% if form.lot_number %}
                         <div class="col-md-4" id="lot_number_field">

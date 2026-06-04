@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h2><i class="bi bi-capsule"></i> Pharmaceutical Report</h2>
-    <a href="{{ url_for('main.pharma_report_download', year=year, quarter=quarter, formulation_type=formulation_filter, api=api_filter, source=source_filter) }}"
+    <a href="{{ url_for('main.pharma_report_download', year=year, quarter=quarter, formulation_type=formulation_filter, api=api_filter, source=source_filter, manufacturer=manufacturer_filter) }}"
        class="btn btn-outline-primary btn-sm">
         <i class="bi bi-download me-1"></i>Download CSV
     </a>
@@ -62,6 +62,10 @@
             <div class="col-sm-6 col-md-2">
                 <label class="form-label small fw-semibold mb-1">Source</label>
                 <input type="text" name="source" value="{{ source_filter }}" class="form-control form-control-sm" placeholder="Source">
+            </div>
+            <div class="col-sm-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Manufacturer</label>
+                <input type="text" name="manufacturer" value="{{ manufacturer_filter }}" class="form-control form-control-sm" placeholder="Manufacturer">
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
@@ -137,6 +141,7 @@
                     <th>Lab Number</th>
                     <th>Sample Name</th>
                     <th>Formulation</th>
+                    <th>Manufacturer</th>
                     <th>API</th>
                     <th>Status</th>
                     <th>Date Received</th>
@@ -158,6 +163,7 @@
                     </td>
                     <td>{{ s.sample_name }}</td>
                     <td>{{ s.formulation_type or '—' }}</td>
+                    <td>{{ s.manufacturer or '—' }}</td>
                     <td>{{ s.api or '—' }}</td>
                     <td>
                         {% set status_colors = {
@@ -210,7 +216,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-4">No pharmaceutical samples found.</td>
+                    <td colspan="14" class="text-center text-muted py-4">No pharmaceutical samples found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

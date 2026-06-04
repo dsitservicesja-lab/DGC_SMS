@@ -815,6 +815,7 @@ def pharma_report():
     formulation_filter = request.args.get('formulation_type', '').strip()
     api_filter = request.args.get('api', '').strip()
     source_filter = request.args.get('source', '').strip()
+    manufacturer_filter = request.args.get('manufacturer', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
@@ -837,6 +838,9 @@ def pharma_report():
 
     if source_filter:
         q = q.filter(Sample.source.ilike(f'%{source_filter}%'))
+
+    if manufacturer_filter:
+        q = q.filter(Sample.manufacturer.ilike(f'%{manufacturer_filter}%'))
 
     samples = q.order_by(Sample.date_registered.desc()).all()
 
@@ -896,6 +900,7 @@ def pharma_report():
         formulation_filter=formulation_filter,
         api_filter=api_filter,
         source_filter=source_filter,
+        manufacturer_filter=manufacturer_filter,
         available_years=available_years,
         total=total,
         certified=certified,
@@ -927,6 +932,7 @@ def pharma_report_download():
     formulation_filter = request.args.get('formulation_type', '').strip()
     api_filter = request.args.get('api', '').strip()
     source_filter = request.args.get('source', '').strip()
+    manufacturer_filter = request.args.get('manufacturer', '').strip()
 
     q = Sample.query.filter(
         Sample.sample_type.in_([Branch.PHARMACEUTICAL, Branch.PHARMACEUTICAL_NR]),
@@ -942,6 +948,9 @@ def pharma_report_download():
     if source_filter:
         q = q.filter(Sample.source.ilike(f'%{source_filter}%'))
 
+    if manufacturer_filter:
+        q = q.filter(Sample.manufacturer.ilike(f'%{manufacturer_filter}%'))
+
     samples = q.order_by(Sample.date_registered.desc()).all()
 
     fy_start, fy_end = fiscal_year_date_range(year, quarter if quarter in (1, 2, 3, 4) else None)
@@ -951,7 +960,7 @@ def pharma_report_download():
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
-        'Lab Number', 'Sample Name', 'Type', 'Formulation', 'API',
+        'Lab Number', 'Sample Name', 'Type', 'Formulation', 'Manufacturer', 'API',
         'Status', 'Date Received', 'Date Registered',
         'Expected Report Date', 'Certified Date', 'Turnaround (days)',
         'Report Resubmissions', 'COA Version',
@@ -966,6 +975,7 @@ def pharma_report_download():
             s.sample_name,
             s.sample_type.value if s.sample_type else '',
             s.formulation_type or '',
+            s.manufacturer or '',
             s.api or '',
             s.status.value if s.status else '',
             s.date_received.isoformat() if s.date_received else '',

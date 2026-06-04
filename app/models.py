@@ -527,6 +527,7 @@ class Sample(db.Model):
 
     # Pharmaceutical specific
     formulation_type = db.Column(db.String(100), nullable=True)
+    manufacturer = db.Column(db.String(255), nullable=True)
     api = db.Column(db.String(255), nullable=True)
 
     # Food (Alcohol) specific

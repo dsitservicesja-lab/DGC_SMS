@@ -119,6 +119,8 @@ MIGRATIONS = [
     ('sample_assignments', 'return_to_analyst_comments', 'TEXT'),
     # Feature 11 – branch-specific dropdown entries (test types per laboratory)
     ('dropdown_configs', 'branch', 'VARCHAR(100)'),
+    # Pharmaceutical – manufacturer field
+    ('samples', 'manufacturer', 'VARCHAR(255)'),
 ]
 
 NEW_TABLES = [

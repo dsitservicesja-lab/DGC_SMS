@@ -181,6 +181,7 @@ def sample_list():
     # Advanced filters
     adv_sample_name = request.args.get('sample_name', '').strip()
     adv_formulation = request.args.get('formulation_type', '').strip()
+    adv_manufacturer = request.args.get('manufacturer', '').strip()
     adv_api = request.args.get('api', '').strip()
     adv_source = request.args.get('source', '').strip()
     adv_parish = request.args.get('parish', '').strip()
@@ -222,6 +223,8 @@ def sample_list():
         query = query.filter(Sample.sample_name.ilike(f'%{adv_sample_name}%'))
     if adv_formulation:
         query = query.filter(Sample.formulation_type.ilike(f'%{adv_formulation}%'))
+    if adv_manufacturer:
+        query = query.filter(Sample.manufacturer.ilike(f'%{adv_manufacturer}%'))
     if adv_api:
         query = query.filter(Sample.api.ilike(f'%{adv_api}%'))
     if adv_source:
@@ -292,6 +295,7 @@ def sample_list():
     adv_filters = {
         'sample_name': adv_sample_name,
         'formulation_type': adv_formulation,
+        'manufacturer': adv_manufacturer,
         'api': adv_api,
         'source': adv_source,
         'parish': adv_parish,
@@ -413,6 +417,9 @@ def register():
         ft = _get_field(form, 'formulation_type')
         if ft:
             sample.formulation_type = ft
+        mfr = _get_field(form, 'manufacturer')
+        if mfr:
+            sample.manufacturer = mfr
         api_val = _get_field(form, 'api')
         if api_val:
             sample.api = api_val

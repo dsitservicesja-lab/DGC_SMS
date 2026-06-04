@@ -542,6 +542,10 @@ class PharmaceuticalSampleRegisterForm(SampleRegisterForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
+    manufacturer = StringField(
+        'Manufacturer',
+        validators=[Optional(), Length(max=255)]
+    )
     api = StringField(
         'API',
         validators=[Optional(), Length(max=255)]
@@ -684,6 +688,7 @@ class SampleEditForm(FlaskForm):
         choices=FORMULATION_TYPE_CHOICES,
         validators=[Optional()],
     )
+    manufacturer = StringField('Manufacturer', validators=[Optional(), Length(max=255)])
     api = StringField('API', validators=[Optional(), Length(max=255)])
     alcohol_type = SelectField(
         'Alcohol Type',

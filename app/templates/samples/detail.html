@@ -202,6 +202,10 @@
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Formulation</dt>
                             <dd class="mb-0">{{ sample.formulation_type }}</dd>
                             {% endif %}
+                            {% if sample.manufacturer %}
+                            <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">Manufacturer</dt>
+                            <dd class="mb-0">{{ sample.manufacturer }}</dd>
+                            {% endif %}
                             {% if sample.active_ingredient %}
                             <dt class="text-muted small fw-semibold text-uppercase" style="font-size:.7rem; letter-spacing:.04em;">API (Active Ingredient)</dt>
                             <dd class="mb-0">
