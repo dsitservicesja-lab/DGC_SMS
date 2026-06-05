@@ -596,13 +596,13 @@ def edit(sample_id):
     if request.method == 'GET' and sample.sample_type:
         form.sample_type.data = sample.sample_type.name
         form.lab_number.data = sample.lab_number
-        if sample.active_ingredient:
+        if sample.api:
             if isinstance(form.active_ingredient, _SelectMultipleField):
                 form.active_ingredient.data = [
-                    v.strip() for v in sample.active_ingredient.split(',') if v.strip()
+                    v.strip() for v in sample.api.split(',') if v.strip()
                 ]
             else:
-                form.active_ingredient.data = sample.active_ingredient
+                form.active_ingredient.data = sample.api
     if form.validate_on_submit():
         new_lab_number = form.lab_number.data.strip()
         if new_lab_number != sample.lab_number:
@@ -623,7 +623,11 @@ def edit(sample_id):
         sample.patient_name = form.patient_name.data
         sample.source = form.source.data
         sample.formulation_type = form.formulation_type.data
-        sample.api = form.api.data or None
+        sample.manufacturer = form.manufacturer.data or None
+        if isinstance(form.active_ingredient, _SelectMultipleField):
+            sample.api = _serialize_apis(form.active_ingredient.data)
+        else:
+            sample.api = form.api.data or None
         sample.alcohol_type = form.alcohol_type.data if form.alcohol_type.data else None
         sample.claim_butt_number = form.claim_butt_number.data
         sample.batch_lot_number = form.batch_lot_number.data or None

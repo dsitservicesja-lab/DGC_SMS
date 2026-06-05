@@ -689,6 +689,11 @@ class SampleEditForm(FlaskForm):
         validators=[Optional()],
     )
     manufacturer = StringField('Manufacturer', validators=[Optional(), Length(max=255)])
+    active_ingredient = SelectMultipleField(
+        'Active Ingredient / API',
+        choices=[],
+        validators=[Optional()],
+    )
     api = StringField('API', validators=[Optional(), Length(max=255)])
     alcohol_type = SelectField(
         'Alcohol Type',
