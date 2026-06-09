@@ -3518,6 +3518,7 @@ def admin_dropdown_bulk_add():
         return redirect(url_for('main.dashboard'))
 
     from app.forms import DropdownBulkAddForm
+    from sqlalchemy.exc import IntegrityError
     form = DropdownBulkAddForm()
     if form.validate_on_submit():
         category = form.category.data
@@ -3526,6 +3527,7 @@ def admin_dropdown_bulk_add():
         lines = [l.strip() for l in form.bulk_values.data.splitlines() if l.strip()]
         added = 0
         skipped = 0
+        seen_values = set()
         for line in lines:
             if '|' in line:
                 value, _, label = line.partition('|')
@@ -3536,6 +3538,12 @@ def admin_dropdown_bulk_add():
                 label = line
             if not value:
                 continue
+            # Skip duplicates within the same batch
+            value_key = value.lower()
+            if value_key in seen_values:
+                skipped += 1
+                continue
+            seen_values.add(value_key)
             existing = DropdownConfig.query.filter_by(
                 category=category, value=value, branch=branch_val
             ).first()
@@ -3553,7 +3561,12 @@ def admin_dropdown_bulk_add():
                 ))
                 added += 1
         if added:
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash('Unable to save entries due to duplicate values. Please try again.', 'danger')
+                return redirect(url_for('main.admin_dropdowns'))
         parts = []
         if added:
             parts.append(f'{added} entr{"y" if added == 1 else "ies"} added')
